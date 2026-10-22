@@ -31,7 +31,7 @@ fn load_app_stylesheet() {
     // overlay crate's `v4_12` and then deprecates this method.
     #[allow(deprecated)]
     provider.load_from_data(include_str!("style.css"));
-    if let Some(display) = gtk::gdk::Display::default() {
+    if let Some(display) = Display::default() {
         gtk::style_context_add_provider_for_display(
             &display,
             &provider,
@@ -46,6 +46,9 @@ fn load_app_stylesheet() {
 const APP_ID: &str = "org.wayscriber.Configurator";
 
 use effects::spawn_effect;
+use gtk::gdk::Display;
+use gtk::gio::ApplicationFlags;
+use wayscriber::domain::Language;
 
 pub(crate) fn run(startup: StartupRequest) {
     // Every launch is its own window, as it was under Iced: the overlay and
@@ -56,7 +59,7 @@ pub(crate) fn run(startup: StartupRequest) {
     // safe: the guarded `ConfigDocument` save revision arbitrates writes.
     let application = adw::Application::builder()
         .application_id(APP_ID)
-        .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+        .flags(ApplicationFlags::NON_UNIQUE)
         .build();
     let app = RelmApp::from_app(application);
     // GTK must not parse our argv: `--open <destination>` is ours and was
@@ -92,7 +95,7 @@ pub(crate) struct AppWidgets {
     bindings: Vec<Binding>,
     /// The language the pages were built in. When the active language moves
     /// away from it, the next refresh rebuilds them.
-    language: wayscriber::domain::Language,
+    language: Language,
     chrome: shell::Chrome,
 }
 

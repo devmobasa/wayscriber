@@ -20,8 +20,8 @@ pub(crate) fn find_match_range(haystack: &str, needle_lower: &str) -> Option<(us
         .map(|start| (start, start + needle_lower.len()))
 }
 
-pub(crate) struct HighlightStyle<'a> {
-    pub(crate) font_family: &'a str,
+pub(crate) struct HighlightStyle<'font> {
+    pub(crate) font_family: &'font str,
     pub(crate) font_size: f64,
     pub(crate) font_weight: cairo::FontWeight,
     pub(crate) color: [f64; 4],

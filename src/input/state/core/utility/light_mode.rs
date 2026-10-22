@@ -1,10 +1,11 @@
+use crate::ui_text::UiTextEngine;
+
 use super::super::base::{DesktopEnvironment, InputState, ShellMode};
 use super::super::modes::LightModeRestore;
 use crate::domain::Action;
 use crate::draw::TextMeasurer;
 use crate::i18n::tr;
-use crate::input::state::InputTextResources;
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{InputTextResources, Toast, ToastPriority};
 use crate::input::tool::Tool;
 
 impl InputState {
@@ -78,7 +79,7 @@ impl InputState {
 
     pub fn toggle_light_mode_drawing(&mut self) -> bool {
         let measurer = TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let ui_engine = UiTextEngine::default();
         self.toggle_light_mode_drawing_with_resources(InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
@@ -99,7 +100,7 @@ impl InputState {
 
     pub fn set_light_mode_drawing(&mut self, drawing: bool) -> bool {
         let measurer = TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let ui_engine = UiTextEngine::default();
         self.set_light_mode_drawing_with_resources(
             InputTextResources {
                 measurer: &measurer,

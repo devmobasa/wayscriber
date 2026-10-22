@@ -235,6 +235,7 @@ impl<'de> Deserialize<'de> for QuickColorsConfig {
 }
 
 impl QuickColorsConfig {
+    #[must_use]
     pub fn effective_entries(&self) -> Vec<QuickColorConfig> {
         if self.entries.is_empty() {
             return default_quick_color_entries();
@@ -248,6 +249,7 @@ impl QuickColorsConfig {
         entries
     }
 
+    #[must_use]
     pub fn configured_entry_count(&self) -> Option<usize> {
         self.configured_entry_count
     }
@@ -288,6 +290,7 @@ impl QuickColorsConfig {
         self.entries = entries;
     }
 
+    #[must_use]
     pub fn is_implicit_default(&self) -> bool {
         self.configured_entry_count.is_none() && self.entries == default_quick_color_entries()
     }
@@ -314,6 +317,7 @@ pub struct QuickColorConfig {
 }
 
 impl QuickColorConfig {
+    #[must_use]
     pub fn resolved_label(&self, index: usize) -> String {
         quick_color_label(self, index)
     }
@@ -343,6 +347,7 @@ impl QuickColorSlot {
         Self::Black,
     ];
 
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Red => "Red",
@@ -356,10 +361,12 @@ impl QuickColorSlot {
         }
     }
 
+    #[must_use]
     pub fn index(self) -> usize {
         self as usize
     }
 
+    #[must_use]
     pub fn action(self) -> Action {
         match self {
             Self::Red => Action::SetColorRed,
@@ -373,6 +380,7 @@ impl QuickColorSlot {
         }
     }
 
+    #[must_use]
     pub fn fallback_key(self) -> &'static str {
         match self {
             Self::Red => "R",
@@ -386,6 +394,7 @@ impl QuickColorSlot {
         }
     }
 
+    #[must_use]
     pub fn from_action(action: Action) -> Option<Self> {
         match action {
             Action::SetColorRed => Some(Self::Red),
@@ -400,6 +409,7 @@ impl QuickColorSlot {
         }
     }
 
+    #[must_use]
     pub fn from_index(index: usize) -> Option<Self> {
         Self::ALL.get(index).copied()
     }
@@ -419,6 +429,7 @@ pub struct QuickColorPalette {
 }
 
 impl QuickColorPalette {
+    #[must_use]
     pub fn from_config(config: &QuickColorsConfig) -> Self {
         if config.entries.is_empty() {
             return Self::default();
@@ -441,6 +452,7 @@ impl QuickColorPalette {
     }
 
     #[cfg(test)]
+    #[must_use]
     pub fn from_entries(entries: Vec<QuickColorPaletteEntry>) -> Self {
         let radial_render_len = entries.len().min(QUICK_COLOR_RENDER_LIMIT);
         Self {
@@ -449,15 +461,18 @@ impl QuickColorPalette {
         }
     }
 
+    #[must_use]
     pub fn rendered_entries(&self) -> &[QuickColorPaletteEntry] {
         let len = self.rendered_len();
         &self.entries[..len]
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    #[must_use]
     pub fn rendered_len(&self) -> usize {
         if self.is_empty() {
             return 0;
@@ -465,19 +480,23 @@ impl QuickColorPalette {
         self.entries.len().min(QUICK_COLOR_RENDER_LIMIT)
     }
 
+    #[must_use]
     pub fn radial_rendered_entries(&self) -> &[QuickColorPaletteEntry] {
         let len = self.radial_rendered_len();
         &self.entries[..len]
     }
 
+    #[must_use]
     pub fn radial_rendered_len(&self) -> usize {
         self.radial_render_len.min(self.rendered_len())
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
+    #[must_use]
     pub fn entry(&self, index: usize) -> Option<&QuickColorPaletteEntry> {
         self.entries.get(index)
     }
@@ -496,20 +515,24 @@ impl QuickColorPalette {
         }
     }
 
+    #[must_use]
     pub fn color_for_action(&self, action: Action) -> Option<Color> {
         let index = QuickColorSlot::from_action(action)?.index();
         self.color_for_index(index)
     }
 
+    #[must_use]
     pub fn color_for_index(&self, index: usize) -> Option<Color> {
         self.entry(index).map(|entry| entry.color)
     }
 
     #[cfg(test)]
+    #[must_use]
     pub fn rendered_color_for_index(&self, index: usize) -> Option<Color> {
         self.rendered_entries().get(index).map(|entry| entry.color)
     }
 
+    #[must_use]
     pub fn radial_color_for_index(&self, index: usize) -> Option<Color> {
         self.radial_rendered_entries()
             .get(index)
@@ -520,6 +543,7 @@ impl QuickColorPalette {
         QuickColorSlot::from_index(index).map(QuickColorSlot::action)
     }
 
+    #[must_use]
     pub fn cache_key(&self) -> String {
         let entries = self
             .entries
@@ -574,6 +598,7 @@ pub struct MouseDragToolsConfig {
 }
 
 impl MouseDragToolsConfig {
+    #[must_use]
     pub fn from_legacy(
         drag_tool: DragBindableTool,
         shift_drag_tool: DragBindableTool,
@@ -595,6 +620,7 @@ impl MouseDragToolsConfig {
         }
     }
 
+    #[must_use]
     pub fn from_buttons(
         left: DragButtonConfig,
         right: DragButtonConfig,
@@ -608,10 +634,12 @@ impl MouseDragToolsConfig {
         }
     }
 
+    #[must_use]
     pub fn left_explicit(&self) -> bool {
         self.left_explicit
     }
 
+    #[must_use]
     pub fn resolve_with_left_defaults(mut self, left_defaults: &DragButtonConfig) -> Self {
         if self.left_explicit() {
             self.left.apply_defaults_from(left_defaults);
@@ -703,6 +731,7 @@ pub struct DragButtonConfig {
 }
 
 impl DragButtonConfig {
+    #[must_use]
     pub fn from_legacy(
         drag_tool: DragBindableTool,
         shift_drag_tool: DragBindableTool,
@@ -724,6 +753,7 @@ impl DragButtonConfig {
         }
     }
 
+    #[must_use]
     pub fn button_behavior() -> Self {
         Self {
             drag_tool: DragTool::Default,
@@ -780,6 +810,7 @@ impl Default for DragButtonConfig {
 }
 
 impl DrawingConfig {
+    #[must_use]
     pub fn effective_drag_tools(&self) -> MouseDragToolsConfig {
         match self.drag_tools.clone() {
             Some(drag_tools) => {
@@ -837,6 +868,7 @@ fn default_shortcut_quick_color_entries() -> Vec<QuickColorConfig> {
 
 /// The color the built-in palette ships for a quick-color slot. Slots past the
 /// built-in palette were added by the user, so they have no default to restore.
+#[must_use]
 pub fn default_quick_color_for_index(index: usize) -> Option<Color> {
     default_quick_color_entries()
         .get(index)

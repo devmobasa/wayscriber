@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::models::{
     ArrowStyleOption, ColorMode, ColorPickerId, DragColorOption, DragMouseButton, DragToolField,
     DragToolOption, EraserModeOption, NamedColorOption,
@@ -108,9 +110,9 @@ impl ConfiguratorApp {
         self.status = StatusMessage::idle();
         if self.draft.drawing_quick_colors.remove_entry(index) {
             self.remap_quick_color_pickers(|picker_index| match picker_index.cmp(&index) {
-                std::cmp::Ordering::Less => Some(picker_index),
-                std::cmp::Ordering::Equal => None,
-                std::cmp::Ordering::Greater => picker_index.checked_sub(1),
+                Ordering::Less => Some(picker_index),
+                Ordering::Equal => None,
+                Ordering::Greater => picker_index.checked_sub(1),
             });
             self.refresh_dirty_flag();
         }
@@ -178,7 +180,7 @@ impl ConfiguratorApp {
     pub(in crate::app::update) fn handle_font_cycle_changed(
         &mut self,
         index: usize,
-        family: String,
+        family: &str,
     ) -> Vec<Effect> {
         match self.draft.drawing_font_cycle.set(index, family) {
             Ok(changed) => {

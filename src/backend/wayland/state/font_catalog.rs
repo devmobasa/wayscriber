@@ -6,6 +6,7 @@ use crate::backend::wayland::{
     RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
     RuntimeOperationSubmitFailure, RuntimeWakeHandle,
 };
+use crate::draw;
 
 use super::WaylandState;
 
@@ -42,7 +43,7 @@ impl FontCatalogPrewarm {
         self.controller
             .try_submit((), "wayscriber-font-catalog", || {
                 let started = Instant::now();
-                crate::draw::prewarm_system_font_catalog();
+                draw::prewarm_system_font_catalog();
                 started.elapsed()
             })
             .map(|_| self.started = true)
@@ -65,7 +66,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn start_font_catalog_prewarm(&mut self) {
         if let Err(failure) = self.font_catalog.start(
             self.input_state.font_picker_load_failed(),
-            crate::draw::system_font_catalog_is_ready(),
+            draw::system_font_catalog_is_ready(),
         ) {
             let (error, ()) = failure.into_parts();
             log::warn!("Failed to start system font catalog prewarm: {error}");
@@ -104,7 +105,7 @@ mod tests {
     use crate::backend::wayland::RuntimeWakeSource;
 
     fn prewarm() -> FontCatalogPrewarm {
-        let wake = RuntimeWakeSource::new().expect("runtime wake source");
+        let wake = RuntimeWakeSource::try_new().expect("runtime wake source");
         FontCatalogPrewarm::new(RuntimeOperationIdSource::new(), wake.handle())
     }
 

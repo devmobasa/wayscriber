@@ -1,15 +1,16 @@
-use std::{fmt, path::PathBuf, sync::Arc};
+use std::fmt;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::capture::{
-    dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
-    file::{FileSaveConfig, no_save_directory_error},
-    types::{
-        CaptureDestination, CaptureError, CaptureResult, CaptureType,
-        DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult, DocumentDeliveryRequest,
-        ImageDeliveryRequest, ImageOperationKind, RenderImageRequest,
-        RenderedDocumentDeliveryRequest, RenderedImage, RenderedImageDeliveryRequest,
-    },
+use crate::capture::dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver};
+use crate::capture::file::{FileSaveConfig, no_save_directory_error};
+use crate::capture::types::{
+    CaptureDestination, CaptureError, CaptureResult, CaptureType, DesktopBackdropCaptureRequest,
+    DesktopBackdropCaptureResult, DocumentDeliveryRequest, ImageDeliveryRequest,
+    ImageOperationKind, RenderImageRequest, RenderedDocumentDeliveryRequest, RenderedImage,
+    RenderedImageDeliveryRequest,
 };
+use crate::process_broker;
 use tokio::task;
 
 #[derive(Clone)]
@@ -417,7 +418,7 @@ async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec
         super::clipboard::copy_to_clipboard_with(
             &image_data,
             clipboard.as_ref(),
-            crate::process_broker::max_publish_bytes(),
+            process_broker::max_publish_bytes(),
         )
     })
     .await

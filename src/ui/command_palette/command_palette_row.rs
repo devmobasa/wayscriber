@@ -1,12 +1,13 @@
 use crate::config::KeybindingsConfig;
 use crate::config::action_meta::ActionMeta;
-use crate::input::state::COMMAND_PALETTE_ITEM_HEIGHT;
-use crate::input::state::query_tokens;
 use crate::input::state::{
-    COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
+    COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_ROW_ACTION_COUNT, COMMAND_PALETTE_ROW_ACTION_GAP,
     COMMAND_PALETTE_ROW_ACTION_SIZE, COMMAND_PALETTE_ROW_ICON_GAP, COMMAND_PALETTE_ROW_ICON_SIZE,
+    query_tokens,
 };
+use crate::toolbar_icons;
 use crate::ui::text_highlight::{HighlightStyle, draw_highlight_with_engine, find_match_range};
+use crate::ui::theme::Theme;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::super::constants::{self, RADIUS_SM};
@@ -46,7 +47,7 @@ pub(super) fn command_palette_row_styles() -> CommandPaletteRowStyle {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     query: &str,
@@ -80,7 +81,7 @@ pub(super) fn render_command_row(
     if let Some(icon) = cmd.icon {
         let icon_alpha = if is_selected { 0.95 } else { 0.7 };
         constants::set_color(ctx, constants::with_alpha(theme.text_primary, icon_alpha));
-        crate::toolbar_icons::action_icon_painter(icon)(
+        toolbar_icons::action_icon_painter(icon)(
             ctx,
             inner_x + 10.0,
             item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ICON_SIZE) / 2.0,
@@ -172,7 +173,7 @@ pub(super) fn render_command_row(
 }
 
 fn render_command_row_actions(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     ctx: &cairo::Context,
     content_right: f64,
     item_y: f64,
@@ -183,19 +184,19 @@ fn render_command_row_actions(
     let icon_y = item_y + (COMMAND_PALETTE_ITEM_HEIGHT - COMMAND_PALETTE_ROW_ACTION_SIZE) / 2.0;
     let alpha = if selected { 0.95 } else { 0.62 };
     constants::set_color(ctx, constants::with_alpha(theme.text_primary, alpha));
-    crate::toolbar_icons::draw_icon_pencil(
+    toolbar_icons::draw_icon_pencil(
         ctx,
         left + 3.0,
         icon_y + 3.0,
         COMMAND_PALETTE_ROW_ACTION_SIZE - 6.0,
     );
-    crate::toolbar_icons::draw_icon_clear(
+    toolbar_icons::draw_icon_clear(
         ctx,
         left + stride + 3.0,
         icon_y + 3.0,
         COMMAND_PALETTE_ROW_ACTION_SIZE - 6.0,
     );
-    crate::toolbar_icons::draw_icon_refresh(
+    toolbar_icons::draw_icon_refresh(
         ctx,
         left + stride * 2.0 + 3.0,
         icon_y + 3.0,
@@ -219,7 +220,7 @@ fn render_command_row_label(
 /// drawn by the caller afterwards, over these boxes.
 #[allow(clippy::too_many_arguments)]
 fn draw_label_match_highlights(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     query: &str,
@@ -249,7 +250,7 @@ fn draw_label_match_highlights(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_shortcut_badge(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     item_y: f64,
@@ -332,7 +333,7 @@ pub(super) fn render_command_row_shortcut_badge(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_command_row_description(
-    theme: &crate::ui::theme::Theme,
+    theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
     desc_style: &UiTextStyle,

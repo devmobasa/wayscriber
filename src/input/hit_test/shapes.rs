@@ -1,3 +1,4 @@
+use crate::draw::shape;
 use crate::util::{self, ArrowheadTriangle};
 
 use super::geometry::{
@@ -131,7 +132,7 @@ pub(super) fn polygon_outline_hit(
     point: (i32, i32),
     tolerance: f64,
 ) -> bool {
-    if !crate::draw::shape::has_minimum_distinct_points(points) {
+    if !shape::has_minimum_distinct_points(points) {
         return false;
     }
 
@@ -145,7 +146,7 @@ pub(super) fn polygon_outline_hit(
 }
 
 pub(super) fn polygon_fill_hit(points: &[(i32, i32)], point: (i32, i32)) -> bool {
-    if !crate::draw::shape::has_minimum_distinct_points(points) {
+    if !shape::has_minimum_distinct_points(points) {
         return false;
     }
 

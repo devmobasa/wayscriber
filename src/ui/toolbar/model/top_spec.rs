@@ -1,21 +1,15 @@
-use std::borrow::Cow;
-
-use crate::config::{
-    Action, ToolbarItemId, ToolbarLayoutMode, action_label, action_short_label,
-    toolbar_item_ids as ids,
-};
+use crate::config::toolbar_item_ids as ids;
+#[cfg(test)]
+use crate::config::{Action, ToolbarLayoutMode};
+#[cfg(test)]
 use crate::input::Tool;
+#[cfg(test)]
 use crate::label_format::format_binding_label;
-use crate::ui::toolbar::bindings::{tool_label, tool_tooltip_label};
+#[cfg(test)]
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
-use super::{
-    SemanticToolIcon, TopToolGroup, TopUtilityButton, active_tool_in_shape_picker,
-    default_drag_hint, layout_mode_label, semantic_icon_for_tool, toolbar_item_id_for_tool,
-    toolbar_item_visible, top_highlight_ring_visible, top_highlight_visible,
-    top_shape_picker_visible, top_tool_group, visible_top_tool_buttons,
-    visible_top_utility_buttons,
-};
+#[cfg(test)]
+use super::{TopUtilityButton, semantic_icon_for_tool};
 
 mod control;
 mod control_meta;

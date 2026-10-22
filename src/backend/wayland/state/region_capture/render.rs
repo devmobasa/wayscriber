@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use crate::canvas_export::{CanvasRegionExportSnapshot, render_canvas_region_pixels};
-use crate::capture::{CaptureError, CutBand, apply_band_cuts, output_size as band_cut_output_size};
+use crate::capture;
+use crate::capture::{
+    BandCutError, CaptureError, CutBand, ImageRenderJob, apply_band_cuts,
+    output_size as band_cut_output_size,
+};
 use crate::screen_pixels::{ImagePixelRect, PackedArgb32, ScreenImage};
 
 /// Immutable pixels a region render job may flatten, then cut.
@@ -81,11 +85,15 @@ pub(super) fn render_region_pixels(
 
 /// The PNG job for a submission. Shared by every destination, so what Copy
 /// writes and what Board pastes can only differ by the Review toggle and cuts.
-pub(super) fn region_render_job(request: RegionRenderRequest) -> crate::capture::ImageRenderJob {
-    Box::new(move || crate::capture::png::encode_packed_argb32_png(&render_region_pixels(request)?))
+pub(super) fn region_render_job(request: RegionRenderRequest) -> ImageRenderJob {
+    Box::new(move || capture::png::encode_packed_argb32_png(&render_region_pixels(request)?))
 }
 
-fn band_cut_error(error: crate::capture::BandCutError) -> CaptureError {
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "passed to `Result::map_err`, which hands over the error by value"
+)]
+fn band_cut_error(error: BandCutError) -> CaptureError {
     CaptureError::ImageError(format!("Could not apply the requested cut: {error}"))
 }
 
@@ -98,12 +106,12 @@ mod tests {
 
     fn swatch() -> ([u32; 6], Vec<u8>) {
         let ids = [
-            0xFF11_2233,
-            0xFF44_5566,
-            0xFF77_8899,
-            0xFFAA_BBCC,
-            0xFFDD_EEFF,
-            0xFF01_0203,
+            0xff11_2233,
+            0xff44_5566,
+            0xff77_8899,
+            0xffaa_bbcc,
+            0xffdd_eeff,
+            0xff01_0203,
         ];
         let bytes = ids
             .iter()
@@ -137,13 +145,13 @@ mod tests {
     fn raw_and_annotated_jobs_share_the_cut_compose_path() {
         let (ids, bytes) = swatch();
         let image = Arc::new(ScreenImage {
-            data: bytes.clone(),
+            data: bytes,
             width: 3,
             height: 2,
             stride: 12,
         });
         let selection = ImagePixelRect::new(0, 0, 3, 2, (3, 2)).unwrap();
-        let cut = CutBand::new(CutAxis::Columns, 1, 2).unwrap();
+        let cut = CutBand::try_new(CutAxis::Columns, 1, 2).unwrap();
         let rendered = region_render_job(RegionRenderRequest {
             source: RegionPixelSource::Raw {
                 image: Arc::clone(&image),

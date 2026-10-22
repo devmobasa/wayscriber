@@ -3,10 +3,10 @@
 use crate::draw::TextMeasurer;
 use std::borrow::Cow;
 
+use crate::config;
 use crate::draw::Color;
 use crate::i18n::{tr, trf};
-use crate::input::state::InputState;
-use crate::input::state::QuickColorEdit;
+use crate::input::state::{InputState, QuickColorEdit};
 
 use super::{
     ColorPickerPopupAction, ColorPickerPopupLayout, ColorPickerPopupState, ColorPickerTarget,
@@ -478,7 +478,7 @@ impl InputState {
     /// The built-in color of the slot being recolored, when there is one.
     pub fn color_picker_popup_default_color(&self) -> Option<Color> {
         let index = self.color_picker_popup_slot()?;
-        crate::config::default_quick_color_for_index(index)
+        config::default_quick_color_for_index(index)
     }
 
     /// Load the slot's built-in color as the live candidate. The popup stays

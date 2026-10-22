@@ -2,6 +2,7 @@ use wayscriber::i18n::{tr, trf};
 
 use wayscriber::config::enums::ColorSpec;
 use wayscriber::draw::Color;
+use wayscriber::input::state;
 use wayscriber::util::{ConfigHexColorError, name_to_color, parse_config_hex_color};
 
 use super::super::error::FormError;
@@ -22,7 +23,7 @@ impl ColorInput {
                 mode: ColorMode::Named,
                 name: name.clone(),
                 rgb: color_to_rgb_strings(spec.to_color()),
-                selected_named: NamedColorOption::from_str(name),
+                selected_named: NamedColorOption::from_name(name),
             },
             ColorSpec::Rgb([r, g, b]) => Self {
                 mode: ColorMode::Rgb,
@@ -35,7 +36,7 @@ impl ColorInput {
             // silently flattened to opaque by the three RGB boxes.
             ColorSpec::Rgba(_) => Self {
                 mode: ColorMode::Named,
-                name: wayscriber::input::state::color_to_hex(spec.to_color()),
+                name: state::color_to_hex(spec.to_color()),
                 rgb: color_to_rgb_strings(spec.to_color()),
                 selected_named: NamedColorOption::Custom,
             },
@@ -116,7 +117,7 @@ impl ColorInput {
     }
 
     pub fn update_named_from_current(&mut self) {
-        self.selected_named = NamedColorOption::from_str(&self.name);
+        self.selected_named = NamedColorOption::from_name(&self.name);
     }
 
     pub fn sync_rgb_from_preview(&mut self) -> bool {

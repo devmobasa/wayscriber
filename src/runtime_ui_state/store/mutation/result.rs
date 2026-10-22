@@ -1,4 +1,11 @@
-use super::*;
+use super::super::{RuntimeUiStateInspection, inspection};
+use super::{MutationMode, store_fs};
+use crate::runtime_ui_state::{
+    AcceptedStateRevision, RuntimeStateFailurePathEffect, RuntimeStateIoError,
+    RuntimeStateObservedPathEffect, RuntimeStatePathIdentity, RuntimeStatePostClaimPathEffect,
+    RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
+    RuntimeUiFileStatus, SourceMutationId, SourceMutationResult,
+};
 
 pub(super) fn status_allowed(mode: MutationMode, status: &RuntimeUiFileStatus) -> bool {
     match mode {
@@ -18,15 +25,15 @@ pub(super) fn status_allowed(mode: MutationMode, status: &RuntimeUiFileStatus) -
 }
 
 pub(super) fn artifact_for(
-    path: store_fs::PinnedPath,
-    source_inspection: RuntimeUiStateInspection,
+    path: &store_fs::PinnedPath,
+    source_inspection: &RuntimeUiStateInspection,
 ) -> Vec<RuntimeStateRecoveryArtifact> {
     let source_path = source_inspection
         .observation
         .revision
         .path_identity()
         .clone();
-    inspection::inspect_pinned(&path).map_or_else(
+    inspection::inspect_pinned(path).map_or_else(
         |_| Vec::new(),
         |mut inspection| {
             if inspection.observation.revision.bytes().is_none() {
@@ -50,10 +57,10 @@ pub(super) fn artifact_for(
 pub(super) fn observation_changed_retained(
     id: SourceMutationId,
     active: RuntimeStateSourceObservation,
-    recovery_path: store_fs::PinnedPath,
-    claimed: RuntimeUiStateInspection,
+    recovery_path: &store_fs::PinnedPath,
+    claimed: &RuntimeUiStateInspection,
 ) -> SourceMutationResult {
-    let recovery_artifacts = artifact_for(recovery_path.clone(), claimed);
+    let recovery_artifacts = artifact_for(recovery_path, claimed);
     if recovery_artifacts.is_empty() {
         return failed(
             id,

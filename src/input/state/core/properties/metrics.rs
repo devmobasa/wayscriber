@@ -1,6 +1,8 @@
 //! Sizes shared by the properties panel's layout, hit-testing, and painting,
 //! so what the pointer hits is exactly what the renderer draws.
 
+use crate::ui_text::UiTextStyle;
+
 pub(crate) const TITLE_FONT: f64 = 15.0;
 pub(crate) const SUBTITLE_FONT: f64 = 12.0;
 pub(crate) const BODY_FONT: f64 = 13.0;
@@ -103,10 +105,7 @@ pub(crate) const TOOLTIP_PADDING_Y: f64 = 5.0;
 pub(crate) const TOOLTIP_GAP: f64 = 6.0;
 
 /// The panel's text style at `size`.
-pub(crate) fn text_style(
-    size: f64,
-    weight: cairo::FontWeight,
-) -> crate::ui_text::UiTextStyle<'static> {
+pub(crate) fn text_style(size: f64, weight: cairo::FontWeight) -> UiTextStyle<'static> {
     crate::ui_text::UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,

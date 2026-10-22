@@ -1,6 +1,6 @@
 use crate::config::QuickColorPalette;
 use crate::domain::Action;
-use crate::draw::Color;
+use crate::draw::{Color, TextMeasurer};
 use crate::input::Tool;
 
 use super::super::{HexPasteTarget, InputEffect, InputState};
@@ -12,7 +12,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_color_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         if action == Action::PickScreenColor {
@@ -28,7 +28,7 @@ impl InputState {
 
     pub(crate) fn apply_color_from_ui_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         color: Color,
     ) -> bool {
         self.note_recent_color(color);
@@ -57,8 +57,8 @@ impl InputState {
 
     /// Restores recents from a session snapshot, re-applying the dedupe and cap
     /// so a hand-edited session file cannot grow the list past its bound.
-    pub fn restore_recent_colors(&mut self, colors: Vec<Color>) {
-        self.style.restore_recent_colors(&colors);
+    pub fn restore_recent_colors(&mut self, colors: &[Color]) {
+        self.style.restore_recent_colors(colors);
     }
 
     /// Request a hex-color copy to the clipboard. The color is captured now so

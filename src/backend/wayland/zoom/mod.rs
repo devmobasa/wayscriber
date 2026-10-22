@@ -11,6 +11,9 @@ pub(in crate::backend::wayland) use state::{
     ZoomWaiter, ZoomWaiterOwner, ZoomWaiterRegistry,
 };
 
+use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
+use crate::capture::types::CaptureError;
+
 const MIN_ZOOM_SCALE: f64 = 1.0;
 const MAX_ZOOM_SCALE: f64 = 8.0;
 
@@ -20,8 +23,8 @@ type PortalCaptureResult = Result<
     (
         Option<u32>,
         u64,
-        crate::backend::wayland::frozen::ScreenImageProvenance,
-        Result<crate::backend::wayland::frozen::FrozenImage, crate::capture::types::CaptureError>,
+        ScreenImageProvenance,
+        Result<FrozenImage, CaptureError>,
     ),
-    crate::capture::types::CaptureError,
+    CaptureError,
 >;

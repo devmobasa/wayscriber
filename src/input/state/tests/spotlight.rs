@@ -1,5 +1,12 @@
 //! The spotlight tool: drag geometry, region collection, and damage behavior.
 
+use crate::draw;
+use crate::draw::{ShapeId, TextMeasurer};
+use crate::input::BOARD_ID_WHITEBOARD;
+use crate::input::state::spotlight::FrameIdentity;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::input::state::{SpotlightWheelClaim, SpotlightWheelOutcome};
 
@@ -205,7 +212,7 @@ fn spotlight_exposes_a_readable_kind_name() {
         cy: 0,
         rx: 10,
         ry: 10,
-        magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
+        magnification: draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
     };
     assert_eq!(shape.kind_name(), "Spotlight");
 }
@@ -217,7 +224,7 @@ fn spotlight_bounds_cover_its_opening() {
         cy: 100,
         rx: 40,
         ry: 20,
-        magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
+        magnification: draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
     };
     let bounds = shape.bounding_box().expect("spotlight has area");
     assert!(bounds.x <= 60 && bounds.y <= 80);
@@ -225,7 +232,7 @@ fn spotlight_bounds_cover_its_opening() {
     assert!(bounds.y + bounds.height >= 120);
 }
 
-fn spotlight_state_with_one_loupe(magnification: f64) -> (InputState, crate::draw::ShapeId) {
+fn spotlight_state_with_one_loupe(magnification: f64) -> (InputState, ShapeId) {
     let mut state = create_test_input_state();
     // A real viewport, so the on-canvas control is placed under the same
     // clamping rules it gets on screen.
@@ -240,7 +247,7 @@ fn spotlight_state_with_one_loupe(magnification: f64) -> (InputState, crate::dra
     (state, id)
 }
 
-fn magnification_of(state: &InputState, id: crate::draw::ShapeId) -> f64 {
+fn magnification_of(state: &InputState, id: ShapeId) -> f64 {
     match state.boards.active_frame().shape(id).expect("loupe").shape {
         Shape::Spotlight { magnification, .. } => magnification,
         ref other => panic!("expected a spotlight, got {other:?}"),
@@ -250,8 +257,7 @@ fn magnification_of(state: &InputState, id: crate::draw::ShapeId) -> f64 {
 /// Every control that edits this property must leave the shape on the 0.25
 /// grid, or the toolbar would show a value the shape does not hold.
 fn assert_on_the_step_grid(value: f64) {
-    let steps = (value - crate::draw::MIN_SPOTLIGHT_MAGNIFICATION)
-        / crate::draw::SPOTLIGHT_MAGNIFICATION_STEP;
+    let steps = (value - draw::MIN_SPOTLIGHT_MAGNIFICATION) / draw::SPOTLIGHT_MAGNIFICATION_STEP;
     assert!(
         (steps - steps.round()).abs() < 1e-9,
         "{value} is not a whole number of 0.25 steps above 1x"
@@ -260,7 +266,7 @@ fn assert_on_the_step_grid(value: f64) {
 
 #[test]
 fn every_pixel_of_the_track_snaps_to_the_same_grid_the_toolbar_uses() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(1.0);
     state.set_selection(vec![id]);
     let track = state
@@ -283,7 +289,7 @@ fn every_pixel_of_the_track_snaps_to_the_same_grid_the_toolbar_uses() {
 
 #[test]
 fn a_wheel_tick_pulls_an_off_grid_loupe_back_onto_the_grid() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     // A factor from an older session or a hand-edited file. One tick should
     // land on a real step rather than carrying the offset forever.
@@ -300,7 +306,7 @@ fn a_wheel_tick_pulls_an_off_grid_loupe_back_onto_the_grid() {
 
 #[test]
 fn the_wheel_over_a_loupe_steps_its_own_magnification() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
 
@@ -321,8 +327,8 @@ fn the_wheel_over_a_loupe_steps_its_own_magnification() {
 
 #[test]
 fn a_wheel_burst_over_one_loupe_undoes_as_a_single_step() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -346,14 +352,14 @@ fn a_wheel_burst_over_one_loupe_undoes_as_a_single_step() {
 
 #[test]
 fn the_wheel_stops_at_the_end_of_the_range_without_opening_a_gesture() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
     };
 
-    let (mut state, id) = spotlight_state_with_one_loupe(crate::draw::MAX_SPOTLIGHT_MAGNIFICATION);
+    let (mut state, id) = spotlight_state_with_one_loupe(draw::MAX_SPOTLIGHT_MAGNIFICATION);
 
     // Still the loupe's event, so the wheel must not fall through and resize
     // a brush behind the user's back.
@@ -364,19 +370,19 @@ fn the_wheel_stops_at_the_end_of_the_range_without_opening_a_gesture() {
     );
     assert_eq!(
         magnification_of(&state, id),
-        crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
+        draw::MAX_SPOTLIGHT_MAGNIFICATION
     );
     state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
         magnification_of(&state, id),
-        crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
+        draw::MAX_SPOTLIGHT_MAGNIFICATION,
         "a refused step must not have left an undo entry behind"
     );
 }
 
 #[test]
 fn a_locked_loupe_claims_the_wheel_without_changing() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     let index = state
@@ -395,7 +401,7 @@ fn a_locked_loupe_claims_the_wheel_without_changing() {
 
 #[test]
 fn a_locked_topmost_loupe_hides_an_unlocked_loupe_from_the_wheel() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let (mut state, lower_id) = spotlight_state_with_one_loupe(2.0);
     let upper_id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
@@ -422,7 +428,7 @@ fn a_locked_topmost_loupe_hides_an_unlocked_loupe_from_the_wheel() {
 
 #[test]
 fn the_on_canvas_knob_only_appears_for_one_unlocked_selected_loupe() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     assert!(
         state
@@ -456,7 +462,7 @@ fn the_on_canvas_knob_only_appears_for_one_unlocked_selected_loupe() {
 
 #[test]
 fn the_control_only_shows_on_a_page_that_already_forces_full_damage() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     // The control is drawn well outside the loupe's bounds, above it. It is
     // never clipped away because a page holding any Spotlight repaints in full
     // (`render_force_full_damage_reason`), and the control cannot appear
@@ -485,8 +491,8 @@ fn the_control_only_shows_on_a_page_that_already_forces_full_damage() {
 
 #[test]
 fn a_wheel_gesture_never_commits_against_a_different_page() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -535,11 +541,11 @@ fn a_changed_page_set_never_looks_like_the_frame_a_gesture_started_on() {
     // are what separate them; the index alone would alias, and the old
     // snapshot would attach to whatever now holds that id.
     let (mut state, _id) = spotlight_state_with_one_loupe(2.0);
-    let started_on = crate::input::state::spotlight::FrameIdentity::of(&state.boards);
+    let started_on = FrameIdentity::of(&state.boards);
 
     state.boards.new_page();
     assert_ne!(
-        crate::input::state::spotlight::FrameIdentity::of(&state.boards),
+        FrameIdentity::of(&state.boards),
         started_on,
         "a different page must not compare equal to the gesture's own"
     );
@@ -551,7 +557,7 @@ fn a_changed_page_set_never_looks_like_the_frame_a_gesture_started_on() {
     state.boards.prev_page();
     assert_eq!(state.boards.active_page_index(), 0);
     assert_ne!(
-        crate::input::state::spotlight::FrameIdentity::of(&state.boards),
+        FrameIdentity::of(&state.boards),
         started_on,
         "a changed page set invalidates the gesture rather than risking an alias"
     );
@@ -559,8 +565,8 @@ fn a_changed_page_set_never_looks_like_the_frame_a_gesture_started_on() {
 
 #[test]
 fn moving_off_a_loupe_ends_its_wheel_gesture() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -611,8 +617,8 @@ fn moving_off_a_loupe_discards_its_partial_wheel_step() {
 
 #[test]
 fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -627,10 +633,10 @@ fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
         SpotlightWheelOutcome::Adjusted
     );
 
-    state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::PageNew);
+    state.apply_toolbar_event(ToolbarEvent::PageNew);
     assert_ne!(state.boards.active_page_index(), 0);
 
-    state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::PagePrev);
+    state.apply_toolbar_event(ToolbarEvent::PagePrev);
     assert_eq!(magnification_of(&state, id), 2.25);
     state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(
@@ -642,7 +648,7 @@ fn a_toolbar_page_switch_closes_the_wheel_gesture_too() {
 
 #[test]
 fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     // The clamp is in canvas coordinates, so it has to follow the pan. A loupe
     // at the top of the *visible* area needs the control flipped below it even
     // though its canvas y is far from zero.
@@ -678,9 +684,9 @@ fn a_panned_board_still_places_the_control_where_the_user_can_reach_it() {
 
 #[test]
 fn maximum_persisted_view_offsets_do_not_overflow_the_selected_control_path() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
-    state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
+    state.switch_board(BOARD_ID_WHITEBOARD);
     state.update_screen_dimensions(1920, 1080);
     let id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
         cx: 200,
@@ -705,7 +711,7 @@ fn maximum_persisted_view_offsets_do_not_overflow_the_selected_control_path() {
 
 #[test]
 fn an_edge_loupe_keeps_its_control_on_screen() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let (mut state, _) = spotlight_state_with_one_loupe(2.0);
     state.boards.active_frame_mut().shapes.clear();
 
@@ -758,7 +764,7 @@ fn an_edge_loupe_keeps_its_control_on_screen() {
 
 #[test]
 fn extreme_loupe_coordinates_do_not_overflow_the_hit_test_or_the_track() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let id = state.boards.active_frame_mut().add_shape(Shape::Spotlight {
@@ -779,8 +785,8 @@ fn extreme_loupe_coordinates_do_not_overflow_the_hit_test_or_the_track() {
 
 #[test]
 fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -811,7 +817,7 @@ fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
     state.on_mouse_motion(track.x + track.width, track.y + 6);
     assert_eq!(
         magnification_of(&state, id),
-        crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
+        draw::MAX_SPOTLIGHT_MAGNIFICATION
     );
 
     state.on_mouse_release(MouseButton::Left, track.x + track.width, track.y + 6);
@@ -827,7 +833,7 @@ fn dragging_the_knob_magnifies_live_and_commits_one_undo_entry() {
 
 #[test]
 fn cancelling_a_knob_drag_restores_the_factor_it_started_from() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
     let (mut state, id) = spotlight_state_with_one_loupe(2.0);
     state.set_selection(vec![id]);
     let track = state
@@ -839,10 +845,10 @@ fn cancelling_a_knob_drag_restores_the_factor_it_started_from() {
     state.on_mouse_press(MouseButton::Left, track.x + track.width, track.y + 6);
     assert_eq!(
         magnification_of(&state, id),
-        crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
+        draw::MAX_SPOTLIGHT_MAGNIFICATION
     );
 
-    state.cancel_active_interaction_with(&crate::draw::TextMeasurer::default());
+    state.cancel_active_interaction_with(&TextMeasurer::default());
     assert!(matches!(state.state, DrawingState::Idle));
     assert_eq!(magnification_of(&state, id), 2.0);
 }

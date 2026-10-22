@@ -1,3 +1,6 @@
+use std::time::{Duration, Instant};
+
+use crate::config;
 use crate::config::{
     ResolvedToolbarItems, ToolbarConfig, ToolbarItemId, ToolbarItemOrderGroup,
     ToolbarItemVisibilitySetting, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarModeOverrides,
@@ -69,18 +72,17 @@ pub(in crate::input::state) struct ToolbarInteraction {
 /// enough that a deliberate next click still works.
 #[derive(Debug, Default, Clone, Copy)]
 pub(in crate::input::state) struct RestoreClickGuard {
-    until: Option<std::time::Instant>,
+    until: Option<Instant>,
 }
 
 impl RestoreClickGuard {
-    pub(in crate::input::state) const WINDOW: std::time::Duration =
-        std::time::Duration::from_millis(450);
+    pub(in crate::input::state) const WINDOW: Duration = Duration::from_millis(450);
 
-    fn arm(&mut self, now: std::time::Instant) {
+    fn arm(&mut self, now: Instant) {
         self.until = Some(now + Self::WINDOW);
     }
 
-    fn blocks(&self, now: std::time::Instant) -> bool {
+    fn blocks(&self, now: Instant) -> bool {
         self.until.is_some_and(|until| now < until)
     }
 }
@@ -155,11 +157,11 @@ impl ToolbarInteraction {
     }
 
     /// Start the post-restore click guard (see [`RestoreClickGuard`]).
-    pub(in crate::input::state) fn arm_restore_guard(&mut self, now: std::time::Instant) {
+    pub(in crate::input::state) fn arm_restore_guard(&mut self, now: Instant) {
         self.restore_guard.arm(now);
     }
 
-    pub(in crate::input::state) fn restore_guard_blocks(&self, now: std::time::Instant) -> bool {
+    pub(in crate::input::state) fn restore_guard_blocks(&self, now: Instant) -> bool {
         self.restore_guard.blocks(now)
     }
 
@@ -532,8 +534,7 @@ impl ToolbarInteraction {
 
     pub(in crate::input::state) fn reset_individual_item_visibility(&mut self) -> bool {
         let mut changed = false;
-        for (&id, &setting) in crate::config::factory_individual_toolbar_item_visibility_settings()
-        {
+        for (&id, &setting) in config::factory_individual_toolbar_item_visibility_settings() {
             changed |= self.items.set_visibility_setting(id, setting);
         }
         if changed {
@@ -632,6 +633,8 @@ impl ToolbarInteraction {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::toolbar_item_ids;
+
     use super::*;
 
     fn legacy_visibility() -> ToolbarSectionVisibility {
@@ -713,7 +716,7 @@ mod tests {
         let mut toolbar = ToolbarInteraction::default();
         let drag = (
             ToolbarItemOrderGroup::TopTools,
-            crate::config::toolbar_item_ids::TOP_TOOL_PEN,
+            toolbar_item_ids::TOP_TOOL_PEN,
         );
 
         toolbar.begin_customize_drag(drag);
@@ -728,7 +731,7 @@ mod tests {
     fn dragging_an_item_reorders_only_its_group() {
         let mut toolbar = ToolbarInteraction::default();
         let group = ToolbarItemOrderGroup::TopTools;
-        let pen = crate::config::toolbar_item_ids::TOP_TOOL_PEN;
+        let pen = toolbar_item_ids::TOP_TOOL_PEN;
         let before = toolbar.resolved_items().order.ordered_ids(group).to_vec();
         toolbar.begin_customize_drag((group, pen));
 

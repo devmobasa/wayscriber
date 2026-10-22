@@ -1,5 +1,6 @@
-use crate::config::{BoardGridConfig, BoardGridKindConfig, Config};
+use crate::config::{BoardGridConfig, BoardGridKindConfig, BoardsConfig, Config};
 use crate::domain::{BoardGrid, BoardGridKind};
+use crate::input::BoardManager;
 
 #[test]
 fn board_grid_config_defaults_and_modes_round_trip() {
@@ -40,12 +41,12 @@ fn board_grid_config_clamps_spacing_and_disables_transparent_patterns() {
 
 #[test]
 fn board_grid_runtime_mapping_preserves_new_session_templates() {
-    let mut config = crate::config::BoardsConfig::default();
+    let mut config = BoardsConfig::default();
     config.items[1].grid = BoardGridConfig {
         kind: BoardGridKindConfig::IsometricDots,
         spacing: 20,
     };
-    let mut boards = crate::input::BoardManager::from_config(config);
+    let mut boards = BoardManager::from_config(config);
     assert_eq!(
         boards.board_states()[1].spec.grid,
         BoardGrid::new(BoardGridKind::IsometricDots, 20)

@@ -3,7 +3,11 @@
 //! Input records semantic intent only. The backend resolves executables and
 //! talks to the process broker because both are runtime side effects.
 
+use std::env;
 use std::ffi::{OsStr, OsString};
+
+use crate::process_broker::{BrokerChild, BrokerErrorKind, HelperKind, HelperLifetime};
+use crate::{about_window, process_broker};
 
 use super::WaylandState;
 use crate::configurator_destination::{ConfiguratorDestination, configurator_launch_arguments};
@@ -12,13 +16,13 @@ use crate::i18n::tr;
 use crate::input::state::{HelperLaunchRequest, Toast, ToastPriority};
 
 fn spawn_detached(
-    kind: crate::process_broker::HelperKind,
+    kind: HelperKind,
     program: &OsStr,
     arguments: &[OsString],
-) -> anyhow::Result<crate::process_broker::BrokerChild> {
-    crate::process_broker::current()?.try_spawn(
+) -> anyhow::Result<BrokerChild> {
+    process_broker::current()?.try_spawn(
         kind,
-        crate::process_broker::HelperLifetime::DetachedAfterExec,
+        HelperLifetime::DetachedAfterExec,
         program,
         arguments,
         Vec::new(),
@@ -26,7 +30,7 @@ fn spawn_detached(
 }
 
 fn launch_deferred_by_busy_broker(error: &anyhow::Error) -> bool {
-    crate::process_broker::error_kind(error) == Some(crate::process_broker::BrokerErrorKind::Busy)
+    process_broker::error_kind(error) == Some(BrokerErrorKind::Busy)
 }
 
 fn launch_failure_message(error: &anyhow::Error, failed: &'static str) -> &'static str {
@@ -45,13 +49,13 @@ impl WaylandState {
         match request {
             HelperLaunchRequest::About => self.launch_about_helper(),
             HelperLaunchRequest::Configurator(destination) => {
-                self.launch_configurator_helper(destination);
+                self.launch_configurator_helper(destination.as_ref());
             }
         }
     }
 
     fn launch_about_helper(&mut self) {
-        let executable = match std::env::current_exe() {
+        let executable = match env::current_exe() {
             Ok(path) => path,
             Err(error) => {
                 log::error!("Failed to resolve the Wayscriber executable for About: {error}");
@@ -65,9 +69,9 @@ impl WaylandState {
         };
 
         match spawn_detached(
-            crate::process_broker::HelperKind::About,
+            HelperKind::About,
             executable.as_os_str(),
-            &crate::about_window::launch_arguments(),
+            &about_window::launch_arguments(),
         ) {
             Ok(child) => {
                 log::info!("Launched About window (pid {})", child.id());
@@ -87,16 +91,12 @@ impl WaylandState {
         }
     }
 
-    fn launch_configurator_helper(&mut self, destination: Option<ConfiguratorDestination>) {
-        let binary = std::env::var(CONFIGURATOR_ENV)
-            .unwrap_or_else(|_| "wayscriber-configurator".to_string());
-        let arguments = configurator_launch_arguments(destination.as_ref());
+    fn launch_configurator_helper(&mut self, destination: Option<&ConfiguratorDestination>) {
+        let binary =
+            env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
+        let arguments = configurator_launch_arguments(destination);
 
-        match spawn_detached(
-            crate::process_broker::HelperKind::Configurator,
-            OsStr::new(&binary),
-            &arguments,
-        ) {
+        match spawn_detached(HelperKind::Configurator, OsStr::new(&binary), &arguments) {
             Ok(child) => {
                 log::info!(
                     "Launched wayscriber-configurator (binary: {binary}, pid: {})",

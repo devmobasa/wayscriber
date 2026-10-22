@@ -30,11 +30,13 @@ pub struct KeybindingConflict {
 
 impl KeybindingConflict {
     /// The parsed shortcut every listed action claims.
+    #[must_use]
     pub fn binding(&self) -> &Shortcut {
         &self.binding
     }
 
     /// Every action claiming the shortcut, in keymap traversal order.
+    #[must_use]
     pub fn actions(&self) -> &[Action] {
         &self.actions
     }
@@ -70,18 +72,18 @@ impl ConflictLog {
     }
 }
 
-struct BindingInserter<'a> {
-    map: &'a mut HashMap<Shortcut, Action>,
-    ordered: Option<&'a mut HashMap<Action, Vec<Shortcut>>>,
-    conflicts: Option<&'a mut ConflictLog>,
+struct BindingInserter<'maps> {
+    map: &'maps mut HashMap<Shortcut, Action>,
+    ordered: Option<&'maps mut HashMap<Action, Vec<Shortcut>>>,
+    conflicts: Option<&'maps mut ConflictLog>,
     /// Whether a bad binding string or a duplicate key is data rather than a
     /// failure. Set only for the views that answer "which keys are taken",
     /// which have to stay usable while the config still has a problem in it.
     tolerant: bool,
 }
 
-impl<'a> BindingInserter<'a> {
-    fn new(map: &'a mut HashMap<Shortcut, Action>) -> Self {
+impl<'maps> BindingInserter<'maps> {
+    fn new(map: &'maps mut HashMap<Shortcut, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -91,8 +93,8 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_with_order(
-        map: &'a mut HashMap<Shortcut, Action>,
-        ordered: &'a mut HashMap<Action, Vec<Shortcut>>,
+        map: &'maps mut HashMap<Shortcut, Action>,
+        ordered: &'maps mut HashMap<Action, Vec<Shortcut>>,
     ) -> Self {
         Self {
             map,
@@ -103,8 +105,8 @@ impl<'a> BindingInserter<'a> {
     }
 
     fn new_collecting(
-        map: &'a mut HashMap<Shortcut, Action>,
-        conflicts: &'a mut ConflictLog,
+        map: &'maps mut HashMap<Shortcut, Action>,
+        conflicts: &'maps mut ConflictLog,
     ) -> Self {
         Self {
             map,
@@ -114,7 +116,7 @@ impl<'a> BindingInserter<'a> {
         }
     }
 
-    fn new_tolerant(map: &'a mut HashMap<Shortcut, Action>) -> Self {
+    fn new_tolerant(map: &'maps mut HashMap<Shortcut, Action>) -> Self {
         Self {
             map,
             ordered: None,
@@ -249,6 +251,7 @@ impl KeybindingsConfig {
     /// claims nothing at runtime either. That keeps an editor able to accept an
     /// edit to an unrelated action while a tolerated problem sits elsewhere in
     /// the file (#293).
+    #[must_use]
     pub fn claimed_keys(&self) -> HashMap<Shortcut, Action> {
         let mut map = HashMap::new();
         let mut inserter = BindingInserter::new_tolerant(&mut map);

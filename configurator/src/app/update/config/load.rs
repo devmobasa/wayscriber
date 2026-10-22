@@ -2,6 +2,7 @@ use wayscriber::i18n::{tr, trf};
 
 use wayscriber::config::ConfigDocument;
 
+use crate::app::document_workflow::LeaveAction;
 use crate::models::ConfigDraft;
 
 use super::super::super::effects::Effect;
@@ -60,7 +61,7 @@ impl ConfiguratorApp {
     }
 
     pub(in crate::app::update) fn handle_reload_requested(&mut self) -> Vec<Effect> {
-        self.request_leave(crate::app::document_workflow::LeaveAction::Reload)
+        self.request_leave(LeaveAction::Reload)
     }
 
     pub(in crate::app::update) fn begin_config_reload(&mut self) -> Vec<Effect> {

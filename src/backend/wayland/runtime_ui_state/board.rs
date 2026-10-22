@@ -1,4 +1,15 @@
-use super::*;
+use std::mem;
+
+use super::seeds::runtime_seeds_from_config;
+use super::{
+    DeferredBoardPinRestore, PreparedBoardPinMutation, ToolbarRuntimeFinish, ToolbarRuntimeState,
+};
+use crate::config::Config;
+use crate::input::InputState;
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, PreviewRollbackSnapshot,
+    RuntimePreviewFinishIntent, RuntimeUiMutationScope, RuntimeUiMutationValues, UpdateSeedsResult,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BoardSeedUpdate {
@@ -16,7 +27,7 @@ impl ToolbarRuntimeState {
                 return BoardSeedUpdate::Rejected;
             }
         };
-        let outcome = match self.controller.update_seeds(seeds) {
+        let outcome = match self.controller.update_seeds(&seeds) {
             UpdateSeedsResult::Applied { .. } => BoardSeedUpdate::Applied,
             UpdateSeedsResult::StagedBehindBarrier { barrier, .. } => {
                 log::debug!("Board runtime seed update staged behind barrier {barrier:?}");
@@ -104,17 +115,17 @@ impl ToolbarRuntimeState {
             input.apply_board_pinned_runtime(&board_id, pin_seed);
             return None;
         }
-        self.commit_board_pin_value(input, board_id, pin_seed, pinned)
+        self.commit_board_pin_value(input, &board_id, pin_seed, pinned)
     }
 
     fn commit_board_pin_value(
         &mut self,
         input: &mut InputState,
-        board_id: String,
+        board_id: &str,
         current: bool,
         desired: bool,
     ) -> Option<ToolbarRuntimeFinish> {
-        let target = InteractionSeedTarget::BoardPin(board_id.clone());
+        let target = InteractionSeedTarget::BoardPin(board_id.to_string());
         let rollback = PreviewRollbackSnapshot {
             values: [(target.clone(), InteractionSeedValue::Bool(current))]
                 .into_iter()
@@ -128,11 +139,11 @@ impl ToolbarRuntimeState {
             Ok(session) => session,
             Err(error) => {
                 log::warn!("Restored board pin runtime mutation blocked: {error:?}");
-                input.apply_board_pinned_runtime(&board_id, current);
+                input.apply_board_pinned_runtime(board_id, current);
                 return None;
             }
         };
-        input.apply_board_pinned_runtime(&board_id, desired);
+        input.apply_board_pinned_runtime(board_id, desired);
         let values = RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(desired))
             .expect("board pin value matches its runtime target");
         let result = self
@@ -151,7 +162,7 @@ impl ToolbarRuntimeState {
 
         let current_generation = input.boards.board_identity_generation();
         let current_epoch = self.controller.authority_epoch();
-        let deferred = std::mem::take(&mut self.deferred_board_pin_restores);
+        let deferred = mem::take(&mut self.deferred_board_pin_restores);
         let mut finishes = Vec::new();
         for restore in deferred.into_values() {
             if restore.board_identity_generation != current_generation
@@ -174,7 +185,7 @@ impl ToolbarRuntimeState {
                 continue;
             }
             if let Some(finish) =
-                self.commit_board_pin_value(input, restore.board_id, current, restore.pinned)
+                self.commit_board_pin_value(input, &restore.board_id, current, restore.pinned)
             {
                 finishes.push(finish);
             }

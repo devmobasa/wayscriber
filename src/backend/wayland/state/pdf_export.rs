@@ -3,7 +3,9 @@ use crate::canvas_export::{
     CanvasPageExportSnapshot, PdfPageExportSnapshot, PdfPageMetadata, SpotlightPassSnapshot,
     resolve_pdf_page_layout,
 };
-use crate::config::{Action, PdfFitMode};
+use crate::capture::CaptureError;
+use crate::config::{Action, PdfExportConfig, PdfFitMode};
+use crate::domain::BoardGrid;
 use crate::draw::{Frame, TextMeasurer};
 use crate::input::BoardBackground;
 use crate::input::boards::BoardState;
@@ -14,7 +16,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn board_pdf_export_snapshot(
         &self,
         action: Action,
-    ) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
+    ) -> Result<BoardPdfExportSnapshot, CaptureError> {
         self.board_pdf_export_snapshot_inner(action, None)
     }
 
@@ -22,7 +24,7 @@ impl WaylandState {
         &self,
         action: Action,
         desktop_backdrop: CanvasExportBackdropSnapshot,
-    ) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
+    ) -> Result<BoardPdfExportSnapshot, CaptureError> {
         self.board_pdf_export_snapshot_inner(action, Some(desktop_backdrop))
     }
 
@@ -30,7 +32,7 @@ impl WaylandState {
         &self,
         action: Action,
         desktop_backdrop: Option<CanvasExportBackdropSnapshot>,
-    ) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
+    ) -> Result<BoardPdfExportSnapshot, CaptureError> {
         let scope = pdf_export_scope_for_action(action);
         build_board_pdf_export_snapshot(BoardPdfExportBuildContext {
             measurer: self.render.text_measurer(),
@@ -68,15 +70,15 @@ enum PdfExportScope {
     AllBoards,
 }
 
-struct BoardPdfExportBuildContext<'a> {
-    measurer: &'a TextMeasurer,
+struct BoardPdfExportBuildContext<'state> {
+    measurer: &'state TextMeasurer,
     logical_width: u32,
     logical_height: u32,
-    boards: &'a [BoardState],
+    boards: &'state [BoardState],
     active_board_index: usize,
     pan_enabled: bool,
     scope: PdfExportScope,
-    config: &'a crate::config::PdfExportConfig,
+    config: &'state PdfExportConfig,
     desktop_backdrop: Option<CanvasExportBackdropSnapshot>,
     text_halo_enabled: bool,
     spotlight: SpotlightPassSnapshot,
@@ -84,7 +86,7 @@ struct BoardPdfExportBuildContext<'a> {
 
 fn build_board_pdf_export_snapshot(
     context: BoardPdfExportBuildContext<'_>,
-) -> Result<BoardPdfExportSnapshot, crate::capture::CaptureError> {
+) -> Result<BoardPdfExportSnapshot, CaptureError> {
     let BoardPdfExportBuildContext {
         measurer,
         logical_width,
@@ -243,7 +245,7 @@ fn pdf_export_scope_has_transparent_pages(
 
 fn backdrop_from_background(
     background: &BoardBackground,
-    grid: crate::domain::BoardGrid,
+    grid: BoardGrid,
     desktop_backdrop: Option<&CanvasExportBackdropSnapshot>,
 ) -> CanvasExportBackdropSnapshot {
     match background {

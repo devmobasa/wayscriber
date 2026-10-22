@@ -10,6 +10,7 @@
 
 use std::f64::consts::TAU;
 
+use crate::draw::shape;
 use crate::ui::theme::set_color;
 use crate::ui::theme::toolbar::{
     COLOR_ACCENT, COLOR_SMOOTHING_PREVIEW_BG, COLOR_SMOOTHING_PREVIEW_RAW,
@@ -64,7 +65,7 @@ pub(crate) fn draw_smoothing_preview(ctx: &cairo::Context, rect: (f64, f64, f64,
         y + (h - SAMPLE_H * scale) / 2.0,
     );
     let raw = smoothing_preview_sample();
-    let smoothed = crate::draw::shape::smooth_path(&raw, level);
+    let smoothed = shape::smooth_path(&raw, level);
 
     let _ = ctx.save();
     set_color(ctx, COLOR_SMOOTHING_PREVIEW_BG);
@@ -106,6 +107,8 @@ fn rounded_rect(ctx: &cairo::Context, rect: (f64, f64, f64, f64), radius: f64) {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+
     use super::*;
 
     /// Pixels where the as-drawn stroke shows on its own: bright and neutral,
@@ -150,7 +153,7 @@ mod tests {
 
     fn mean_deviation(level: u8) -> f64 {
         let raw = smoothing_preview_sample();
-        let smoothed = crate::draw::shape::smooth_path(&raw, level);
+        let smoothed = shape::smooth_path(&raw, level);
         let total: f64 = raw
             .iter()
             .zip(&smoothed)
@@ -164,10 +167,10 @@ mod tests {
         let raw = smoothing_preview_sample();
 
         assert_eq!(raw.len(), SAMPLE_POINTS);
-        assert_eq!(crate::draw::shape::smooth_path(&raw, 0), raw);
+        assert_eq!(shape::smooth_path(&raw, 0), raw);
         assert_eq!(mean_deviation(0), 0.0);
         // Each level takes visibly more of the tremor out than the last.
-        for level in 1..=crate::draw::MAX_PEN_SMOOTHING {
+        for level in 1..=draw::MAX_PEN_SMOOTHING {
             assert!(
                 mean_deviation(level) > mean_deviation(level - 1),
                 "level {level} smooths more than level {}",
@@ -175,7 +178,7 @@ mod tests {
             );
         }
         // Past two preview pixels on average at the top level.
-        assert!(mean_deviation(crate::draw::MAX_PEN_SMOOTHING) > 2.0 * SAMPLE_SCALE);
+        assert!(mean_deviation(draw::MAX_PEN_SMOOTHING) > 2.0 * SAMPLE_SCALE);
     }
 
     #[test]
@@ -191,7 +194,7 @@ mod tests {
     #[test]
     fn the_drawn_stroke_shows_only_where_smoothing_moved_it() {
         assert_eq!(raw_only_pixels(0), 0, "Off draws one stroke");
-        let separated = raw_only_pixels(crate::draw::MAX_PEN_SMOOTHING);
+        let separated = raw_only_pixels(draw::MAX_PEN_SMOOTHING);
         assert!(
             separated > 40,
             "only {separated} raw pixels show at the maximum"

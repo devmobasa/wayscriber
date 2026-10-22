@@ -108,7 +108,7 @@ impl LogicalDesktop {
 }
 
 pub(super) fn crop_portal_raster(
-    data: Vec<u8>,
+    data: &[u8],
     width: u32,
     height: u32,
     geometry: &OutputGeometry,
@@ -172,16 +172,8 @@ pub(super) fn crop_portal_raster(
         return Err(error("Portal capture does not contain the active output"));
     }
 
-    let (_, _, data) = crop_argb(
-        &data,
-        width,
-        height,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-    )
-    .ok_or_else(|| error("Portal capture crop is invalid"))?;
+    let (_, _, data) = crop_argb(data, width, height, crop.x, crop.y, crop.width, crop.height)
+        .ok_or_else(|| error("Portal capture crop is invalid"))?;
 
     resample(data, (crop.width, crop.height), target)
 }
@@ -276,6 +268,8 @@ fn resample(
 
 #[cfg(test)]
 mod tests {
+    use crate::capture::DesktopBackdropGeometry;
+
     use super::*;
     use wayland_client::protocol::wl_output;
 
@@ -308,9 +302,7 @@ mod tests {
             Some((active.physical_width, active.physical_height)),
         )
         .unwrap()
-        .with_desktop_backdrop_geometry(crate::capture::DesktopBackdropGeometry::from_outputs(
-            active, outputs,
-        ))
+        .with_desktop_backdrop_geometry(DesktopBackdropGeometry::from_outputs(active, outputs))
         .with_portal_outputs(Some(outputs.to_vec()))
         .with_known_output_count(Some(outputs.len() as u32))
     }
@@ -341,7 +333,7 @@ mod tests {
             }
         }
 
-        let image = crop_portal_raster(data, 16, 20, &geo).unwrap();
+        let image = crop_portal_raster(&data, 16, 20, &geo).unwrap();
 
         assert_eq!(image.data, 0xff123456_u32.to_ne_bytes().repeat(4 * 8));
     }
@@ -364,7 +356,7 @@ mod tests {
             }
         }
 
-        let image = crop_portal_raster(data, 18, 8, &geo).unwrap();
+        let image = crop_portal_raster(&data, 18, 8, &geo).unwrap();
 
         assert_eq!((image.width, image.height), (2, 6));
         assert_eq!(image.data, expected);
@@ -387,7 +379,7 @@ mod tests {
             }
         }
 
-        let image = crop_portal_raster(pixels, 12, 4, &geo).unwrap();
+        let image = crop_portal_raster(&pixels, 12, 4, &geo).unwrap();
 
         assert_eq!((image.width, image.height, image.stride), (8, 4, 32));
         assert_eq!(image.data, expected);
@@ -411,7 +403,7 @@ mod tests {
 
         assert!(
             crop_portal_raster(
-                pixels.clone(),
+                &pixels,
                 2,
                 1,
                 &geometry.clone().with_known_output_count(Some(2))
@@ -419,13 +411,8 @@ mod tests {
             .is_err()
         );
 
-        let image = crop_portal_raster(
-            pixels.clone(),
-            2,
-            1,
-            &geometry.with_known_output_count(Some(1)),
-        )
-        .unwrap();
+        let image =
+            crop_portal_raster(&pixels, 2, 1, &geometry.with_known_output_count(Some(1))).unwrap();
 
         assert_eq!(image.data, pixels);
     }
@@ -462,7 +449,7 @@ mod tests {
         let outputs = [output(0, 0, (8, 4), (16, 8)), output(2, 1, (4, 2), (4, 2))];
         let geo = geometry(outputs[1], &outputs);
         assert_eq!(geo.screenshot_size, Some((16, 8)));
-        assert!(crop_portal_raster(vec![0; 16 * 8 * 4], 16, 8, &geo).is_err());
+        assert!(crop_portal_raster(&vec![0; 16 * 8 * 4], 16, 8, &geo).is_err());
     }
 
     #[test]
@@ -484,8 +471,8 @@ mod tests {
             output(1280, 0, (640, 360), (1280, 720)),
         ];
         let geo = geometry(outputs[0], &outputs);
-        assert!(crop_portal_raster(vec![0; 16], 3840, 1440, &geo).is_err());
-        assert!(crop_portal_raster(vec![0; 1920 * 720 * 4], 1920, 720, &geo).is_err());
+        assert!(crop_portal_raster(&[0; 16], 3840, 1440, &geo).is_err());
+        assert!(crop_portal_raster(&vec![0; 1920 * 720 * 4], 1920, 720, &geo).is_err());
         assert!(
             LogicalDesktop::from_outputs(&[
                 output(i32::MIN, 0, (1, 1), (1, 1)),

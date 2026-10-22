@@ -15,8 +15,8 @@ struct FloatRect {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct BoardPickerPagePanelHitContext<'a> {
-    layout: &'a super::super::BoardPickerLayout,
+struct BoardPickerPagePanelHitContext<'layout> {
+    layout: &'layout super::super::BoardPickerLayout,
     board_index: usize,
     info: PagePanelInfo,
 }

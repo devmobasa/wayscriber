@@ -17,7 +17,7 @@ pub struct HitRegion {
     pub focus_id: Option<String>,
     pub rect: (f64, f64, f64, f64), // x, y, w, h
     pub event: ToolbarEvent,
-    pub kind: crate::backend::wayland::toolbar::events::HitKind,
+    pub kind: HitKind,
     pub tooltip: Option<String>,
 }
 
@@ -161,7 +161,11 @@ enum HitPhase {
 /// Both entry points below share this: keeping two copies meant every slider
 /// spec and every new hit kind had to be written twice, in step, forever.
 fn event_for_hit(hit: &HitRegion, x: f64, y: f64, phase: HitPhase) -> Option<ToolbarEvent> {
-    use crate::backend::wayland::toolbar::events::HitKind::*;
+    use crate::backend::wayland::toolbar::events::HitKind::{
+        Click, DragCustomRedoDelay, DragCustomUndoDelay, DragMoveTop, DragRedoDelay,
+        DragScrollTopPopover, DragSetFontSize, DragSetMarkerOpacity, DragSetSpotlightMagnification,
+        DragSetThickness, DragToolbarItem, DragUndoDelay,
+    };
 
     let event = match hit.kind {
         DragSetThickness { min, max } => slider_event_for_hit(
@@ -390,6 +394,9 @@ pub fn focused_event(hits: &[HitRegion], focus: Option<usize>) -> Option<Toolbar
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Action;
+    use crate::draw::color;
+
     use super::*;
 
     fn click(event: ToolbarEvent) -> HitRegion {
@@ -614,8 +621,8 @@ mod tests {
     #[test]
     fn secondary_press_resolves_only_quick_color_swatches() {
         let swatch = click(ToolbarEvent::SetQuickColor {
-            color: crate::draw::color::RED,
-            action: Some(crate::config::Action::SetColorRed),
+            color: color::RED,
+            action: Some(Action::SetColorRed),
             index: 6,
         });
 

@@ -1,10 +1,8 @@
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
 };
-use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_keyboard, wl_surface},
-};
+use wayland_client::protocol::{wl_keyboard, wl_surface};
+use wayland_client::{Connection, QueueHandle};
 
 use super::super::AboutWindowState;
 

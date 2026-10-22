@@ -1,3 +1,7 @@
+use crate::draw::EraserKind;
+use crate::input::EraserMode;
+use crate::{draw, session, test_temp};
+
 use super::{ClearToolStateOutcome, clear_session, clear_tool_state, inspect_session};
 use crate::draw::{Color, FontDescriptor, Frame, Shape};
 use crate::session::snapshot::{BoardPagesSnapshot, BoardSnapshot};
@@ -5,10 +9,13 @@ use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
 };
 #[cfg(unix)]
-use std::{
-    ffi::CString,
-    os::unix::{ffi::OsStrExt, fs::symlink},
-};
+use std::ffi::CString;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+use std::path::Path;
+use std::{fs, io};
 
 fn transparent_line_snapshot() -> SessionSnapshot {
     let mut frame = Frame::new();
@@ -50,8 +57,8 @@ fn sample_tool_state() -> ToolStateSnapshot {
         },
         current_thickness: 3.0,
         eraser_size: 12.0,
-        eraser_kind: crate::draw::EraserKind::Circle,
-        eraser_mode: crate::input::EraserMode::Brush,
+        eraser_kind: EraserKind::Circle,
+        eraser_mode: EraserMode::Brush,
         blur_style: Default::default(),
         recent_colors: Vec::new(),
         pen_smoothing: None,
@@ -68,7 +75,7 @@ fn sample_tool_state() -> ToolStateSnapshot {
         arrow_head_at_end: Some(false),
         arrow_style: None,
         arrow_label_enabled: Some(false),
-        polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+        polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
         tool_settings: None,
     }
@@ -76,41 +83,41 @@ fn sample_tool_state() -> ToolStateSnapshot {
 
 #[test]
 fn clear_session_removes_all_variants_for_prefix() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-1");
     options.per_output = true;
 
     let base_dir = &options.base_dir;
-    std::fs::write(base_dir.join("session-display_1.json"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1-DP_1.json"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1.json.cleared"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1-DP_1.json.cleared"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1.json.bak"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1-DP_1.json.bak"), b"{}").unwrap();
-    std::fs::write(
+    fs::write(base_dir.join("session-display_1.json"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1-DP_1.json"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1.json.cleared"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1-DP_1.json.cleared"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1.json.bak"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1-DP_1.json.bak"), b"{}").unwrap();
+    fs::write(
         base_dir.join("session-display_1.json.bak.recoverable"),
         b"{}",
     )
     .unwrap();
-    std::fs::write(
+    fs::write(
         base_dir.join("session-display_1-DP_1.json.bak.recoverable"),
         b"{}",
     )
     .unwrap();
-    std::fs::write(base_dir.join("session-display_1.json.recovery"), b"{}").unwrap();
-    std::fs::write(
+    fs::write(base_dir.join("session-display_1.json.recovery"), b"{}").unwrap();
+    fs::write(
         base_dir.join("session-display_1.json.recovery.recoverable"),
         b"{}",
     )
     .unwrap();
-    std::fs::write(
+    fs::write(
         base_dir.join("session-display_1.json.recovery.empty"),
         b"{}",
     )
     .unwrap();
-    std::fs::write(base_dir.join("session-display_1-DP_1.json.recovery"), b"{}").unwrap();
-    std::fs::write(base_dir.join("session-display_1.lock"), b"").unwrap();
-    std::fs::write(base_dir.join("session-display_1-DP_1.lock"), b"").unwrap();
+    fs::write(base_dir.join("session-display_1-DP_1.json.recovery"), b"{}").unwrap();
+    fs::write(base_dir.join("session-display_1.lock"), b"").unwrap();
+    fs::write(base_dir.join("session-display_1-DP_1.lock"), b"").unwrap();
 
     let outcome = clear_session(&options).expect("clear_session should succeed");
     assert!(
@@ -188,7 +195,7 @@ fn clear_session_removes_all_variants_for_prefix() {
 
 #[test]
 fn clear_session_removes_every_outputs_unreadable_copies_and_no_neighbors() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-1");
     options.per_output = true;
     let base_dir = &options.base_dir;
@@ -201,7 +208,7 @@ fn clear_session_removes_every_outputs_unreadable_copies_and_no_neighbors() {
         "session-display_1-DP_1.json.corrupt-01",
     ];
     for name in removed.iter().chain(&kept) {
-        std::fs::write(base_dir.join(name), b"unreadable").unwrap();
+        fs::write(base_dir.join(name), b"unreadable").unwrap();
     }
 
     let outcome = clear_session(&options).unwrap();
@@ -218,7 +225,7 @@ fn clear_session_removes_every_outputs_unreadable_copies_and_no_neighbors() {
 
 #[test]
 fn clear_session_keeps_neighbor_display_prefix_variants() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "wayland-1");
     options.per_output = true;
 
@@ -248,7 +255,7 @@ fn clear_session_keeps_neighbor_display_prefix_variants() {
         "session-wayland_10.json.recovery.empty",
         "session-wayland_10.lock",
     ] {
-        std::fs::write(base_dir.join(name), b"{}").unwrap();
+        fs::write(base_dir.join(name), b"{}").unwrap();
     }
 
     clear_session(&options).expect("clear_session should succeed");
@@ -295,7 +302,7 @@ fn clear_session_keeps_neighbor_display_prefix_variants() {
 
 #[test]
 fn inspect_session_reports_counts_and_flags() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-inspect");
     options.persist_transparent = true;
     options.persist_whiteboard = false;
@@ -365,7 +372,7 @@ fn inspect_session_reports_counts_and_flags() {
 
 #[test]
 fn clear_tool_state_preserves_board_data() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-clear-tool");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -383,7 +390,7 @@ fn clear_tool_state_preserves_board_data() {
         }
     );
 
-    let loaded = crate::session::load_snapshot(&options)
+    let loaded = session::load_snapshot(&options)
         .expect("load should succeed")
         .expect("snapshot should remain");
     assert!(loaded.tool_state.is_none(), "tool state should be removed");
@@ -393,7 +400,7 @@ fn clear_tool_state_preserves_board_data() {
 
 #[test]
 fn clear_tool_state_rewrites_compressed_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-compressed");
     options.persist_transparent = true;
     options.restore_tool_state = true;
@@ -431,7 +438,7 @@ fn clear_tool_state_rewrites_compressed_session() {
 
 #[test]
 fn clear_tool_state_without_output_identity_clears_all_per_output_variants() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-1");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -467,13 +474,13 @@ fn clear_tool_state_without_output_identity_clears_all_per_output_variants() {
         }
     );
 
-    let first_loaded = crate::session::load_snapshot(&first_output)
+    let first_loaded = session::load_snapshot(&first_output)
         .expect("first output load should succeed")
         .expect("first output snapshot should remain");
-    let second_loaded = crate::session::load_snapshot(&second_output)
+    let second_loaded = session::load_snapshot(&second_output)
         .expect("second output load should succeed")
         .expect("second output snapshot should remain");
-    let neighbor_loaded = crate::session::load_snapshot(&neighbor)
+    let neighbor_loaded = session::load_snapshot(&neighbor)
         .expect("neighbor load should succeed")
         .expect("neighbor snapshot should remain");
 
@@ -489,7 +496,7 @@ fn clear_tool_state_without_output_identity_clears_all_per_output_variants() {
 
 #[test]
 fn clear_tool_state_missing_session_is_nonfatal() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = SessionOptions::new(temp.path().to_path_buf(), "display-missing");
 
     let outcome = clear_tool_state(&options).expect("clear_tool_state should succeed");
@@ -499,7 +506,7 @@ fn clear_tool_state_missing_session_is_nonfatal() {
 
 #[test]
 fn clear_tool_state_without_tool_state_is_nonfatal_and_preserves_boards() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-no-tool");
     options.persist_transparent = true;
     options.restore_tool_state = true;
@@ -510,7 +517,7 @@ fn clear_tool_state_without_tool_state_is_nonfatal_and_preserves_boards() {
     let outcome = clear_tool_state(&options).expect("clear_tool_state should succeed");
     assert_eq!(outcome, ClearToolStateOutcome::NoToolState);
 
-    let loaded = crate::session::load_snapshot(&options)
+    let loaded = session::load_snapshot(&options)
         .expect("load should succeed")
         .expect("snapshot should remain");
     assert!(loaded.tool_state.is_none());
@@ -519,7 +526,7 @@ fn clear_tool_state_without_tool_state_is_nonfatal_and_preserves_boards() {
 
 #[test]
 fn clear_named_tool_state_targets_only_selected_file() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let selected = temp.path().join("lecture-04.wayscriber-session");
     let sibling = temp.path().join("lecture-05.wayscriber-session");
 
@@ -550,10 +557,10 @@ fn clear_named_tool_state_targets_only_selected_file() {
         }
     );
 
-    let selected_loaded = crate::session::load_snapshot(&selected_options)
+    let selected_loaded = session::load_snapshot(&selected_options)
         .expect("selected load should succeed")
         .expect("selected snapshot should remain");
-    let sibling_loaded = crate::session::load_snapshot(&sibling_options)
+    let sibling_loaded = session::load_snapshot(&sibling_options)
         .expect("sibling load should succeed")
         .expect("sibling snapshot should remain");
 
@@ -566,7 +573,7 @@ fn clear_named_tool_state_targets_only_selected_file() {
 
 #[test]
 fn inspect_named_file_missing_parent_reports_absent_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
     let named_path = temp
         .path()
@@ -583,7 +590,7 @@ fn inspect_named_file_missing_parent_reports_absent_session() {
 
 #[test]
 fn inspect_named_file_does_not_create_missing_lock() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let named_path = temp.path().join("lecture.wayscriber-session");
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
     options.set_named_file_target(named_path);
@@ -593,7 +600,7 @@ fn inspect_named_file_does_not_create_missing_lock() {
 
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
     let lock_path = options.lock_file_path();
-    std::fs::remove_file(&lock_path).expect("remove named session lock");
+    fs::remove_file(&lock_path).expect("remove named session lock");
 
     let inspection = inspect_session(&options).expect("inspect should succeed");
 
@@ -615,7 +622,7 @@ fn inspect_named_file_does_not_create_missing_lock() {
 #[cfg(unix)]
 #[test]
 fn inspect_named_file_rejects_special_lock_without_blocking() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let named_path = temp.path().join("lecture.wayscriber-session");
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
     options.set_named_file_target(named_path);
@@ -624,7 +631,7 @@ fn inspect_named_file_rejects_special_lock_without_blocking() {
     let snapshot = transparent_line_snapshot();
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
     let lock_path = options.lock_file_path();
-    std::fs::remove_file(&lock_path).expect("remove named session lock");
+    fs::remove_file(&lock_path).expect("remove named session lock");
     make_fifo(&lock_path);
 
     let err = inspect_session(&options).expect_err("special lock should be rejected");
@@ -638,11 +645,11 @@ fn inspect_named_file_rejects_special_lock_without_blocking() {
 
 #[test]
 fn clear_named_file_removes_only_selected_artifacts() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let selected = temp.path().join("lecture-04.wayscriber-session");
     let sibling = temp.path().join("lecture-05.wayscriber-session");
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
-    options.set_named_file_target(selected.clone());
+    options.set_named_file_target(selected);
 
     for path in [
         options.session_file_path(),
@@ -653,14 +660,10 @@ fn clear_named_file_removes_only_selected_artifacts() {
         options.clear_marker_file_path(),
         options.lock_file_path(),
     ] {
-        std::fs::write(path, b"artifact").unwrap();
+        fs::write(path, b"artifact").unwrap();
     }
     for suffix in ["", ".bak", ".recovery", ".cleared", ".lock"] {
-        std::fs::write(
-            crate::session::append_path_suffix(&sibling, suffix),
-            b"sibling",
-        )
-        .unwrap();
+        fs::write(session::append_path_suffix(&sibling, suffix), b"sibling").unwrap();
     }
 
     let outcome = clear_session(&options).expect("clear should succeed");
@@ -681,7 +684,7 @@ fn clear_named_file_removes_only_selected_artifacts() {
         assert!(!path.exists(), "{} should be removed", path.display());
     }
     for suffix in ["", ".bak", ".recovery", ".cleared", ".lock"] {
-        let path = crate::session::append_path_suffix(&sibling, suffix);
+        let path = session::append_path_suffix(&sibling, suffix);
         assert!(path.exists(), "{} should be preserved", path.display());
     }
 }
@@ -689,28 +692,28 @@ fn clear_named_file_removes_only_selected_artifacts() {
 #[cfg(unix)]
 #[test]
 fn clear_named_file_rejects_symlink_primary_without_removing_artifacts() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("real-session.wayscriber-session");
     let link = temp.path().join("linked-session.wayscriber-session");
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
     options.set_named_file_target(link.clone());
 
-    std::fs::write(&target, b"target").expect("write target session");
+    fs::write(&target, b"target").expect("write target session");
     symlink(&target, &link).expect("create symlink primary");
-    std::fs::write(options.backup_file_path(), b"backup").expect("write backup sidecar");
+    fs::write(options.backup_file_path(), b"backup").expect("write backup sidecar");
 
     let err = clear_session(&options).expect_err("symlink primary should reject clear");
 
     assert!(err.to_string().contains("not a symlink"), "{err:#}");
     assert!(
-        std::fs::symlink_metadata(&link)
+        fs::symlink_metadata(&link)
             .expect("symlink should remain")
             .file_type()
             .is_symlink(),
         "clear must not remove the symlink primary"
     );
     assert_eq!(
-        std::fs::read(&target).expect("target remains"),
+        fs::read(&target).expect("target remains"),
         b"target",
         "clear must not affect the symlink target"
     );
@@ -721,7 +724,7 @@ fn clear_named_file_rejects_symlink_primary_without_removing_artifacts() {
 }
 
 #[cfg(unix)]
-fn make_fifo(path: &std::path::Path) {
+fn make_fifo(path: &Path) {
     let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
     // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
     let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
@@ -730,6 +733,6 @@ fn make_fifo(path: &std::path::Path) {
         0,
         "mkfifo {} failed: {}",
         path.display(),
-        std::io::Error::last_os_error()
+        io::Error::last_os_error()
     );
 }

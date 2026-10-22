@@ -1,7 +1,12 @@
 //! Side files containing unreadable artifacts, independent of rotation backups.
-use super::*;
+use super::super::options::append_path_suffix;
+use super::remove_artifact_if_exists;
+use anyhow::{Context, Result};
 use std::ffi::OsStr;
+use std::fs;
+use std::io::ErrorKind;
 use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 
 pub(crate) const MAX_CORRUPT_COPIES_PER_ARTIFACT: usize = 3;
 const CORRUPT_COPY_MARKER: &str = ".corrupt-";
@@ -29,7 +34,7 @@ pub(crate) fn parse_corrupt_copy_name(name: &OsStr) -> Option<(&OsStr, u64)> {
     }
     Some((
         OsStr::from_bytes(artifact),
-        std::str::from_utf8(seq).ok()?.parse().ok()?,
+        str::from_utf8(seq).ok()?.parse().ok()?,
     ))
 }
 
@@ -94,10 +99,10 @@ pub(super) fn collect_corrupt_copies(primary: &Path, paths: &mut Vec<PathBuf>) -
 
 pub(crate) fn remove_corrupt_copies(artifact: &Path) -> Result<bool> {
     let mut removed = false;
-    for copy in corrupt_copies_of(artifact)?
+    let regular_copies = corrupt_copies_of(artifact)?
         .into_iter()
-        .filter(|copy| copy.regular_file)
-    {
+        .filter(|copy| copy.regular_file);
+    for copy in regular_copies {
         removed = remove_artifact_if_exists(&copy.path)? || removed;
     }
     Ok(removed)

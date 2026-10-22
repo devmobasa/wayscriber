@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use crate::capture::CaptureError;
+use crate::domain::{BoardGrid, BoardGridKind};
+use crate::draw;
 use crate::draw::{
-    BlurRectParams, Color, EraserReplayContext, Frame, RenderCtx, Shape, SpotlightMagnifierOutcome,
-    SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass, render_eraser_stroke,
-    render_spotlight_magnification_pass, render_spotlight_pass, spotlight_regions_for_frame,
+    BlurRectParams, BoardPaper, Color, EraserReplayContext, Frame, RenderCtx, Shape,
+    SpotlightMagnifierOutcome, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
+    TextMeasurer, render_eraser_stroke, render_spotlight_magnification_pass, render_spotlight_pass,
+    spotlight_regions_for_frame,
 };
 use crate::screen_pixels::ScreenImage;
 
@@ -45,7 +48,7 @@ pub enum CanvasExportBackdropSnapshot {
     Solid(Color),
     BoardPaper {
         color: Color,
-        grid: crate::domain::BoardGrid,
+        grid: BoardGrid,
     },
     PersistedImage {
         data: Arc<[u8]>,
@@ -58,8 +61,9 @@ pub enum CanvasExportBackdropSnapshot {
 }
 
 impl CanvasExportBackdropSnapshot {
-    pub fn board_paper(color: Color, grid: crate::domain::BoardGrid) -> Self {
-        if grid.kind == crate::domain::BoardGridKind::None {
+    #[must_use]
+    pub fn board_paper(color: Color, grid: BoardGrid) -> Self {
+        if grid.kind == BoardGridKind::None {
             Self::Solid(color)
         } else {
             Self::BoardPaper { color, grid }
@@ -67,7 +71,7 @@ impl CanvasExportBackdropSnapshot {
     }
     /// Loupe availability for this backdrop, answered without decoding it.
     ///
-    /// Mirrors what [`ExportBackdrop::new`] will produce for the same variant,
+    /// Mirrors what [`ExportBackdrop::try_new`] will produce for the same variant,
     /// which is what lets the main-thread preflight refuse a page before a
     /// render worker is ever submitted.
     pub(crate) fn magnifier_source(&self) -> SpotlightMagnifierSource {
@@ -90,6 +94,7 @@ pub struct CanvasExportRect {
 }
 
 impl CanvasExportRect {
+    #[must_use]
     pub fn new(x: f64, y: f64, width: f64, height: f64) -> Option<Self> {
         if !x.is_finite()
             || !y.is_finite()
@@ -110,13 +115,13 @@ impl CanvasExportRect {
 }
 
 pub fn draw_canvas_page_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     output_scale: f64,
 ) -> Result<(), CaptureError> {
     let ctx = render.cairo;
-    let backdrop = ExportBackdrop::new(&page.backdrop)?;
+    let backdrop = ExportBackdrop::try_new(&page.backdrop)?;
     let source = CanvasExportRect {
         x: page.origin_x as f64,
         y: page.origin_y as f64,
@@ -154,7 +159,7 @@ pub fn draw_canvas_page_with_measurer(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_canvas_page_region(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -229,10 +234,10 @@ impl ExportBackdrop {
     /// one number for the whole of it would be a guess.
     pub(crate) fn solid_luminance(&self) -> Option<f64> {
         self.bg_color
-            .map(|color| crate::draw::perceived_luminance(color.r, color.g, color.b))
+            .map(|color| draw::perceived_luminance(color.r, color.g, color.b))
     }
 
-    pub(crate) fn new(snapshot: &CanvasExportBackdropSnapshot) -> Result<Self, CaptureError> {
+    pub(crate) fn try_new(snapshot: &CanvasExportBackdropSnapshot) -> Result<Self, CaptureError> {
         match snapshot {
             CanvasExportBackdropSnapshot::Transparent => Ok(Self {
                 surface: None,
@@ -400,14 +405,14 @@ impl ExportBackdrop {
         SpotlightMagnifierSource::from_backdrop(
             self.surface
                 .is_some()
-                .then_some(crate::draw::IMMUTABLE_RASTER_SOURCE_TOKEN),
+                .then_some(draw::IMMUTABLE_RASTER_SOURCE_TOKEN),
             self.bg_color.is_some(),
         )
     }
 }
 
 fn draw_canvas_page_contents(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     render: &mut RenderCtx<'_, '_>,
     page: &CanvasPageExportSnapshot,
     backdrop: &ExportBackdrop,
@@ -419,11 +424,11 @@ fn draw_canvas_page_contents(
         backdrop.paint(ctx);
     }
     let paper = match page.backdrop {
-        CanvasExportBackdropSnapshot::BoardPaper { color, grid } => Some(
-            crate::draw::BoardPaper::for_context(color, grid, ctx).map_err(|err| {
+        CanvasExportBackdropSnapshot::BoardPaper { color, grid } => {
+            Some(BoardPaper::for_context(color, grid, ctx).map_err(|err| {
                 CaptureError::ImageError(format!("Failed to render board paper: {err}"))
-            })?,
-        ),
+            })?)
+        }
         _ => None,
     };
     if let Some(paper) = &paper {
@@ -522,7 +527,7 @@ fn draw_canvas_page_contents(
 pub(crate) fn frame_has_magnified_spotlight(frame: &Frame) -> bool {
     spotlight_regions_for_frame(frame)
         .iter()
-        .any(|region| crate::draw::spotlight_magnification_is_active(region.magnification))
+        .any(|region| draw::spotlight_magnification_is_active(region.magnification))
 }
 
 /// Refuses an export whose own backdrop cannot feed the loupes on its frame.
@@ -605,7 +610,7 @@ mod tests {
             width: 2,
             height: 2,
             stride: 8,
-            data: vec![0xFF; 16],
+            data: vec![0xff; 16],
         });
         let pixels = image.data.as_ptr();
         let backdrop = ExportBackdrop::from_region_source(
@@ -629,11 +634,11 @@ mod backdrop_luminance_tests {
 
     #[test]
     fn a_solid_page_reports_its_own_brightness_for_text_to_contrast_with() {
-        let white = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+        let white = ExportBackdrop::try_new(&CanvasExportBackdropSnapshot::Solid(Color::new(
             1.0, 1.0, 1.0, 1.0,
         )))
         .expect("backdrop");
-        let black = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+        let black = ExportBackdrop::try_new(&CanvasExportBackdropSnapshot::Solid(Color::new(
             0.0, 0.0, 0.0, 1.0,
         )))
         .expect("backdrop");
@@ -645,7 +650,7 @@ mod backdrop_luminance_tests {
     #[test]
     fn a_transparent_page_has_no_colour_to_report() {
         let backdrop =
-            ExportBackdrop::new(&CanvasExportBackdropSnapshot::Transparent).expect("backdrop");
+            ExportBackdrop::try_new(&CanvasExportBackdropSnapshot::Transparent).expect("backdrop");
 
         assert_eq!(backdrop.solid_luminance(), None);
     }
@@ -655,14 +660,14 @@ mod backdrop_luminance_tests {
         // The screen probes and gets ~1.0; the PDF page cannot be probed and
         // falls back to this. Both must reach the same decision, or an exported
         // board looks different from the board it was exported from.
-        let whiteboard = ExportBackdrop::new(&CanvasExportBackdropSnapshot::Solid(Color::new(
+        let whiteboard = ExportBackdrop::try_new(&CanvasExportBackdropSnapshot::Solid(Color::new(
             1.0, 1.0, 1.0, 1.0,
         )))
         .expect("backdrop");
         let red = Color::new(0.96, 0.2, 0.25, 1.0);
 
-        let on_screen = crate::draw::text_outline_color(red, Some(1.0));
-        let in_pdf = crate::draw::text_outline_color(red, whiteboard.solid_luminance());
+        let on_screen = draw::text_outline_color(red, Some(1.0));
+        let in_pdf = draw::text_outline_color(red, whiteboard.solid_luminance());
 
         assert_eq!(on_screen, in_pdf);
         assert!(in_pdf.r < 0.5, "and it is the dark halo");

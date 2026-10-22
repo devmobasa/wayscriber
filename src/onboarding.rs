@@ -1,5 +1,13 @@
+use std::fmt::{Display, Formatter};
+use std::{error, fmt, io, process};
+
+use toml::ser;
+
 use crate::domain::OnboardingTip;
-use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::durable_io;
+use crate::durable_io::{
+    AtomicWriteOptions, DurableIoError, OverwriteMode, PermissionPolicy, SymlinkPolicy,
+};
 use crate::paths::data_dir;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -354,17 +362,17 @@ pub(crate) enum OnboardingSaveError {
     Unavailable,
     CreateDirectory {
         path: PathBuf,
-        source: std::io::Error,
+        source: io::Error,
     },
-    Serialize(toml::ser::Error),
+    Serialize(ser::Error),
     Write {
         path: PathBuf,
-        source: crate::durable_io::DurableIoError,
+        source: DurableIoError,
     },
 }
 
-impl std::fmt::Display for OnboardingSaveError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OnboardingSaveError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unavailable => formatter.write_str("no user data directory is available"),
             Self::CreateDirectory { path, source } => write!(
@@ -384,7 +392,7 @@ impl std::fmt::Display for OnboardingSaveError {
     }
 }
 
-impl std::error::Error for OnboardingSaveError {}
+impl error::Error for OnboardingSaveError {}
 
 impl OnboardingStore {
     pub fn load() -> Self {
@@ -596,7 +604,7 @@ impl OnboardingStore {
                 return Err(error);
             }
         };
-        if let Err(source) = crate::durable_io::write_text_atomic(
+        if let Err(source) = durable_io::write_text_atomic(
             path,
             &contents,
             AtomicWriteOptions {
@@ -831,7 +839,7 @@ fn backup_path(path: &Path) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let pid = std::process::id();
+    let pid = process::id();
     let mut candidate = path.with_extension(format!("bak.{nanos}.{pid}"));
     if !candidate.exists() {
         return candidate;

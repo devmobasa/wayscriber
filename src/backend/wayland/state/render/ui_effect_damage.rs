@@ -6,10 +6,16 @@
 //! with the footprint from the previous frame so moves, content changes, and
 //! disappearance are cleaned up correctly.
 
-use super::super::*;
+use crate::input::state::RegionPurposeTag;
+use crate::ui;
+use crate::ui_text::UiTextEngine;
+
+use super::super::WaylandState;
+use super::runtime::{UiEffect, UiEffectFlags};
 use super::tool_preview::mouse_tool_preview_damage_rect;
-use super::{UiEffect, UiEffectFlags};
+use crate::input::{DrawingState, InputState};
 use crate::util::Rect;
+use std::time::Instant;
 
 /// Safety margin around effect bounds for anti-aliasing bleed.
 const UI_EFFECT_DAMAGE_MARGIN: i32 = 2;
@@ -29,12 +35,12 @@ pub(super) fn effect_rect(bounds: (f64, f64, f64, f64), width: u32, height: u32)
 }
 
 fn color_picker_effect_rect(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     input_state: &InputState,
     width: u32,
     height: u32,
 ) -> Option<Rect> {
-    crate::ui::color_picker_popup_visual_geometry_with_engine(engine, input_state, width, height)
+    ui::color_picker_popup_visual_geometry_with_engine(engine, input_state, width, height)
         .and_then(|bounds| effect_rect(bounds, width, height))
 }
 
@@ -93,7 +99,7 @@ impl WaylandState {
         let mut regions = Vec::new();
 
         let toast_rect = if flags.active(UiEffect::UiToast) {
-            crate::ui::ui_toast_geometry_with_engine(
+            ui::ui_toast_geometry_with_engine(
                 self.render.ui_text(),
                 &self.input_state,
                 width,
@@ -108,7 +114,7 @@ impl WaylandState {
             .roll(UiEffect::UiToast, toast_rect, &mut regions);
 
         let preset_rect = if flags.active(UiEffect::PresetToast) {
-            crate::ui::preset_toast_geometry_with_engine(
+            ui::preset_toast_geometry_with_engine(
                 self.render.ui_text(),
                 &self.input_state,
                 width,
@@ -128,7 +134,7 @@ impl WaylandState {
             .roll_blocked_feedback(flags.blocked_feedback())
         {
             regions.extend(
-                crate::ui::blocked_feedback_rects(width, height)
+                ui::blocked_feedback_rects(width, height)
                     .into_iter()
                     .filter_map(|bounds| effect_rect(bounds, width, height)),
             );
@@ -161,7 +167,7 @@ impl WaylandState {
                     height,
                     chrome_cursor_focused,
                 );
-            crate::ui::status_hud_geometry(&self.input_state, width, height)
+            ui::status_hud_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             self.input_state.clear_status_hud_layout();
@@ -206,7 +212,7 @@ impl WaylandState {
                     height,
                     chrome_cursor_focused,
                 );
-            crate::ui::zoom_chip_geometry(&self.input_state, width, height)
+            ui::zoom_chip_geometry(&self.input_state, width, height)
                 .and_then(|bounds| effect_rect(bounds, width, height))
         } else {
             self.input_state.clear_zoom_chip_layout();
@@ -220,7 +226,7 @@ impl WaylandState {
         // the same appear → resize → disappear union keeps the stale chips
         // cleaned up without escalating a keystroke to the full surface.
         let input_hud_rect = if flags.active(UiEffect::InputHud) {
-            crate::ui::input_hud_geometry_with_engine(
+            ui::input_hud_geometry_with_engine(
                 self.render.ui_text(),
                 &self.input_state,
                 width,
@@ -239,7 +245,7 @@ impl WaylandState {
         // optional action tooltip change, so typing and selection no longer
         // fall through to the full-surface empty-damage fallback.
         let command_palette_rect = if flags.active(UiEffect::CommandPalette) {
-            crate::ui::command_palette_visual_geometry_with_engine(
+            ui::command_palette_visual_geometry_with_engine(
                 self.render.ui_text(),
                 &self.input_state,
                 width,
@@ -279,9 +285,9 @@ impl WaylandState {
                 height,
             );
             (
-                crate::ui::context_menu_visual_geometry(&self.input_state)
+                ui::context_menu_visual_geometry(&self.input_state)
                     .and_then(|bounds| effect_rect(bounds, width, height)),
-                crate::ui::context_submenu_visual_geometry(&self.input_state)
+                ui::context_submenu_visual_geometry(&self.input_state)
                     .and_then(|bounds| effect_rect(bounds, width, height)),
             )
         } else {
@@ -356,11 +362,9 @@ impl WaylandState {
         // still has to be damaged and cleared even though it asks for no
         // frames of its own, so this keys off the overlay itself.
         let ocr_scan_rect = self.input_state.ocr_scan().and_then(|scan| {
-            let outcome = scan
-                .result(std::time::Instant::now())
-                .map(|(outcome, _)| outcome);
+            let outcome = scan.result(Instant::now()).map(|(outcome, _)| outcome);
             effect_rect(
-                crate::ui::ocr_scan_geometry(
+                ui::ocr_scan_geometry(
                     self.render.ui_text(),
                     scan.region(),
                     outcome,
@@ -374,18 +378,17 @@ impl WaylandState {
             .ui_damage_mut()
             .roll(UiEffect::OcrScan, ocr_scan_rect, &mut regions);
 
-        let measure_picker_damage = if self.input_state.region_state().purpose()
-            == Some(crate::input::state::RegionPurposeTag::Measure)
-        {
-            let (pointer_x, pointer_y) = self.pointer.position();
-            crate::ui::measure_picker_damage(
-                self.input_state.region_state().selection(),
-                (f64::from(pointer_x), f64::from(pointer_y)),
-                (width, height),
-            )
-        } else {
-            Vec::new()
-        };
+        let measure_picker_damage =
+            if self.input_state.region_state().purpose() == Some(RegionPurposeTag::Measure) {
+                let (pointer_x, pointer_y) = self.pointer.position();
+                ui::measure_picker_damage(
+                    self.input_state.region_state().selection(),
+                    (f64::from(pointer_x), f64::from(pointer_y)),
+                    (width, height),
+                )
+            } else {
+                Vec::new()
+            };
         self.render
             .ui_damage_mut()
             .roll_measure_picker(measure_picker_damage, &mut regions);
@@ -420,6 +423,11 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::InputHudConfig;
+    use crate::input::state::{InputHudSettings, test_support};
+    use crate::input::{Key, Modifiers, state};
+    use crate::ui::ShapeReadout;
+
     use super::*;
 
     #[test]
@@ -441,19 +449,19 @@ mod tests {
 
     #[test]
     fn shape_badge_damage_unions_appear_move_and_disappear_footprints() {
-        let first = crate::ui::measure_shape_badge(
-            &crate::ui_text::UiTextEngine::default(),
+        let first = ui::measure_shape_badge(
+            &UiTextEngine::default(),
             true,
-            crate::ui::ShapeReadout::size(20, 30),
+            ShapeReadout::size(20, 30),
             (100.0, 100.0),
             800,
             600,
         )
         .and_then(|badge| effect_rect(badge.bounds, 800, 600));
-        let second = crate::ui::measure_shape_badge(
-            &crate::ui_text::UiTextEngine::default(),
+        let second = ui::measure_shape_badge(
+            &UiTextEngine::default(),
             true,
-            crate::ui::ShapeReadout::size(200, 300),
+            ShapeReadout::size(200, 300),
             (300.0, 250.0),
             800,
             600,
@@ -478,8 +486,8 @@ mod tests {
 
     #[test]
     fn recognition_chip_damage_stays_on_its_own_footprint_until_it_expires() {
-        let chip = crate::ui::recognition_chip_layout(
-            &crate::ui_text::UiTextEngine::default(),
+        let chip = ui::recognition_chip_layout(
+            &UiTextEngine::default(),
             "Circle · Ctrl+Z keeps ink",
             (300.0, 100.0, 200.0, 150.0),
             0.5,
@@ -609,16 +617,14 @@ mod tests {
     /// keystroke to the whole surface.
     #[test]
     fn input_hud_damage_is_a_compact_row_not_the_full_surface() {
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        input.init_input_hud_from_config(crate::input::state::InputHudSettings::from(
-            &crate::config::InputHudConfig {
-                enabled: true,
-                ..crate::config::InputHudConfig::default()
-            },
-        ));
-        input.note_input_hud_key(crate::input::Key::Escape, crate::input::Modifiers::new());
+        let mut input = test_support::make_test_input_state();
+        input.init_input_hud_from_config(InputHudSettings::from(&InputHudConfig {
+            enabled: true,
+            ..InputHudConfig::default()
+        }));
+        input.note_input_hud_key(Key::Escape, Modifiers::new());
 
-        let bounds = crate::ui::input_hud_geometry(&input, 1920, 1080).expect("row geometry");
+        let bounds = ui::input_hud_geometry(&input, 1920, 1080).expect("row geometry");
         let damage = effect_rect(bounds, 1920, 1080).expect("row damage");
         assert!(damage.width * damage.height < 1920 * 1080 / 10);
     }
@@ -649,12 +655,11 @@ mod tests {
 
     #[test]
     fn color_picker_typing_damage_is_compact_instead_of_full_screen() {
-        let mut input = crate::input::state::test_support::make_test_input_state();
+        let mut input = test_support::make_test_input_state();
         input.open_color_picker_popup();
 
-        let damage =
-            color_picker_effect_rect(&crate::ui_text::UiTextEngine::default(), &input, 1920, 1080)
-                .expect("popup damage");
+        let damage = color_picker_effect_rect(&UiTextEngine::default(), &input, 1920, 1080)
+            .expect("popup damage");
 
         // Before targeted popup damage, an ordinary key used the renderer's
         // 1920x1080 empty-damage fallback (2,073,600 pixels). Now it is the
@@ -662,8 +667,8 @@ mod tests {
         // from the layout constants rather than hard-coded, so changing the
         // panel's size does not fail this test for the wrong reason.
         const MARGIN: i32 = 2;
-        let panel_w = crate::input::state::COLOR_PICKER_POPUP_WIDTH as i32;
-        let panel_h = crate::input::state::COLOR_PICKER_POPUP_HEIGHT as i32;
+        let panel_w = state::COLOR_PICKER_POPUP_WIDTH as i32;
+        let panel_h = state::COLOR_PICKER_POPUP_HEIGHT as i32;
         let expected = Rect::new(
             (1920 - panel_w) / 2 - MARGIN,
             (1080 - panel_h) / 2 - MARGIN,
@@ -677,7 +682,7 @@ mod tests {
 
     #[test]
     fn color_picker_damage_includes_the_hovered_action_tooltip() {
-        let mut input = crate::input::state::test_support::make_test_input_state();
+        let mut input = test_support::make_test_input_state();
         input.open_color_picker_popup();
         input.update_color_picker_popup_layout(1920, 1080);
         let layout = input.color_picker_popup_layout().expect("popup layout");
@@ -686,9 +691,8 @@ mod tests {
             layout.eyedropper_btn_y + layout.action_btn_size / 2.0,
         )));
 
-        let damage =
-            color_picker_effect_rect(&crate::ui_text::UiTextEngine::default(), &input, 1920, 1080)
-                .expect("tooltip damage");
+        let damage = color_picker_effect_rect(&UiTextEngine::default(), &input, 1920, 1080)
+            .expect("tooltip damage");
 
         assert!(damage.width > 304);
         assert!(damage.width < 1920);

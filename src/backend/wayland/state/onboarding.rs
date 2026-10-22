@@ -1,11 +1,15 @@
+use crate::config;
+use crate::config::TopDisplayMode;
 use crate::config::keybindings::Action;
 use crate::domain::OnboardingTip;
 use crate::i18n::{tr, trf};
+use crate::input::InputState;
 use crate::input::state::{Toast, ToastCommand, ToastPriority};
-use crate::onboarding::DEFERRED_HINT_REPEAT_MAX;
+use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, OnboardingSaveError};
 use std::time::{Duration, Instant};
 
-use super::*;
+use super::WaylandState;
+use anyhow::Result;
 
 mod card;
 mod first_run;
@@ -32,11 +36,11 @@ enum ContextualHint {
 
 struct TipAcknowledgementOutcome {
     follow_up: Option<Action>,
-    persistence_error: Option<crate::onboarding::OnboardingSaveError>,
+    persistence_error: Option<OnboardingSaveError>,
 }
 
 fn acknowledge_tip_command(
-    result: Result<(), crate::onboarding::OnboardingSaveError>,
+    result: Result<(), OnboardingSaveError>,
     follow_up: Option<Action>,
 ) -> TipAcknowledgementOutcome {
     TipAcknowledgementOutcome {
@@ -48,7 +52,7 @@ fn acknowledge_tip_command(
 /// The visible status-HUD entry that can open the board picker. The hint must
 /// not advertise the pill when both configurable Board/Page segments are
 /// absent: the remaining color/tool/help segments perform different actions.
-fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'static str> {
+fn status_bar_board_picker_entry(input: &InputState) -> Option<&'static str> {
     if !input.ui_visibility.show_status_bar
         || !input.ui_visibility.status_bar_interactive
         || input.boards.board_count() <= 1
@@ -67,10 +71,10 @@ fn status_bar_board_picker_entry(input: &crate::input::InputState) -> Option<&'s
 }
 
 /// Whether the top-strip overflow that owns the Canvas popover is reachable.
-fn canvas_popover_hint_relevant(input: &crate::input::InputState) -> bool {
+fn canvas_popover_hint_relevant(input: &InputState) -> bool {
     input.toolbar_top_visible()
         && !input.toolbar_top_minimized()
-        && input.toolbar_top_display_mode() == crate::config::TopDisplayMode::Full
+        && input.toolbar_top_display_mode() == TopDisplayMode::Full
 }
 
 fn automatic_tip_toast(message: impl Into<String>, tip: OnboardingTip) -> Toast {
@@ -271,7 +275,7 @@ impl WaylandState {
 
         let message = format!(
             "Tip: press {shortcut} for {}.",
-            crate::config::action_label(action)
+            config::action_label(action)
         );
         let outcome = self.input_state.push_toast(
             ToastPriority::Hint,
@@ -521,10 +525,7 @@ impl WaylandState {
         }
     }
 
-    fn show_onboarding_persistence_warning(
-        &mut self,
-        error: &crate::onboarding::OnboardingSaveError,
-    ) {
+    fn show_onboarding_persistence_warning(&mut self, error: &OnboardingSaveError) {
         self.input_state.push_toast(
             ToastPriority::Critical,
             "onboarding.persistence",

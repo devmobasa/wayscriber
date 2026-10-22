@@ -1,10 +1,9 @@
+use std::mem;
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
-use wayland_client::{
-    Proxy,
-    protocol::{wl_keyboard, wl_seat},
-};
+use wayland_client::Proxy;
+use wayland_client::protocol::{wl_keyboard, wl_seat};
 
 use super::WaylandState;
 use super::seat_devices::SeatDevices;
@@ -266,7 +265,7 @@ impl FocusState {
     }
 
     pub(in crate::backend::wayland) fn take_xdg_explicit_close_requested(&mut self) -> bool {
-        std::mem::take(&mut self.xdg_explicit_close_requested)
+        mem::take(&mut self.xdg_explicit_close_requested)
     }
 
     pub(in crate::backend::wayland) fn activation_token_to_apply(&self) -> Option<String> {

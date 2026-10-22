@@ -1,12 +1,19 @@
-use crate::toolbar_gtk::view::{
-    CaptureProofTarget, capture_suppression::wait_for_presented_transparency,
-    widget_native_is_mapped,
-};
+use std::cell::Cell;
+use std::rc::Rc;
+use std::{env, thread};
+
+use gtk4::gdk::FrameClockPhase;
+use gtk4::glib::MainContext;
+use gtk4::graphene::Rect;
+use gtk4::gsk::{CairoRenderer, GLRenderer};
+
+use crate::toolbar_gtk::view::capture_suppression::wait_for_presented_transparency;
+use crate::toolbar_gtk::view::{CaptureProofTarget, widget_native_is_mapped};
 use gtk4::prelude::*;
 use std::time::{Duration, Instant};
 
 pub(super) fn prove(generation: u64, targets: Vec<CaptureProofTarget>) {
-    gtk4::glib::MainContext::default()
+    MainContext::default()
         .block_on(wait_for_presented_transparency(generation, targets))
         .expect("transparent native buffer presentation");
 }
@@ -19,9 +26,9 @@ pub(super) fn native_size(widget: &impl IsA<gtk4::Widget>) -> (i32, i32) {
 
 pub(super) fn assert_renderer(window: &gtk4::Window) {
     let renderer = window.renderer().unwrap();
-    match std::env::var("GSK_RENDERER").unwrap().as_str() {
-        "cairo" => assert!(renderer.is::<gtk4::gsk::CairoRenderer>()),
-        "gl" => assert!(renderer.is::<gtk4::gsk::GLRenderer>()),
+    match env::var("GSK_RENDERER").unwrap().as_str() {
+        "cairo" => assert!(renderer.is::<CairoRenderer>()),
+        "gl" => assert!(renderer.is::<GLRenderer>()),
         "vulkan" => assert_eq!(renderer.type_().name(), "GskVulkanRenderer"),
         _ => unreachable!(),
     }
@@ -89,19 +96,20 @@ pub(super) fn assert_restored(widget: &impl IsA<gtk4::Widget>, expected: &[[u8; 
 pub(super) fn settled_pixels(widget: &impl IsA<gtk4::Widget>) -> Vec<[u8; 4]> {
     let deadline = Instant::now() + Duration::from_secs(2);
     let mut previous = pixels(widget);
-    let mut stable = 0;
+    let mut stable_since = Instant::now();
+
+    // Popup layout can change after several identical frames. Require a
+    // quiet interval before saving the normal pixels used after capture.
     loop {
         wait_for_frame(widget);
         let current = pixels(widget);
-        if current == previous {
-            stable += 1;
-        } else {
-            stable = 0;
-        }
-        if stable == 3 {
+        let now = Instant::now();
+        if current != previous {
+            stable_since = now;
+        } else if now.duration_since(stable_since) >= Duration::from_millis(200) {
             return current;
         }
-        assert!(Instant::now() < deadline, "normal fixture did not settle");
+        assert!(now < deadline, "normal fixture did not settle");
         previous = current;
     }
 }
@@ -127,7 +135,7 @@ pub(super) fn pixels(widget: &impl IsA<gtk4::Widget>) -> Vec<[u8; 4]> {
     };
     // WidgetPaintable clips to the allocation. The margin checks transparent
     // render bounds only; native popup geometry is asserted separately.
-    let viewport = gtk4::graphene::Rect::new(
+    let viewport = Rect::new(
         -16.0,
         -16.0,
         widget.width() as f32 + 32.0,
@@ -149,7 +157,7 @@ pub(super) fn pixels(widget: &impl IsA<gtk4::Widget>) -> Vec<[u8; 4]> {
 }
 
 pub(super) fn wait_for_frame(widget: &impl IsA<gtk4::Widget>) {
-    let context = gtk4::glib::MainContext::default();
+    let context = MainContext::default();
     let deadline = Instant::now() + Duration::from_secs(3);
     let clock = loop {
         while context.pending() {
@@ -163,19 +171,19 @@ pub(super) fn wait_for_frame(widget: &impl IsA<gtk4::Widget>) {
             break clock;
         }
         assert!(Instant::now() < deadline, "GTK widget did not map");
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     };
-    let painted = std::rc::Rc::new(std::cell::Cell::new(false));
+    let painted = Rc::new(Cell::new(false));
     let observed = painted.clone();
     let handler = clock.connect_after_paint(move |_| observed.set(true));
     widget.as_ref().queue_draw();
-    clock.request_phase(gtk4::gdk::FrameClockPhase::PAINT);
+    clock.request_phase(FrameClockPhase::PAINT);
     while !painted.get() {
         while context.pending() {
             context.iteration(false);
         }
         assert!(Instant::now() < deadline, "GTK did not paint");
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     }
     clock.disconnect(handler);
 }

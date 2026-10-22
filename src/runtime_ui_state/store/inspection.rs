@@ -1,10 +1,12 @@
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::{MAX_RUNTIME_UI_FILE_BYTES, RuntimeUiStateInspection, fs::PinnedPath};
+use super::fs::PinnedPath;
+use super::{MAX_RUNTIME_UI_FILE_BYTES, RuntimeUiStateInspection};
 use crate::runtime_ui_state::{
     RuntimeStateFileIdentity, RuntimeStateInspectionError, RuntimeStatePathIdentity,
     RuntimeStateResolvedParent, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
@@ -29,11 +31,11 @@ pub(super) fn inspect_path(
                 RuntimeStateSourceRevision::missing(path_identity),
             ));
         }
-        Err(error) => return Err(inspection_error(&resolved_path, error)),
+        Err(error) => return Err(inspection_error(&resolved_path, &error)),
     };
     let before = file
         .metadata()
-        .map_err(|error| inspection_error(&resolved_path, error))?;
+        .map_err(|error| inspection_error(&resolved_path, &error))?;
     if !before.file_type().is_file() {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state path is not a regular file: {}",
@@ -55,13 +57,13 @@ pub(super) fn inspect_path(
         )));
     }
     file.seek(SeekFrom::Start(0))
-        .map_err(|error| inspection_error(&resolved_path, error))?;
+        .map_err(|error| inspection_error(&resolved_path, &error))?;
     let verification_bytes = read_bounded(&resolved_path, &mut file)?;
     let after = file
         .metadata()
-        .map_err(|error| inspection_error(&resolved_path, error))?;
+        .map_err(|error| inspection_error(&resolved_path, &error))?;
     let active = fs::symlink_metadata(&resolved_path)
-        .map_err(|error| inspection_error(&resolved_path, error))?;
+        .map_err(|error| inspection_error(&resolved_path, &error))?;
     if active.file_type().is_symlink() || !active.file_type().is_file() {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state path changed type during inspection: {}",
@@ -113,11 +115,11 @@ pub(super) fn inspect_pinned(
                 )),
             ));
         }
-        Err(error) => return Err(inspection_error(&reported_path, error)),
+        Err(error) => return Err(inspection_error(&reported_path, &error)),
     };
     let before = file
         .metadata()
-        .map_err(|error| inspection_error(&reported_path, error))?;
+        .map_err(|error| inspection_error(&reported_path, &error))?;
     if !before.file_type().is_file() {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state path is not a regular file: {}",
@@ -133,15 +135,15 @@ pub(super) fn inspect_pinned(
 
     let bytes = read_bounded(&reported_path, &mut file)?;
     file.seek(SeekFrom::Start(0))
-        .map_err(|error| inspection_error(&reported_path, error))?;
+        .map_err(|error| inspection_error(&reported_path, &error))?;
     let verification_bytes = read_bounded(&reported_path, &mut file)?;
     let after = file
         .metadata()
-        .map_err(|error| inspection_error(&reported_path, error))?;
+        .map_err(|error| inspection_error(&reported_path, &error))?;
     let active = path
         .open_read()
         .and_then(|file| file.metadata())
-        .map_err(|error| inspection_error(&reported_path, error))?;
+        .map_err(|error| inspection_error(&reported_path, &error))?;
     if !active.file_type().is_file() {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state path changed type during inspection: {}",
@@ -177,7 +179,7 @@ pub(super) fn inspect_pinned(
 
 #[derive(Debug)]
 struct ResolvedParent {
-    resolved_path: std::path::PathBuf,
+    resolved_path: PathBuf,
     identity: RuntimeStateFileIdentity,
 }
 
@@ -195,10 +197,10 @@ fn resolve_parent(path: &Path) -> Result<Option<ResolvedParent>, RuntimeStateIns
     let resolved_path = match fs::canonicalize(parent) {
         Ok(path) => path,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(inspection_error(parent, error)),
+        Err(error) => return Err(inspection_error(parent, &error)),
     };
     let metadata =
-        fs::metadata(&resolved_path).map_err(|error| inspection_error(&resolved_path, error))?;
+        fs::metadata(&resolved_path).map_err(|error| inspection_error(&resolved_path, &error))?;
     if !metadata.is_dir() {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state parent is not a directory: {}",
@@ -236,7 +238,7 @@ fn source_parent(path: &Path) -> &Path {
         .unwrap_or_else(|| Path::new("."))
 }
 
-fn file_name(path: &Path) -> Result<&std::ffi::OsStr, RuntimeStateInspectionError> {
+fn file_name(path: &Path) -> Result<&OsStr, RuntimeStateInspectionError> {
     path.file_name().ok_or_else(|| {
         RuntimeStateInspectionError::new(format!(
             "runtime-state path has no file name: {}",
@@ -286,7 +288,7 @@ fn read_bounded(path: &Path, file: &mut File) -> Result<Vec<u8>, RuntimeStateIns
     file.by_ref()
         .take(MAX_RUNTIME_UI_FILE_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| inspection_error(path, error))?;
+        .map_err(|error| inspection_error(path, &error))?;
     if bytes.len() as u64 > MAX_RUNTIME_UI_FILE_BYTES {
         return Err(RuntimeStateInspectionError::new(format!(
             "runtime-state file exceeds the {} byte limit",
@@ -296,7 +298,7 @@ fn read_bounded(path: &Path, file: &mut File) -> Result<Vec<u8>, RuntimeStateIns
     Ok(bytes)
 }
 
-fn inspection_error(path: &Path, error: io::Error) -> RuntimeStateInspectionError {
+fn inspection_error(path: &Path, error: &io::Error) -> RuntimeStateInspectionError {
     RuntimeStateInspectionError::new(format!(
         "could not inspect runtime-state path {}: {error}",
         path.display()

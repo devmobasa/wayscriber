@@ -1,5 +1,7 @@
+use std::env;
+
 pub(crate) fn env_flag_enabled(name: &str) -> bool {
-    if let Ok(val) = std::env::var(name) {
+    if let Ok(val) = env::var(name) {
         matches!(
             val.to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
@@ -12,20 +14,17 @@ pub(crate) fn env_flag_enabled(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::env_flag_enabled;
+    use crate::test_env;
     use std::env;
-    use std::sync::Mutex;
 
     const TEST_FLAG_ENV: &str = "WAYSCRIBER_TEST_FLAG";
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn env_flag_enabled_accepts_truthy_values() {
-        let _guard = ENV_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_env::lock();
 
         for value in ["1", "true", "yes", "on", "TrUe"] {
-            // SAFETY: serialized via ENV_MUTEX
+            // SAFETY: the environment lease held above serializes environment access.
             unsafe {
                 env::set_var(TEST_FLAG_ENV, value);
             }
@@ -35,6 +34,8 @@ mod tests {
             );
         }
 
+        // SAFETY: serialized via ENV_MUTEX, still held by `_guard`, with the
+        // only other test that writes this key.
         unsafe {
             env::remove_var(TEST_FLAG_ENV);
         }
@@ -42,12 +43,10 @@ mod tests {
 
     #[test]
     fn env_flag_enabled_rejects_non_truthy_values() {
-        let _guard = ENV_MUTEX
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_env::lock();
 
         for value in ["0", "false", "no", "off", "", "random"] {
-            // SAFETY: serialized via ENV_MUTEX
+            // SAFETY: the environment lease held above serializes environment access.
             unsafe {
                 env::set_var(TEST_FLAG_ENV, value);
             }
@@ -57,6 +56,8 @@ mod tests {
             );
         }
 
+        // SAFETY: serialized via ENV_MUTEX, still held by `_guard`, with the
+        // only other test that writes this key.
         unsafe {
             env::remove_var(TEST_FLAG_ENV);
         }

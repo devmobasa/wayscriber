@@ -1,4 +1,6 @@
+use crate::draw::TextMeasurer;
 use crate::input::events::MouseButton;
+use crate::input::state::InputTextResources;
 use crate::input::state::core::PickerDrag;
 
 use super::super::super::InputState;
@@ -29,7 +31,7 @@ impl InputState {
 
     pub(in crate::input::state) fn handle_radial_menu_press_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         button: MouseButton,
         screen_x: i32,
         screen_y: i32,
@@ -185,17 +187,12 @@ impl InputState {
         x: i32,
         y: i32,
     ) -> bool {
-        self.handle_properties_panel_press_with_measurer(
-            &crate::draw::TextMeasurer::default(),
-            button,
-            x,
-            y,
-        )
+        self.handle_properties_panel_press_with_measurer(&TextMeasurer::default(), button, x, y)
     }
 
     pub(in crate::input::state) fn handle_properties_panel_press_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         button: MouseButton,
         x: i32,
         y: i32,

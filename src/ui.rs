@@ -48,9 +48,9 @@ pub(crate) use context_menu::{
 };
 pub(crate) use eyedropper_loupe::{compute_eyedropper_loupe_layout, render_eyedropper_loupe};
 pub use font_picker::render_font_picker;
-#[allow(unused_imports)]
-pub use help_overlay::HelpOverlayBindings;
 pub(crate) use help_overlay::{HelpContentCache, render_help_overlay_result_with_content};
+#[allow(unused_imports)]
+pub use help_overlay::{HelpContentOptions, HelpOverlayBindings};
 #[allow(unused_imports)]
 pub use help_overlay::{
     HelpHitMap, HelpOverlayRegion, HelpRenderResult, render_help_overlay,
@@ -96,7 +96,6 @@ pub(crate) use region_capture_picker::{
 };
 pub(crate) use region_resize_handles::RegionResizeHandles;
 pub(crate) use spotlight_control::render_spotlight_magnification_control;
-pub(crate) use status::StatusHudTooltip;
 pub use status::{
     StatusHudLayout, StatusHudSegmentKind, ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress,
     compute_status_hud_layout, compute_zoom_chip_layout, render_editing_badge, render_frozen_badge,
@@ -105,10 +104,11 @@ pub use status::{
     zoom_chip_geometry,
 };
 pub(crate) use status::{
-    compute_status_hud_layout_with_resources, compute_zoom_chip_layout_with_engine,
-    render_editing_badge_with_engine, render_frozen_badge_with_engine,
-    render_page_badge_with_engine, render_pan_badge_with_engine, render_status_bar_with_resources,
-    render_zoom_badge_with_engine, render_zoom_chip_with_resources,
+    StatusHudTooltip, compute_status_hud_layout_with_resources,
+    compute_zoom_chip_layout_with_engine, render_editing_badge_with_engine,
+    render_frozen_badge_with_engine, render_page_badge_with_engine, render_pan_badge_with_engine,
+    render_status_bar_with_resources, render_zoom_badge_with_engine,
+    render_zoom_chip_with_resources,
 };
 pub use toasts::{
     blocked_feedback_rects, preset_toast_geometry, render_blocked_feedback, render_preset_toast,

@@ -1,12 +1,23 @@
-use super::*;
-use crate::{
-    backend::wayland::runtime_ui_state::ToolbarRuntimeFinish,
-    input::{InputState, state::TopMenuState},
-    ui::toolbar::model::{
-        ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
-        ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
-    },
+use std::env;
+use std::sync::OnceLock;
+use std::time::Instant;
+
+use crate::env_vars;
+use crate::ui::toolbar::model;
+
+use super::super::WaylandState;
+use super::super::helpers::drag_log;
+use super::drag::MoveDragKind;
+use crate::backend::wayland::runtime_ui_state::ToolbarRuntimeFinish;
+use crate::input::InputState;
+use crate::input::state::TopMenuState;
+use crate::ui::toolbar::model::{
+    ToolbarBackendRoute, ToolbarEventPolicy, ToolbarPersistence, ToolbarPopover,
+    ToolbarRuntimeUiPersistenceTarget, popovers_for_event,
 };
+use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
+#[cfg(test)]
+use anyhow::Result;
 use wayland_client::{Connection, QueueHandle};
 
 mod feedback;
@@ -25,9 +36,8 @@ use session::populate_session_snapshot;
 /// The daemon marks its overlay children with the child-generation variable
 /// (`daemon::overlay::spawn`), which never changes during a run.
 fn overlay_is_daemon_child() -> bool {
-    static DAEMON_CHILD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *DAEMON_CHILD
-        .get_or_init(|| std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some())
+    static DAEMON_CHILD: OnceLock<bool> = OnceLock::new();
+    *DAEMON_CHILD.get_or_init(|| env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some())
 }
 
 fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
@@ -38,13 +48,13 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
 /// palette, and a click landing right after the minimized tab (or micro chip)
 /// restored the strip, whose controls now sit under the pointer. Both
 /// frontends deliver clicks through this one path.
-fn toolbar_event_dropped(input_state: &InputState, now: std::time::Instant) -> bool {
+fn toolbar_event_dropped(input_state: &InputState, now: Instant) -> bool {
     toolbar_event_blocked_by_modal(input_state) || input_state.toolbar_restore_guard_blocks(now)
 }
 
 fn finalize_pointer_gestures_before_toolbar_dispatch(
     input_state: &mut InputState,
-    spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
+    spotlight_wheel_idle_deadline: &mut Option<Instant>,
 ) {
     // Several backend-owned toolbar routes return before
     // `InputState::apply_toolbar_event`, including session operations. Close
@@ -68,7 +78,7 @@ enum ToolbarEventPreflight {
 
 fn handle_toolbar_event_preflight(
     input_state: &mut InputState,
-    spotlight_wheel_idle_deadline: &mut Option<std::time::Instant>,
+    spotlight_wheel_idle_deadline: &mut Option<Instant>,
     event: &ToolbarEvent,
     rebind_requested: bool,
 ) -> ToolbarEventPreflight {
@@ -78,7 +88,7 @@ fn handle_toolbar_event_preflight(
     // already resolved.
     finalize_pointer_gestures_before_toolbar_dispatch(input_state, spotlight_wheel_idle_deadline);
 
-    if rebind_requested && let Some(action) = crate::ui::toolbar::model::action_for_event(event) {
+    if rebind_requested && let Some(action) = model::action_for_event(event) {
         input_state.begin_keybinding_capture(action);
         return ToolbarEventPreflight::RebindCaptured;
     }
@@ -197,7 +207,7 @@ impl WaylandState {
         // GTK toolbar feedback bypasses the built-in pointer modal gate, so
         // enforce the same rule in the shared event path as well. The same
         // path drops the second click of a double-click on the restore tab.
-        if toolbar_event_dropped(&self.input_state, std::time::Instant::now()) {
+        if toolbar_event_dropped(&self.input_state, Instant::now()) {
             return;
         }
         // A toolbar interaction replaces the modal sampler. Do this before

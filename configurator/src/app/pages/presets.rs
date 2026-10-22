@@ -42,7 +42,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Visible slots"),
             tr("How many preset slots the toolbar offers."),
             counts,
-            count_labels,
+            &count_labels,
             |app| app.draft.presets.slot_count,
             Message::PresetSlotCountChanged,
         );
@@ -187,7 +187,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     rows.combo_row(
         tr("Tool"),
         tools,
-        tool_labels,
+        &tool_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.tool),
         Message::PresetToolChanged,
     );
@@ -215,7 +215,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     rows.combo_row(
         tr("Eraser kind"),
         kinds,
-        kind_labels,
+        &kind_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.eraser_kind),
         Message::PresetEraserKindChanged,
     );
@@ -224,7 +224,7 @@ fn build_slot(page: &mut PageBuilder, slot: usize) {
     rows.combo_row(
         tr("Eraser mode"),
         modes,
-        mode_labels,
+        &mode_labels,
         move |app| app.draft.presets.slot(slot).map(|draft| draft.eraser_mode),
         Message::PresetEraserModeChanged,
     );

@@ -1,4 +1,10 @@
-use super::*;
+use super::definitions::toolbar_item_definitions;
+use super::{
+    DEFAULT_TOP_CONTROLS_ORDER, DEFAULT_TOP_TOOLS_ORDER, ToolbarItemCategory,
+    ToolbarItemDefinition, ToolbarItemId, ToolbarItemSurface,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -10,6 +16,7 @@ pub struct ToolbarItemOrderConfig {
 }
 
 impl ToolbarItemOrderConfig {
+    #[must_use]
     pub fn resolved(&self) -> ResolvedToolbarOrder {
         ResolvedToolbarOrder {
             top_tools: resolve_order_group(ToolbarItemOrderGroup::TopTools, &self.top_tools),
@@ -110,6 +117,7 @@ impl ToolbarItemOrderGroup {
     pub(crate) const ALL: [Self; 2] = [Self::TopTools, Self::TopControls];
 }
 
+#[must_use]
 pub fn toolbar_item_order_group(
     definition: &ToolbarItemDefinition,
 ) -> Option<ToolbarItemOrderGroup> {

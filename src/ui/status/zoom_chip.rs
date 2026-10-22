@@ -115,6 +115,7 @@ pub enum ZoomChipPress {
 impl ZoomChipPress {
     /// True for a press that landed inside the chip (`Passive` or `Button`) and
     /// whose release the chip must therefore consume; false for `None`.
+    #[must_use]
     pub fn is_pending(self) -> bool {
         !matches!(self, ZoomChipPress::None)
     }
@@ -729,11 +730,15 @@ fn draw_zoom_sign(ctx: &cairo::Context, m: &ZoomGlyphMetrics, run_x: f64, plus: 
 
 #[cfg(test)]
 mod tests {
+    use crate::config::StatusPosition;
+    use crate::input::state::test_support;
+    use crate::ui;
+
     use super::*;
     use crate::config::StatusBarStyle;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     /// The chip anchors to the bottom-right corner: its right/bottom edges sit
@@ -1013,14 +1018,9 @@ mod tests {
 
         // And the status HUD suppresses its ZOOM badge in this config, so the
         // chip is the sole zoom % indicator (never two).
-        let hud = crate::ui::compute_status_hud_layout(
-            &state,
-            crate::config::StatusPosition::BottomLeft,
-            &style,
-            1920,
-            1080,
-        )
-        .expect("hud layout");
+        let hud =
+            ui::compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 1920, 1080)
+                .expect("hud layout");
         assert!(
             !hud.badges.iter().any(|badge| badge.label.contains("ZOOM")),
             "the HUD ZOOM badge yields to the chip when zoom actions are on"
@@ -1062,9 +1062,9 @@ mod tests {
                     // Status-HUD ZOOM badge: only rendered while the bar is
                     // shown, and only present when the chip does not own it.
                     let hud_badge = show_status_bar
-                        && crate::ui::compute_status_hud_layout(
+                        && ui::compute_status_hud_layout(
                             &state,
-                            crate::config::StatusPosition::BottomLeft,
+                            StatusPosition::BottomLeft,
                             &style,
                             w,
                             h,
@@ -1104,7 +1104,7 @@ mod tests {
         state.ui_visibility.show_status_bar = true;
         // The damage collector refreshes the status HUD layout before the chip
         // each frame; cache it by hand here at the bottom-right corner.
-        state.update_status_hud_layout(crate::config::StatusPosition::BottomRight, &style, w, h);
+        state.update_status_hud_layout(StatusPosition::BottomRight, &style, w, h);
         let status = state.status_hud_layout().expect("status layout").clone();
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");
@@ -1139,7 +1139,7 @@ mod tests {
         let style = StatusBarStyle::default();
         let (w, h) = (1920_u32, 1080_u32);
         state.ui_visibility.show_status_bar = true;
-        state.update_status_hud_layout(crate::config::StatusPosition::BottomLeft, &style, w, h);
+        state.update_status_hud_layout(StatusPosition::BottomLeft, &style, w, h);
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");
         assert!(

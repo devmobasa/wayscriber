@@ -1,25 +1,36 @@
-use super::*;
-use crate::backend::wayland::session::{SessionCommand, SessionCommandReport};
+use std::time::Instant;
+
+use crate::backend::wayland::session::{
+    SessionCommand, SessionCommandReport, SessionHome, SourceWriteRefused, driver,
+};
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::core::overlay::OverlaySuppression;
+use crate::backend::wayland::state::render::RenderOutcome;
 use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
-use crate::session::catalog;
+use crate::session::{
+    ClearToolStateOutcome, CorruptArtifactPreservationFailed, MissingNamedSessionFile,
+    MissingNamedSessionParent, SaveAsOverwrite, SessionInspection, SessionOptions, catalog,
+};
 use crate::ui::toolbar::session_format::session_display_name;
+use crate::ui::toolbar::{SessionRecentSnapshot, ToolbarEvent, ToolbarSnapshot};
 use anyhow::{Context, Error as AnyhowError, Result, anyhow};
+use log::debug;
 use std::path::{Path, PathBuf};
 use wayland_client::{Connection, QueueHandle};
 
-fn clear_tools_message(outcome: Option<crate::session::ClearToolStateOutcome>) -> &'static str {
+fn clear_tools_message(outcome: Option<ClearToolStateOutcome>) -> &'static str {
     match outcome {
-        Some(crate::session::ClearToolStateOutcome::Cleared {
+        Some(ClearToolStateOutcome::Cleared {
             preserved_board_data: true,
         }) => tr("Tool defaults reset from config. Saved boards and history were preserved."),
-        Some(crate::session::ClearToolStateOutcome::Cleared {
+        Some(ClearToolStateOutcome::Cleared {
             preserved_board_data: false,
         }) => tr("Tool defaults reset from config. No board data was present."),
-        Some(crate::session::ClearToolStateOutcome::NoToolState) => {
+        Some(ClearToolStateOutcome::NoToolState) => {
             tr("Tool defaults reset from config. No saved tool state was stored.")
         }
-        Some(crate::session::ClearToolStateOutcome::NoSession) => {
+        Some(ClearToolStateOutcome::NoSession) => {
             tr("Tool defaults reset from config. No saved session file was present.")
         }
         None => tr("Tool defaults reset from config for this run. No active session file to edit."),
@@ -28,8 +39,8 @@ fn clear_tools_message(outcome: Option<crate::session::ClearToolStateOutcome>) -
 
 pub(super) fn populate_session_snapshot(
     snapshot: &mut ToolbarSnapshot,
-    options: Option<&crate::session::SessionOptions>,
-    home: &crate::backend::wayland::session::SessionHome,
+    options: Option<&SessionOptions>,
+    home: &SessionHome,
 ) {
     snapshot.home_session_name = home.name();
     snapshot.at_home_session = home.is_at_home();
@@ -45,7 +56,7 @@ pub(super) fn populate_session_snapshot(
     snapshot.active_session_path = active_path;
 }
 
-pub(super) fn session_info_summary(inspection: &crate::session::SessionInspection) -> String {
+pub(super) fn session_info_summary(inspection: &SessionInspection) -> String {
     let name = session_display_name(&inspection.session_path);
     if !inspection.exists {
         return if inspection.backup_exists {
@@ -95,9 +106,7 @@ fn format_byte_count(bytes: u64) -> String {
     }
 }
 
-fn recent_session_snapshots(
-    current_path: Option<&Path>,
-) -> Vec<crate::ui::toolbar::SessionRecentSnapshot> {
+fn recent_session_snapshots(current_path: Option<&Path>) -> Vec<SessionRecentSnapshot> {
     let recent = match catalog::recent_sessions() {
         Ok(recent) => recent,
         Err(err) => {
@@ -116,7 +125,7 @@ fn recent_session_snapshots(
             {
                 return None;
             }
-            Some(crate::ui::toolbar::SessionRecentSnapshot {
+            Some(SessionRecentSnapshot {
                 display_name: entry.display_name,
                 path,
             })
@@ -183,7 +192,7 @@ impl WaylandState {
     fn current_session_file_path(&self) -> Option<PathBuf> {
         self.session
             .options()
-            .map(crate::session::SessionOptions::session_file_path)
+            .map(SessionOptions::session_file_path)
     }
 
     fn start_session_file_dialog_with_overlay_suppressed(
@@ -403,7 +412,7 @@ impl WaylandState {
         }
 
         self.clear_toolbar_save_as_overwrite_prompt();
-        self.commit_toolbar_save_session_as(path, crate::session::SaveAsOverwrite::ConfirmReplace);
+        self.commit_toolbar_save_session_as(path, SaveAsOverwrite::ConfirmReplace);
     }
 
     fn handle_toolbar_save_session_as_cancel(&mut self) {
@@ -412,11 +421,7 @@ impl WaylandState {
         }
     }
 
-    fn commit_toolbar_save_session_as(
-        &mut self,
-        path: &Path,
-        overwrite: crate::session::SaveAsOverwrite,
-    ) {
+    fn commit_toolbar_save_session_as(&mut self, path: &Path, overwrite: SaveAsOverwrite) {
         if let Err(error) =
             self.start_session_command(SessionCommand::SaveAs(path.to_path_buf(), overwrite))
         {
@@ -483,10 +488,7 @@ impl WaylandState {
                         &[&session_display_name(&path)],
                     ));
                 } else {
-                    self.commit_toolbar_save_session_as(
-                        &path,
-                        crate::session::SaveAsOverwrite::Deny,
-                    );
+                    self.commit_toolbar_save_session_as(&path, SaveAsOverwrite::Deny);
                 }
             }
             SessionCommandReport::Clear(report) => self.set_session_toolbar_info(trf(
@@ -550,18 +552,11 @@ impl WaylandState {
 
     fn fail_output_session_command(&mut self, error: &AnyhowError) {
         let preservation_failed = error
-            .downcast_ref::<crate::session::CorruptArtifactPreservationFailed>()
+            .downcast_ref::<CorruptArtifactPreservationFailed>()
             .is_some();
-        let source_unwritable = error
-            .downcast_ref::<crate::backend::wayland::session::SourceWriteRefused>()
-            .is_some();
+        let source_unwritable = error.downcast_ref::<SourceWriteRefused>().is_some();
         let backoff = self.output_transition_failure_backoff();
-        if !crate::backend::wayland::session::driver::defer_failed_output(
-            &mut self.session,
-            error,
-            std::time::Instant::now(),
-            backoff,
-        ) {
+        if !driver::defer_failed_output(&mut self.session, error, Instant::now(), backoff) {
             log::debug!("Output session transition requeued after guard abort: {error:#}");
             return;
         }
@@ -649,10 +644,10 @@ pub(super) fn forget_missing_recent_session_after_open_error(
 }
 
 fn missing_session_error_matches_path(path: &Path, err: &AnyhowError) -> bool {
-    err.downcast_ref::<crate::session::MissingNamedSessionFile>()
+    err.downcast_ref::<MissingNamedSessionFile>()
         .is_some_and(|missing| catalog::session_paths_match(missing.path(), path))
         || err
-            .downcast_ref::<crate::session::MissingNamedSessionParent>()
+            .downcast_ref::<MissingNamedSessionParent>()
             .is_some_and(|missing| catalog::session_paths_match(missing.path(), path))
 }
 

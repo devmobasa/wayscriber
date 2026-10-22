@@ -1,6 +1,8 @@
+use crate::draw::ShapeId;
+
 use super::*;
 
-fn add_rect(state: &mut InputState) -> crate::draw::ShapeId {
+fn add_rect(state: &mut InputState) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
         y: 20,

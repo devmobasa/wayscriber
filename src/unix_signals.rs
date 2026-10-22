@@ -1,6 +1,9 @@
-use std::io;
 use std::os::fd::{FromRawFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::{io, mem, ptr, thread};
+
+#[cfg(test)]
+use crate::test_env::{Lease, LeaseGuard};
 
 mod listener;
 
@@ -31,8 +34,8 @@ static ACTIVE_HANDLERS: AtomicUsize = AtomicUsize::new(0);
 static SIGNAL_WRITE_FD: AtomicI32 = AtomicI32::new(-1);
 static REGISTERED_SIGNALS: [AtomicI32; MAX_SIGNAL_SLOTS] =
     [const { AtomicI32::new(0) }; MAX_SIGNAL_SLOTS];
-static PENDING_SIGNALS: [std::sync::atomic::AtomicBool; MAX_SIGNAL_SLOTS] =
-    [const { std::sync::atomic::AtomicBool::new(false) }; MAX_SIGNAL_SLOTS];
+static PENDING_SIGNALS: [AtomicBool; MAX_SIGNAL_SLOTS] =
+    [const { AtomicBool::new(false) }; MAX_SIGNAL_SLOTS];
 
 fn gate_token(epoch: u64, state: u64) -> u64 {
     (epoch << GATE_STATE_BITS) | state
@@ -137,7 +140,7 @@ fn wait_for_admitted_handlers() {
     // a handler that is concurrently rechecking the closed gate on weakly
     // ordered CPUs and then close a descriptor that handler is about to use.
     while ACTIVE_HANDLERS.load(Ordering::SeqCst) != 0 {
-        std::thread::yield_now();
+        thread::yield_now();
     }
 }
 
@@ -191,7 +194,7 @@ fn set_status_flag(fd: RawFd, flag: libc::c_int) -> io::Result<()> {
 
 fn install_handler(signal: libc::c_int) -> io::Result<libc::sigaction> {
     // SAFETY: Zeroed sigaction is immediately initialized before use.
-    let mut action = unsafe { std::mem::zeroed::<libc::sigaction>() };
+    let mut action = unsafe { mem::zeroed::<libc::sigaction>() };
     action.sa_sigaction = signal_handler as *const () as usize;
     action.sa_flags = signal_action_flags();
 
@@ -201,7 +204,7 @@ fn install_handler(signal: libc::c_int) -> io::Result<libc::sigaction> {
     }
 
     // SAFETY: Zeroed sigaction is filled by libc when installation succeeds.
-    let mut previous = unsafe { std::mem::zeroed::<libc::sigaction>() };
+    let mut previous = unsafe { mem::zeroed::<libc::sigaction>() };
     // SAFETY: Installs a process-wide handler for the requested signal.
     if unsafe { libc::sigaction(signal, &action, &mut previous) } != 0 {
         return Err(io::Error::last_os_error());
@@ -212,7 +215,7 @@ fn install_handler(signal: libc::c_int) -> io::Result<libc::sigaction> {
 fn restore_handlers(handlers: &[(libc::c_int, libc::sigaction)]) {
     for (signal, previous) in handlers.iter().rev() {
         // SAFETY: `previous` was returned by `sigaction` for the same signal.
-        let _ = unsafe { libc::sigaction(*signal, previous, std::ptr::null_mut()) };
+        let _ = unsafe { libc::sigaction(*signal, previous, ptr::null_mut()) };
     }
 }
 
@@ -253,7 +256,7 @@ extern "C" fn signal_handler(signal: libc::c_int) {
                 libc::write(
                     fd,
                     (&wakeup as *const u8).cast::<libc::c_void>(),
-                    std::mem::size_of::<u8>(),
+                    mem::size_of::<u8>(),
                 )
             };
         }
@@ -382,7 +385,7 @@ fn write_pipe_hint(fd: RawFd) -> io::Result<()> {
             libc::write(
                 fd,
                 (&wakeup as *const u8).cast::<libc::c_void>(),
-                std::mem::size_of::<u8>(),
+                mem::size_of::<u8>(),
             )
         };
         if result == 1 {
@@ -413,6 +416,7 @@ fn close_fd(fd: RawFd) {
 #[cfg(test)]
 mod test_hooks {
     use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+    use std::{hint, thread};
 
     pub(super) const PAUSE_AFTER_TOKEN_READ: u8 = 1;
     pub(super) const PAUSE_AFTER_ADMISSION: u8 = 2;
@@ -428,19 +432,16 @@ mod test_hooks {
         }
         HANDLER_PAUSED.store(true, Ordering::Release);
         while !RESUME_HANDLER.load(Ordering::Acquire) {
-            std::hint::spin_loop();
-            std::thread::yield_now();
+            hint::spin_loop();
+            thread::yield_now();
         }
     }
 }
 
 #[cfg(test)]
-pub(crate) fn test_signal_lock() -> std::sync::MutexGuard<'static, ()> {
-    use std::sync::{Mutex, OnceLock};
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+pub(crate) fn test_signal_lock() -> LeaseGuard<'static> {
+    static SIGNAL_LEASE: Lease = Lease::new();
+    SIGNAL_LEASE.acquire()
 }
 
 #[cfg(test)]

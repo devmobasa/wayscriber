@@ -1,3 +1,7 @@
+use pangocairo::functions;
+
+use crate::draw::TextMeasurer;
+
 use super::backdrop_probe;
 use crate::draw::shape::{
     TextMeasurement, sticky_note_layout, sticky_note_layout_text,
@@ -37,7 +41,7 @@ pub fn render_text(
     background_enabled: bool,
     wrap_width: Option<i32>,
 ) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_text_with_measurer(
         &measurer,
         ctx,
@@ -54,7 +58,7 @@ pub fn render_text(
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_text_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -94,7 +98,7 @@ pub fn render_text_with_halo(
     wrap_width: Option<i32>,
     halo_enabled: bool,
 ) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_text_with_halo_with_measurer(
         &measurer,
         ctx,
@@ -112,7 +116,7 @@ pub fn render_text_with_halo(
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_text_with_halo_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -160,7 +164,7 @@ pub fn render_text_over(
     wrap_width: Option<i32>,
     known_background_luminance: Option<f64>,
 ) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_text_over_with_measurer(
         &measurer,
         ctx,
@@ -178,7 +182,7 @@ pub fn render_text_over(
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_text_over_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -221,7 +225,7 @@ pub fn render_text_over_with_halo(
     known_background_luminance: Option<f64>,
     halo_enabled: bool,
 ) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_text_over_with_halo_with_measurer(
         &measurer,
         ctx,
@@ -240,7 +244,7 @@ pub fn render_text_over_with_halo(
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_text_over_with_halo_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -261,7 +265,7 @@ pub fn render_text_over_with_halo_with_measurer(
     ctx.set_antialias(cairo::Antialias::Best);
 
     // Create Pango layout for text rendering
-    let layout = pangocairo::functions::create_layout(ctx);
+    let layout = functions::create_layout(ctx);
 
     // Set font description from config; the string form is the cache key.
     let font_desc = font_descriptor.to_pango_description(size);
@@ -319,8 +323,11 @@ pub fn render_text_over_with_halo_with_measurer(
     });
 
     // First pass: draw semi-transparent background rectangle (if enabled)
-    if background_enabled && content.width > 0.0 && content.height > 0.0 {
-        let contrast = contrast.expect("text background requests a contrast color");
+    if background_enabled
+        && content.width > 0.0
+        && content.height > 0.0
+        && let Some(contrast) = contrast
+    {
         let padding = size * 0.15;
         // Union ink and logical extents: ink preserves italic overhangs while
         // logical cells retain leading/trailing whitespace advances.
@@ -338,13 +345,13 @@ pub fn render_text_over_with_halo_with_measurer(
     let shadow_offset = size * 0.04;
     ctx.move_to(x as f64 + shadow_offset, adjusted_y + shadow_offset);
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
-    pangocairo::functions::show_layout(ctx, &layout);
+    functions::show_layout(ctx, &layout);
 
     // Third pass: render text with contrasting stroke outline
     ctx.move_to(x as f64, adjusted_y);
 
     // Create path from layout for stroking
-    pangocairo::functions::layout_path(ctx, &layout);
+    functions::layout_path(ctx, &layout);
 
     if let Some(outline) = contrast.filter(|_| halo_enabled) {
         // Fully opaque stroke for maximum contrast and crispness.
@@ -363,6 +370,7 @@ pub fn render_text_over_with_halo_with_measurer(
 }
 
 /// Stroke width of the editor's standalone caret line at `size`.
+#[must_use]
 pub fn caret_line_width(size: f64) -> f64 {
     (size * 0.06).max(1.5)
 }
@@ -372,6 +380,7 @@ pub fn caret_line_width(size: f64) -> f64 {
 /// to either side. The damage tracker sizes the caret's repaint rectangle from
 /// this, which is why the value lives here next to the code that paints it —
 /// duplicating the constant is how the caret used to leave a trail on drags.
+#[must_use]
 pub fn caret_outline_width(size: f64) -> f64 {
     caret_line_width(size) + 2.0
 }
@@ -388,6 +397,7 @@ pub fn caret_outline_width(size: f64) -> f64 {
 /// including on a white page, which is the exact case a halo prevents. It stays
 /// as the fallback only because a transparent overlay over a live desktop has no
 /// background pixels to read, and a guess from the text color beats no halo.
+#[must_use]
 pub fn text_outline_color(color: Color, background_luminance: Option<f64>) -> Color {
     let brightness = background_luminance.unwrap_or_else(|| backdrop_probe::color_luminance(color));
     if brightness > 0.5 {
@@ -409,7 +419,7 @@ pub fn render_sticky_note(
     font_descriptor: &FontDescriptor,
     wrap_width: Option<i32>,
 ) {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     render_sticky_note_with_measurer(
         &measurer,
         ctx,
@@ -425,7 +435,7 @@ pub fn render_sticky_note(
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_sticky_note_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -456,7 +466,7 @@ pub fn render_sticky_note_with_measurer(
 /// when its buffer is empty so the background remains visible behind the caret.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_sticky_note_preview_with_measurer(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -482,7 +492,7 @@ pub(crate) fn render_sticky_note_preview_with_measurer(
 
 #[allow(clippy::too_many_arguments)]
 fn render_sticky_note_layout(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
     x: i32,
     y: i32,
@@ -543,7 +553,7 @@ fn render_sticky_note_layout(
         let fg = sticky_note_foreground(background);
         ctx.move_to(base_x, base_y);
         ctx.set_source_rgba(fg.r, fg.g, fg.b, fg.a);
-        pangocairo::functions::show_layout(ctx, &text_layout.layout);
+        functions::show_layout(ctx, &text_layout.layout);
     }
 
     ctx.restore().ok();
@@ -553,6 +563,7 @@ fn render_sticky_note_layout(
 /// background: near-black on light notes, near-white on dark ones. Shared so the
 /// live caret matches the committed note text instead of vanishing into the
 /// background fill.
+#[must_use]
 pub fn sticky_note_foreground(background: Color) -> Color {
     let brightness = super::color_luminance(background);
     if brightness > 0.6 {
@@ -584,6 +595,8 @@ fn draw_round_rect(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64)
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::{TextMeasurer, shape};
+
     use super::{
         Color, FontDescriptor, caret_outline_width, render_sticky_note,
         render_sticky_note_preview_with_measurer, render_text, render_text_with_halo,
@@ -702,7 +715,7 @@ mod tests {
 
     #[test]
     fn disabled_halo_keeps_the_optional_text_background() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let text = "A                    ";
         let font = FontDescriptor::default();
         let size = 20.0;
@@ -777,7 +790,7 @@ mod tests {
 
     #[test]
     fn empty_sticky_note_still_draws_its_preview_background() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
         {
             let ctx = cairo::Context::new(&surface).unwrap();
@@ -825,7 +838,7 @@ mod tests {
 
     #[test]
     fn live_plain_text_background_covers_a_trailing_space_caret() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let text = "A                    ";
         let font = FontDescriptor::default();
         let size = 20.0;
@@ -859,7 +872,7 @@ mod tests {
 
     #[test]
     fn live_sticky_note_background_covers_a_trailing_space_caret() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let text = "A                    ";
         let font = FontDescriptor::default();
         let size = 20.0;
@@ -944,8 +957,8 @@ mod tests {
             }
             let (min_x, min_y, max_x, max_y) =
                 painted_extents(&mut surface).expect("text paints something");
-            let bounds = crate::draw::shape::bounding_box_for_text_with(
-                &crate::draw::TextMeasurer::default(),
+            let bounds = shape::bounding_box_for_text_with(
+                &TextMeasurer::default(),
                 origin.0,
                 origin.1,
                 text,
@@ -968,7 +981,7 @@ mod tests {
 
     #[test]
     fn caret_stroke_stays_within_its_advertised_width() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         // The damage tracker sizes the caret's repaint from `caret_outline_width`;
         // the stroke is centred, so it must not reach further than half of it.
         let font = FontDescriptor::default();

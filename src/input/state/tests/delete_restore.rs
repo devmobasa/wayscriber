@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 use crate::draw::{Frame, PageDeleteOutcome, ShapeId};
 use crate::input::boards::PendingBoardRuntimeUiAction;
@@ -81,7 +83,7 @@ fn delete_active_board_requires_confirmation_then_restore_recovers_board() {
 
 #[test]
 fn delete_active_board_restore_preserves_cancelled_text_edit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -222,7 +224,7 @@ fn page_delete_requires_confirmation_and_restore_recovers_deleted_page() {
 
 #[test]
 fn page_delete_restore_preserves_cancelled_text_edit() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
@@ -289,7 +291,7 @@ fn page_delete_on_last_page_clears_shapes_without_removing_page() {
 
 #[test]
 fn pending_board_delete_survives_active_drift_and_deletes_original_board() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
     let requested_at = Instant::now();
@@ -305,14 +307,14 @@ fn pending_board_delete_survives_active_drift_and_deletes_original_board() {
 
 #[test]
 fn board_rename_does_not_stale_pending_board_delete() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.switch_board(BOARD_ID_BLACKBOARD);
     let requested_at = Instant::now();
 
     state.delete_active_board_at_with_measurer(&measurer, requested_at);
     let index = board_index(&state, BOARD_ID_BLACKBOARD);
-    assert!(state.set_board_name(index, "Renamed Board".to_string()));
+    assert!(state.set_board_name(index, "Renamed Board"));
     state.delete_active_board_at_with_measurer(&measurer, requested_at + Duration::from_millis(1));
 
     assert!(!state.boards.has_board(BOARD_ID_BLACKBOARD));
@@ -324,7 +326,7 @@ fn board_rename_does_not_stale_pending_board_delete() {
 
 #[test]
 fn page_content_edit_does_not_stale_pending_page_delete() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -355,7 +357,7 @@ fn page_content_edit_does_not_stale_pending_page_delete() {
 
 #[test]
 fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -407,7 +409,7 @@ fn pending_page_delete_survives_active_board_drift_and_deletes_original_page() {
 
 #[test]
 fn stale_active_page_delete_confirmation_does_not_cancel_active_interaction() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -446,7 +448,7 @@ fn stale_active_page_delete_confirmation_does_not_cancel_active_interaction() {
 
 #[test]
 fn stale_board_panel_page_delete_confirmation_does_not_cancel_active_interaction() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let board = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);

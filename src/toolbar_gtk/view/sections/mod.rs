@@ -13,12 +13,12 @@ use super::Updater;
 
 /// Everything a section builder needs; `updaters` collects the closures
 /// that keep the built widgets in sync with later snapshots.
-pub(in crate::toolbar_gtk) struct SectionCtx<'a> {
-    pub(in crate::toolbar_gtk) snapshot: &'a ToolbarSnapshot,
+pub(in crate::toolbar_gtk) struct SectionCtx<'view> {
+    pub(in crate::toolbar_gtk) snapshot: &'view ToolbarSnapshot,
     pub(in crate::toolbar_gtk) feedback: FeedbackSender,
     pub(in crate::toolbar_gtk) scale: f64,
     pub(in crate::toolbar_gtk) use_icons: bool,
-    pub(in crate::toolbar_gtk) updaters: &'a mut Vec<Updater>,
+    pub(in crate::toolbar_gtk) updaters: &'view mut Vec<Updater>,
 }
 
 impl SectionCtx<'_> {

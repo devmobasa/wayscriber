@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::view::{WidgetKind, WidgetTree};
 use crate::draw::ArrowStyle;
 use crate::input::Tool;
 use crate::input::state::test_support::make_test_input_state;
+use crate::ui::theme::toolbar;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot, model};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -81,7 +82,7 @@ fn the_chip_draws_and_names_the_style_and_opens_the_menu() {
 fn every_chip_label_fits_its_slot() {
     let engine = UiTextEngine::default();
     let style = UiTextStyle {
-        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        family: toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: cairo::FontWeight::Bold,
         size: 14.0,

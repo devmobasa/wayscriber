@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::i18n::{tr, trf};
 use crate::input::state::{PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE};
 use crate::ui::constants::{
@@ -5,7 +6,7 @@ use crate::ui::constants::{
     RADIUS_STD, SHADOW_DEEP, TEXT_WHITE,
 };
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
-use crate::ui::theme::Rgba;
+use crate::ui::theme::{Rgba, popup};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 // File-local colors with no matching theme token (kept from the pre-theme
@@ -26,7 +27,7 @@ use super::types::{PREVIEW_SCALE, PageContentArgs, PagePreviewArgs, PageThumbnai
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     cache: &mut ThumbnailCache,
     args: PageThumbnailArgs<'_, '_, '_>,
 ) {
@@ -59,10 +60,10 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
     if is_drop_target {
         constants::set_color(ctx, BG_SELECTION);
     } else {
-        constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
+        constants::set_color(ctx, popup::bg_board_picker());
     }
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
+    constants::set_color(ctx, popup::border_board_picker());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 
@@ -135,26 +136,33 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_thumbnail(
         y,
         width,
         height,
-        is_hovered,
-        rename_hovered,
-        duplicate_hovered,
-        delete_hovered,
+        ThumbnailHover {
+            card: is_hovered,
+            rename: rename_hovered,
+            duplicate: duplicate_hovered,
+            delete: delete_hovered,
+        },
     );
     draw_page_badge(engine, ctx, x, y, page_number, is_hovered);
     render_page_name_label(engine, ctx, x, y, width, height, page_name, is_hovered);
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Which parts of a page thumbnail the pointer is over.
+#[derive(Debug, Clone, Copy)]
+struct ThumbnailHover {
+    card: bool,
+    rename: bool,
+    duplicate: bool,
+    delete: bool,
+}
+
 fn draw_thumbnail_actions(
     ctx: &cairo::Context,
     x: f64,
     y: f64,
     width: f64,
     height: f64,
-    is_hovered: bool,
-    rename_hovered: bool,
-    duplicate_hovered: bool,
-    delete_hovered: bool,
+    hover: ThumbnailHover,
 ) {
     let handle_size = (height * 0.22).clamp(8.0, 12.0);
     let handle_x = x + width - handle_size - 4.0;
@@ -174,21 +182,21 @@ fn draw_thumbnail_actions(
         rename_x,
         icon_y,
         icon_size,
-        icon_alpha(is_hovered, rename_hovered),
+        icon_alpha(hover.card, hover.rename),
     );
     draw_duplicate_icon(
         ctx,
         duplicate_x,
         icon_y,
         icon_size,
-        icon_alpha(is_hovered, duplicate_hovered),
+        icon_alpha(hover.card, hover.duplicate),
     );
     draw_delete_icon(
         ctx,
         delete_x,
         icon_y,
         icon_size,
-        icon_alpha(is_hovered, delete_hovered),
+        icon_alpha(hover.card, hover.delete),
     );
 }
 
@@ -258,7 +266,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
     }
     let _ = ctx.fill_preserve();
 
-    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
+    constants::set_color(ctx, popup::border_board_picker());
     ctx.set_line_width(1.0);
     if !is_hovered {
         ctx.set_dash(&[4.0, 3.0], 0.0);
@@ -312,7 +320,7 @@ pub(in crate::ui::board_picker::page_panel) fn render_add_page_card(
 
 pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     cache: &mut ThumbnailCache,
     args: PagePreviewArgs<'_, '_, '_>,
 ) {
@@ -358,9 +366,9 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
     let _ = ctx.fill();
 
     draw_rounded_rect(ctx, preview_x, preview_y, preview_w, preview_h, RADIUS_MD);
-    constants::set_color(ctx, crate::ui::theme::popup::bg_board_picker());
+    constants::set_color(ctx, popup::bg_board_picker());
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_board_picker());
+    constants::set_color(ctx, popup::border_board_picker());
     ctx.set_line_width(1.2);
     let _ = ctx.stroke();
 

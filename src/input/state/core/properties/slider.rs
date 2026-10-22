@@ -1,6 +1,8 @@
 //! Dragging a properties-panel slider: the shapes follow the thumb live, and
 //! the whole drag lands as one undo entry when it ends.
 
+use crate::input::state::PanelRect;
+
 use super::super::base::InputState;
 use super::apply_selection::{level_applies, set_level};
 use super::types::{PropertiesRowControl, SelectionPropertyKind};
@@ -113,7 +115,7 @@ impl InputState {
         }
     }
 
-    fn properties_slider_track(&self, row: usize) -> Option<crate::input::state::PanelRect> {
+    fn properties_slider_track(&self, row: usize) -> Option<PanelRect> {
         let panel = self.properties.panel.as_ref()?;
         let layout = self.properties.layout.as_ref()?;
         match layout.rows(panel).into_iter().nth(row)?.control {

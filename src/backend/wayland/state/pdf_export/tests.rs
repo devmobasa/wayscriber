@@ -1,3 +1,5 @@
+use crate::draw::BoardPages;
+
 use super::*;
 use crate::config::{PdfExportConfig, PdfFitMode};
 use crate::draw::{RED, Shape, WHITE};
@@ -15,7 +17,7 @@ fn board(id: &str, name: &str, background: BoardBackground, pages: Vec<Frame>) -
         persist: true,
         pinned: false,
     });
-    board.pages = crate::draw::BoardPages::from_pages(pages, 0);
+    board.pages = BoardPages::from_pages(pages, 0);
     board
 }
 

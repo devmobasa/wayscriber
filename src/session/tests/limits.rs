@@ -1,3 +1,8 @@
+use flate2::read::GzDecoder;
+
+use crate::draw::{EraserKind, Frame};
+use crate::{draw, test_temp};
+
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
@@ -8,7 +13,7 @@ use std::path::Path;
 
 #[test]
 fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-too-big");
     options.persist_transparent = false;
     options.persist_whiteboard = false;
@@ -30,7 +35,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             },
             current_thickness: 3.0,
             eraser_size: 12.0,
-            eraser_kind: crate::draw::EraserKind::Circle,
+            eraser_kind: EraserKind::Circle,
             eraser_mode: EraserMode::Brush,
             blur_style: Default::default(),
             recent_colors: Vec::new(),
@@ -48,7 +53,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
             arrow_head_at_end: Some(false),
             arrow_style: None,
             arrow_label_enabled: Some(false),
-            polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+            polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
             board_previous_color: None,
             tool_settings: None,
         }),
@@ -69,7 +74,7 @@ fn save_snapshot_errors_when_payload_exceeds_max_file_size() {
 
 #[test]
 fn load_snapshot_refuses_file_larger_than_max() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-large-file");
     options.persist_transparent = true;
     options.max_file_size_bytes = 8; // very small
@@ -91,7 +96,7 @@ fn load_snapshot_refuses_file_larger_than_max() {
 
 #[test]
 fn oversized_save_writes_recovery_and_load_prefers_it() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-recovery");
     options.persist_transparent = true;
     options.persist_history = false;
@@ -119,7 +124,7 @@ fn oversized_save_writes_recovery_and_load_prefers_it() {
     assert_eq!(count_images(&loaded), 1);
     assert_eq!(loaded.boards[0].pages.pages.len(), 1);
 
-    let mut roomy_options = options.clone();
+    let mut roomy_options = options;
     roomy_options.max_file_size_bytes = u64::MAX;
     save_snapshot(&loaded, &roomy_options).expect("normal save of recovered state should succeed");
     assert!(
@@ -130,7 +135,7 @@ fn oversized_save_writes_recovery_and_load_prefers_it() {
 
 #[test]
 fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut save_options = SessionOptions::new(temp.path().to_path_buf(), "display-shape-limit");
     save_options.persist_transparent = true;
 
@@ -180,14 +185,14 @@ fn load_snapshot_truncates_shapes_when_exceeding_max_shapes_per_frame() {
     );
 }
 
-fn named_frame(name: &str) -> crate::draw::Frame {
-    let mut frame = crate::draw::Frame::new();
+fn named_frame(name: &str) -> Frame {
+    let mut frame = Frame::new();
     frame.set_page_name(Some(name.to_string()));
     frame
 }
 
-fn image_frame(bytes: usize) -> crate::draw::Frame {
-    let mut frame = crate::draw::Frame::new();
+fn image_frame(bytes: usize) -> Frame {
+    let mut frame = Frame::new();
     frame.add_shape(Shape::Image {
         x: 12,
         y: 16,
@@ -203,7 +208,7 @@ fn image_frame(bytes: usize) -> crate::draw::Frame {
     frame
 }
 
-fn single_page_snapshot(frame: crate::draw::Frame) -> SessionSnapshot {
+fn single_page_snapshot(frame: Frame) -> SessionSnapshot {
     SessionSnapshot {
         active_board_id: "transparent".to_string(),
         boards: vec![BoardSnapshot {
@@ -249,7 +254,7 @@ fn populate_compressed_limit_pages(input: &mut InputState, page_count: usize, im
     }
 }
 
-fn assert_restored_limit_page(page: &crate::draw::Frame, page_index: usize, image_bytes: usize) {
+fn assert_restored_limit_page(page: &Frame, page_index: usize, image_bytes: usize) {
     assert_eq!(page.shapes.len(), 3, "page {page_index} shape count");
     assert_eq!(page.undo_stack_len(), 1, "page {page_index} undo depth");
     match &page.shapes[0].shape {
@@ -285,7 +290,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
     const ACTIVE_PAGE: usize = 10;
     const IMAGE_BYTES: usize = 64 * 1024;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-compressed-fit");
     options.persist_whiteboard = true;
     options.persist_history = true;
@@ -340,7 +345,7 @@ fn save_snapshot_allows_compressed_payload_that_fits_limit() {
 
 #[test]
 fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     let point_count = 1_500;
 
@@ -442,7 +447,7 @@ fn save_snapshot_drops_history_when_modified_stroke_exceeds_limit() {
 
 #[test]
 fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     let point_count = 600;
 
@@ -516,7 +521,7 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
     let json = if written.starts_with(&[0x1f, 0x8b]) {
         use std::io::Read;
         let mut decoded = Vec::new();
-        flate2::read::GzDecoder::new(written.as_slice())
+        GzDecoder::new(written.as_slice())
             .read_to_end(&mut decoded)
             .unwrap();
         decoded
@@ -547,7 +552,7 @@ fn save_snapshot_keeps_largest_recent_history_depth_that_fits() {
 
 #[test]
 fn autosave_snapshot_uses_bounded_history_fallback() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     let point_count = 600;
 
@@ -633,7 +638,7 @@ fn autosave_snapshot_uses_bounded_history_fallback() {
 
 #[test]
 fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut input = dummy_input_state();
     {
         let frame = input.boards.active_frame_mut();
@@ -764,7 +769,7 @@ fn save_snapshot_report_marks_near_limit_at_ninety_percent() {
     assert!(!report.is_near_limit());
 }
 
-fn add_image_and_annotations(frame: &mut crate::draw::Frame, page_index: usize, bytes: usize) {
+fn add_image_and_annotations(frame: &mut Frame, page_index: usize, bytes: usize) {
     let image_id = frame.add_shape(Shape::Image {
         x: 12,
         y: 16,

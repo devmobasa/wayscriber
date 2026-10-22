@@ -1,7 +1,8 @@
+use crate::input::boards::PageDeleteConfirmation;
+
 use super::super::super::base::{InputState, PAGE_DELETE_CONFIRM_MS};
 use crate::domain::Action;
-use crate::draw::PageDeleteOutcome as CanvasPageDeleteOutcome;
-use crate::draw::TextMeasurer;
+use crate::draw::{PageDeleteOutcome as CanvasPageDeleteOutcome, TextMeasurer};
 use crate::i18n::{tr, trf};
 use crate::input::boards::{
     PageDeleteBoardTarget, PageDeleteOutcome, PageDeleteRequest, PageDeleteTarget,
@@ -229,10 +230,7 @@ impl InputState {
         }
     }
 
-    fn page_delete_confirmation_is_current(
-        &self,
-        confirmation: &crate::input::boards::PageDeleteConfirmation,
-    ) -> bool {
+    fn page_delete_confirmation_is_current(&self, confirmation: &PageDeleteConfirmation) -> bool {
         if confirmation.board_identity_generation != self.boards.board_identity_generation() {
             return false;
         }

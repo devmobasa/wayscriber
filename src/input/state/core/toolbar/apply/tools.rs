@@ -1,10 +1,10 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{Color, FontDescriptor, TextMeasurer};
 use crate::input::state::TopMenuState;
 use crate::input::{DrawingState, EraserMode, InputState, Tool};
 
+use crate::input::state::InputTextResources;
 use crate::ui::toolbar::PrecisionEntryTarget;
-use crate::ui::toolbar::model::ToolbarSliderSpec;
+use crate::ui::toolbar::model::{StrokeSetting, ToolbarSliderSpec};
 
 impl InputState {
     /// Open the precise-entry popup for a pill numeral.
@@ -67,7 +67,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_set_color_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         color: Color,
     ) -> bool {
         self.apply_color_from_ui_with_measurer(measurer, color)
@@ -95,7 +95,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_nudge_stroke_setting(
         &mut self,
-        setting: crate::ui::toolbar::model::StrokeSetting,
+        setting: StrokeSetting,
         steps: i32,
     ) -> bool {
         use crate::ui::toolbar::model::StrokeSetting;
@@ -213,7 +213,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_enter_text_mode_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) -> bool {
         let _ = self.set_tool_override_with(resources.measurer, None);
         self.toolbar_enter_text_mode_with_resources(resources);
@@ -223,7 +223,7 @@ impl InputState {
 
     pub(super) fn apply_toolbar_enter_sticky_note_mode_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) -> bool {
         let _ = self.set_tool_override_with(resources.measurer, None);
         self.toolbar_enter_sticky_note_mode_with_resources(resources);
@@ -316,6 +316,8 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::ArrowStyle;
+    use crate::input::Tool;
     use crate::input::state::TopMenuState;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarEvent;
@@ -360,14 +362,9 @@ mod tests {
         assert!(state.apply_toolbar_event(ToolbarEvent::ToggleArrowStyleMenu(true)));
         assert_eq!(state.toolbar_top_menu(), TopMenuState::ArrowStyleMenu);
 
-        assert!(
-            state.apply_toolbar_event(ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Curved))
-        );
-        assert_eq!(state.style.arrow_style, crate::draw::ArrowStyle::Curved);
-        assert!(
-            !state
-                .apply_toolbar_event(ToolbarEvent::SetArrowStyle(crate::draw::ArrowStyle::Curved))
-        );
+        assert!(state.apply_toolbar_event(ToolbarEvent::SetArrowStyle(ArrowStyle::Curved)));
+        assert_eq!(state.style.arrow_style, ArrowStyle::Curved);
+        assert!(!state.apply_toolbar_event(ToolbarEvent::SetArrowStyle(ArrowStyle::Curved)));
     }
 
     #[test]
@@ -375,7 +372,7 @@ mod tests {
         let mut state = make_test_input_state();
         state.apply_toolbar_event(ToolbarEvent::TogglePenFeelPanel(true));
 
-        state.apply_toolbar_event(ToolbarEvent::SelectTool(crate::input::Tool::Marker));
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Marker));
 
         assert_eq!(state.toolbar_top_menu(), TopMenuState::Closed);
     }

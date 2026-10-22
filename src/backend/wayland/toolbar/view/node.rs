@@ -1,10 +1,12 @@
 //! Typed widget nodes: what exists, where it is, and what it does.
 
 use std::borrow::Cow;
-use std::fmt;
+use std::{fmt, ptr};
 
 use crate::backend::wayland::toolbar::events::HitKind;
+use crate::draw::ArrowStyle;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::{OpacityPaint, ToolbarSliderSpec};
 
 /// Stable identity of a widget across rebuilds of the tree.
 ///
@@ -53,7 +55,7 @@ pub struct IconFn(pub fn(&cairo::Context, f64, f64, f64));
 
 impl PartialEq for IconFn {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::fn_addr_eq(self.0, other.0)
+        ptr::fn_addr_eq(self.0, other.0)
     }
 }
 
@@ -183,21 +185,13 @@ pub enum WidgetKind {
     /// `t` in `[0, 1]`. The drag mapping lives on the node's interaction
     /// (`HitKind::DragSet*`); the paint only shows the current value, plus
     /// the spec's reference ticks.
-    Slider {
-        t: f64,
-        spec: crate::ui::toolbar::model::ToolbarSliderSpec,
-    },
+    Slider { t: f64, spec: ToolbarSliderSpec },
     /// The marker opacity slider: a [`WidgetKind::Slider`] whose track fades
     /// from clear to solid in the stroke color (`paint.alpha_stops`).
-    OpacitySlider {
-        t: f64,
-        paint: crate::ui::toolbar::model::OpacityPaint,
-    },
+    OpacitySlider { t: f64, paint: OpacityPaint },
     /// The marker opacity slider's readout: a stroke at `paint.stroke_alpha`
     /// over sample text, drawn by the painter both frontends share.
-    OpacitySwatch {
-        paint: crate::ui::toolbar::model::OpacityPaint,
-    },
+    OpacitySwatch { paint: OpacityPaint },
     /// One bar of a level meter. The node's rect is the bar's hit slot; the
     /// painter draws a slimmer rounded bar centered in it, accent-filled at
     /// or below the current level and track-colored above it.
@@ -209,7 +203,7 @@ pub enum WidgetKind {
     SmoothingPreview { level: u8 },
     /// An arrow style drawn left to right in the foreground tone, by the
     /// painter both frontends share (`toolbar_icons::draw_arrow_style_preview`).
-    ArrowStylePreview { style: crate::draw::ArrowStyle },
+    ArrowStylePreview { style: ArrowStyle },
     /// Color swatch tile.
     Swatch {
         color: (f64, f64, f64, f64),

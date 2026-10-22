@@ -6,9 +6,12 @@
 //! is deliberate — a queued request would recognize a screen region the user
 //! has already moved on from.
 
-use std::fmt;
+use std::any::Any;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
+use std::thread::Builder;
+use std::{fmt, io};
 
 use crate::backend::wayland::RuntimeWakeHandle;
 
@@ -132,19 +135,23 @@ impl OcrController {
         publisher: impl OcrTextPublisher + Send + 'static,
     ) -> Result<OcrRequestId, OcrSubmitError> {
         self.try_submit_with_spawner(request, recognizer, publisher, |job| {
-            std::thread::Builder::new()
+            Builder::new()
                 .name("wayscriber-ocr".to_string())
                 .spawn(job)
                 .map(drop)
         })
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a panicking recognizer must still publish a terminal failure carrying its panic message; the exit guard only reports a bare disconnect"
+    )]
     fn try_submit_with_spawner(
         &mut self,
         request: OcrRequest,
         recognizer: impl TextRecognizer + Send + 'static,
         publisher: impl OcrTextPublisher + Send + 'static,
-        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
     ) -> Result<OcrRequestId, OcrSubmitError> {
         if !self.healthy {
             return Err(OcrSubmitError::Unhealthy);
@@ -157,12 +164,12 @@ impl OcrController {
         let value = self.next_id.ok_or(OcrSubmitError::IdentityExhausted)?;
         let id = OcrRequestId(value);
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         let runtime_wake = self.runtime_wake.clone();
         let job = Box::new(move || {
             let guard = WorkerExitGuard::new(id, sender, runtime_wake);
             let message = match catch_unwind(AssertUnwindSafe(|| {
-                run_request(request, &recognizer, &publisher)
+                run_request(&request, &recognizer, &publisher)
             })) {
                 Ok(outcome) => WorkerMessage::Ready { id, outcome },
                 Err(payload) => WorkerMessage::Panicked {
@@ -219,7 +226,7 @@ impl OcrController {
     }
 }
 
-fn panic_reason(payload: &Box<dyn std::any::Any + Send>) -> String {
+fn panic_reason(payload: &Box<dyn Any + Send>) -> String {
     if let Some(message) = payload.downcast_ref::<&'static str>() {
         (*message).to_string()
     } else if let Some(message) = payload.downcast_ref::<String>() {
@@ -287,7 +294,7 @@ impl Drop for WorkerExitGuard {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
+    use std::sync::{Mutex, mpsc};
     use std::time::Duration;
 
     use super::*;
@@ -311,7 +318,7 @@ mod tests {
 
     struct BlockingRecognizer {
         started: mpsc::Sender<()>,
-        release: std::sync::Mutex<mpsc::Receiver<()>>,
+        release: Mutex<mpsc::Receiver<()>>,
     }
 
     impl TextRecognizer for BlockingRecognizer {
@@ -355,13 +362,13 @@ mod tests {
 
     fn request() -> OcrRequest {
         OcrRequest {
-            pixels: PackedArgb32::new(2, 2, 8, vec![0xFF; 16]).unwrap(),
+            pixels: PackedArgb32::new(2, 2, 8, vec![0xff; 16]).unwrap(),
             languages: OcrLanguages::from_validated("eng".to_string()),
         }
     }
 
     fn controller() -> (RuntimeWakeSource, OcrController) {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let controller = OcrController::new(wake.handle());
         (wake, controller)
     }
@@ -417,7 +424,7 @@ mod tests {
                 request(),
                 BlockingRecognizer {
                     started: started_tx,
-                    release: std::sync::Mutex::new(release_rx),
+                    release: Mutex::new(release_rx),
                 },
                 NoopPublisher,
             )
@@ -496,7 +503,7 @@ mod tests {
     fn a_worker_that_exits_without_publishing_is_reported_as_lost() {
         let (wake, mut controller) = controller();
         let id = OcrRequestId(9);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         controller.active = Some(ActiveRequest { id, receiver });
 
         drop(WorkerExitGuard::new(id, sender, wake.handle()));
@@ -518,7 +525,7 @@ mod tests {
                     outcome: || Err(OcrFailure::EngineFailed),
                 },
                 NoopPublisher,
-                |_job| Err(std::io::Error::other("injected spawn failure")),
+                |_job| Err(io::Error::other("injected spawn failure")),
             )
             .unwrap_err();
 

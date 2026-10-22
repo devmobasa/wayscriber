@@ -1,8 +1,7 @@
 use super::*;
-use crate::config::Config;
 use crate::config::io::{is_stale_source_error, persist_keybinding_edit_at};
-use crate::config::persist_keybinding_edit;
 use crate::config::test_helpers::with_temp_config_home;
+use crate::config::{Config, persist_keybinding_edit};
 use std::fs;
 use std::path::{Path, PathBuf};
 

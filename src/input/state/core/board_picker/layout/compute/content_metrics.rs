@@ -1,10 +1,10 @@
 use cairo::Context as CairoContext;
 
 use crate::domain::Action;
+use crate::label_format;
 
 use super::super::super::super::base::InputState;
-use super::super::super::BoardPickerEditMode;
-use super::super::super::COLUMN_GAP;
+use super::super::super::{BoardPickerEditMode, COLUMN_GAP};
 use super::{BoardPickerContentMetrics, BoardPickerLayoutConfig};
 
 impl InputState {
@@ -213,7 +213,7 @@ fn board_slot_hint(state: &InputState, index: usize) -> Option<String> {
     let label = state.action_binding_label(action);
     // The unbound sentinel stays in the source language: it is compared, never
     // drawn, so it is not translated and needs no catalog entry.
-    if label == crate::label_format::NOT_BOUND_LABEL {
+    if label == label_format::NOT_BOUND_LABEL {
         None
     } else {
         Some(label)

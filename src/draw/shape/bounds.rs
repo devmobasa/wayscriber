@@ -174,12 +174,12 @@ pub(crate) fn bounding_box_for_arrow_with(
         bend,
     ) {
         let heads = [Some(skeleton.head), skeleton.tail_head];
-        for corner in heads
+        let corners = heads
             .iter()
             .flatten()
             .flat_map(|head| [head.tip, head.left, head.right])
-            .chain(skeleton.spine.points().iter().copied())
-        {
+            .chain(skeleton.spine.points().iter().copied());
+        for corner in corners {
             min_x = min_x.min(corner.0);
             max_x = max_x.max(corner.0);
             min_y = min_y.min(corner.1);

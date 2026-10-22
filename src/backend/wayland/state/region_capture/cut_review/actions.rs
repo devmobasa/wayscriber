@@ -1,3 +1,8 @@
+use crate::i18n;
+use crate::input::state::{RegionPurposeTag, Toast, ToastPriority};
+use crate::screen_pixels::PackedArgb32;
+use crate::ui::RegionAction;
+
 use super::geometry::{cut_band_display, display_contains, output_display_for, quantized_cut};
 use super::model::{CutCommit, CutMode, RegionReviewCorrelation, RegionReviewEdits};
 use crate::backend::wayland::state::WaylandState;
@@ -12,7 +17,7 @@ pub(in crate::backend::wayland::state::region_capture) fn review_edits_for_activ
     rect: ImagePixelRect,
 ) -> Option<RegionReviewEdits> {
     let Some(ActiveScreenRegion::Ready {
-        purpose: crate::input::state::RegionPurposeTag::CaptureInteractive,
+        purpose: RegionPurposeTag::CaptureInteractive,
         generation,
         source,
         ..
@@ -83,20 +88,17 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn apply_region_review_edit(
         &mut self,
-        action: crate::ui::RegionAction,
+        action: RegionAction,
     ) -> bool {
         match action {
-            crate::ui::RegionAction::CutBand => self.toggle_region_cut_mode(),
-            crate::ui::RegionAction::UndoCut => self.undo_region_cut(),
-            crate::ui::RegionAction::RedoCut => self.redo_region_cut(),
-            crate::ui::RegionAction::ResetCuts => self.reset_region_cuts(),
-            crate::ui::RegionAction::ToggleIncludeDrawings => {
-                self.toggle_region_picker_include_drawings()
+            RegionAction::CutBand => self.toggle_region_cut_mode(),
+            RegionAction::UndoCut => self.undo_region_cut(),
+            RegionAction::RedoCut => self.redo_region_cut(),
+            RegionAction::ResetCuts => self.reset_region_cuts(),
+            RegionAction::ToggleIncludeDrawings => self.toggle_region_picker_include_drawings(),
+            RegionAction::Copy | RegionAction::Save | RegionAction::Both | RegionAction::Board => {
+                false
             }
-            crate::ui::RegionAction::Copy
-            | crate::ui::RegionAction::Save
-            | crate::ui::RegionAction::Both
-            | crate::ui::RegionAction::Board => false,
         }
     }
 
@@ -252,9 +254,9 @@ impl WaylandState {
             }
             CutCommit::RejectedFullAxis => {
                 self.input_state.push_toast(
-                    crate::input::state::ToastPriority::Info,
+                    ToastPriority::Info,
                     "capture",
-                    crate::input::state::Toast::warning(crate::i18n::tr(
+                    Toast::warning(i18n::tr(
                         "That cut would remove the entire remaining image.",
                     )),
                 );
@@ -320,9 +322,7 @@ impl WaylandState {
         }
     }
 
-    pub(in crate::backend::wayland) fn region_cut_preview_pixels(
-        &self,
-    ) -> Option<&crate::screen_pixels::PackedArgb32> {
+    pub(in crate::backend::wayland) fn region_cut_preview_pixels(&self) -> Option<&PackedArgb32> {
         self.region_capture
             .review_edits()
             .and_then(|edits| edits.ready_preview.as_ref())
@@ -338,7 +338,11 @@ impl WaylandState {
         let display = self.region_cut_displayed_selection()?;
         let output = edits.output_size()?;
         let band = quantized_cut(axis, display, output, drag.start, drag.current)?;
-        debug_assert_eq!(band.axis(), axis);
+        debug_assert_eq!(
+            band.axis(),
+            axis,
+            "a quantized cut keeps the axis of the drag that made it"
+        );
         cut_band_display(display, output, axis, band.start(), band.end()).map(|band| (axis, band))
     }
 

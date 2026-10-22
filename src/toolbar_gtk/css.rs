@@ -10,6 +10,7 @@ use crate::ui::theme::css::GtkStylesheetValues;
 
 // Tokens the GTK widgets also paint directly (swatch fills and the slider
 // DrawingArea); re-exported under their pre-M1 local names.
+use crate::ui::theme::css;
 pub(super) use crate::ui::theme::toolbar::{
     COLOR_ACCENT as ACCENT, COLOR_TRACK_BACKGROUND as TRACK_BACKGROUND,
     COLOR_TRACK_KNOB as TRACK_KNOB,
@@ -381,8 +382,8 @@ tooltip {{
         scrollbar_slider = v.scrollbar_slider,
         track = v.track,
         track_hover = v.track_hover,
-        meter_bar_h = crate::ui::theme::css::scaled_px(8.0, scale),
-        meter_bar_radius = crate::ui::theme::css::scaled_px(4.0, scale),
+        meter_bar_h = css::scaled_px(8.0, scale),
+        meter_bar_radius = css::scaled_px(4.0, scale),
         radius_panel = v.radius_panel,
         radius_button = v.radius_button,
         radius_sm = v.radius_sm,
@@ -495,6 +496,8 @@ tooltip.{class} {{
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use crate::ui::theme::css::{hex_css, rgba_css, rgba_css_compact, transparent_css};
     use crate::ui::theme::toolbar as t;
@@ -641,7 +644,7 @@ mod tests {
 
     #[test]
     fn every_theme_token_color_appears_in_the_stylesheet() {
-        let css = stylesheet(1.0) + &capture_stylesheet(1.0);
+        let css = format!("{}{}", stylesheet(1.0), capture_stylesheet(1.0));
         for (token, value) in emitted_colors() {
             assert!(
                 css.contains(&value),
@@ -652,8 +655,8 @@ mod tests {
 
     #[test]
     fn stylesheet_has_no_color_literal_outside_the_theme_tokens() {
-        let css = stylesheet(1.0) + &capture_stylesheet(1.0);
-        let known: std::collections::HashSet<String> = emitted_colors()
+        let css = format!("{}{}", stylesheet(1.0), capture_stylesheet(1.0));
+        let known: HashSet<String> = emitted_colors()
             .into_iter()
             .map(|(_, value)| value)
             .collect();

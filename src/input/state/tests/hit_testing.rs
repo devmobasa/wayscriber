@@ -1,6 +1,9 @@
+use crate::draw::{Frame, ShapeId, TextMeasurer};
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
+
 use super::*;
 
-fn add_test_line(state: &mut InputState) -> crate::draw::ShapeId {
+fn add_test_line(state: &mut InputState) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
@@ -42,7 +45,7 @@ fn indexed_state_with_two_overlapping_rects() -> InputState {
 
 #[test]
 fn explicit_hit_testing_rejects_invalid_tolerances() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     add_test_line(&mut state);
 
@@ -71,7 +74,7 @@ fn stored_hit_test_tolerance_is_always_valid() {
 
 #[test]
 fn extreme_persisted_rectangle_is_selectable_through_the_spatial_index() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.set_hit_test_threshold(1);
     let color = Color {
@@ -140,11 +143,11 @@ fn spatial_hit_testing_reuses_resolved_candidate_indices_without_id_rescans() {
         thick: 1.0,
     });
 
-    crate::draw::Frame::reset_linear_id_lookup_count();
+    Frame::reset_linear_id_lookup_count();
     assert_eq!(state.hit_test_at(10, 10), Some(topmost));
     assert!(state.has_spatial_index());
     assert_eq!(
-        crate::draw::Frame::linear_id_lookup_count(),
+        Frame::linear_id_lookup_count(),
         0,
         "spatial candidates already carry resolved frame indices"
     );
@@ -164,7 +167,7 @@ fn unchanged_spatial_hit_tests_build_shape_indices_once() {
 
 #[test]
 fn unchanged_spatial_multi_point_hit_tests_build_shape_indices_once() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = indexed_state_with_two_overlapping_rects();
 
     InputState::reset_spatial_shape_index_build_count();
@@ -336,13 +339,13 @@ fn spatial_shape_indices_are_scoped_to_the_active_board_and_page() {
     assert!(state.page_prev());
     assert_ne!(state.hit_test_at(10, 0), Some(second_page_top));
 
-    state.switch_board_force(crate::input::BOARD_ID_BLACKBOARD);
+    state.switch_board_force(BOARD_ID_BLACKBOARD);
     add_test_line(&mut state);
     add_test_line(&mut state);
     let blackboard_top = add_test_line(&mut state);
     assert_eq!(state.hit_test_at(10, 0), Some(blackboard_top));
 
-    state.switch_board_force(crate::input::BOARD_ID_TRANSPARENT);
+    state.switch_board_force(BOARD_ID_TRANSPARENT);
     assert_eq!(state.hit_test_at(10, 0), Some(first_page_top));
     assert_eq!(InputState::spatial_shape_index_build_count(), 5);
 }

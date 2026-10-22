@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
+use crate::backend::wayland::state::region_capture;
+use crate::canvas_export::CanvasExportRect;
+use crate::screen_pixels::PackedArgb32;
+
 use super::actions::apply_cut_history_change;
 use super::geometry::{dominant_cut_axis, logical_to_output_point, output_display_for};
 use super::model::{CutCommit, CutMode};
 use super::*;
-use crate::backend::wayland::state::screen_image::ScreenImageKind;
-use crate::backend::wayland::state::screen_image::ScreenSourceToken;
-use crate::capture::CutAxis;
-use crate::capture::CutBand;
+use crate::backend::wayland::state::screen_image::{ScreenImageKind, ScreenSourceToken};
+use crate::capture::{CutAxis, CutBand};
 use crate::input::state::{RegionInputSource, RegionSelection};
 use crate::screen_pixels::ImagePixelRect;
 use wayland_client::protocol::wl_output::Transform;
@@ -159,7 +163,7 @@ fn undo_redo_and_new_commit_clear_redo() {
     let fingerprint = fingerprint(edits.source_rect);
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.revision = 1;
     assert!(edits.undo(fingerprint.clone()));
     assert!(edits.cuts.is_empty());
@@ -188,15 +192,13 @@ fn undo_and_redo_abandon_an_in_flight_drag() {
     let fingerprint = fingerprint(edits.source_rect);
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.revision = 1;
     edits.set_desired_from(fingerprint.clone());
     let desired = edits.desired_preview.clone().unwrap();
     edits.ready_preview = Some(RegionCutPreview {
         key: desired,
-        pixels: std::sync::Arc::new(
-            crate::screen_pixels::PackedArgb32::new(7, 8, 28, vec![0; 28 * 8]).unwrap(),
-        ),
+        pixels: Arc::new(PackedArgb32::new(7, 8, 28, vec![0; 28 * 8]).unwrap()),
         display: display(),
     });
     edits.toggle_mode();
@@ -241,15 +243,13 @@ fn edits_with_current_preview() -> RegionReviewEdits {
     let fingerprint = fingerprint(edits.source_rect);
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.revision = 1;
     edits.set_desired_from(fingerprint);
     let desired = edits.desired_preview.clone().unwrap();
     edits.ready_preview = Some(RegionCutPreview {
         key: desired,
-        pixels: std::sync::Arc::new(
-            crate::screen_pixels::PackedArgb32::new(7, 8, 28, vec![0; 28 * 8]).unwrap(),
-        ),
+        pixels: Arc::new(PackedArgb32::new(7, 8, 28, vec![0; 28 * 8]).unwrap()),
         display: display(),
     });
     edits
@@ -308,7 +308,7 @@ fn toggling_cut_mode_off_during_a_drag_returns_the_owner() {
 #[test]
 fn revision_exhaustion_leaves_reset_and_invalidate_untouched() {
     let mut edits = edits();
-    let cut = CutBand::new(CutAxis::Columns, 1, 2).unwrap();
+    let cut = CutBand::try_new(CutAxis::Columns, 1, 2).unwrap();
     edits.cuts.push(cut);
     edits.revision = u64::MAX;
     edits.failed_revision = Some(u64::MAX);
@@ -329,7 +329,7 @@ fn undoing_the_last_cut_unlocks_the_crop() {
     let fingerprint = fingerprint(edits.source_rect);
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.revision = 1;
     assert!(edits.crop_locked());
     assert!(edits.undo(fingerprint));
@@ -342,7 +342,7 @@ fn a_failed_current_preview_stays_failed_until_the_revision_changes() {
     let desired = CutPreviewKey {
         fingerprint: fingerprint(edits.source_rect),
         revision: 3,
-        cuts: vec![CutBand::new(CutAxis::Columns, 1, 2).unwrap()],
+        cuts: vec![CutBand::try_new(CutAxis::Columns, 1, 2).unwrap()],
     };
     edits.cuts = desired.cuts.clone();
     edits.revision = 3;
@@ -361,10 +361,12 @@ fn a_failed_current_preview_stays_failed_until_the_revision_changes() {
 #[test]
 fn reset_clears_history_and_unlocks_the_crop() {
     let mut edits = edits();
-    edits.cuts.push(CutBand::new(CutAxis::Rows, 1, 2).unwrap());
+    edits
+        .cuts
+        .push(CutBand::try_new(CutAxis::Rows, 1, 2).unwrap());
     edits
         .redo
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.mode = CutMode::Armed;
     assert!(edits.reset());
     assert!(edits.cuts.is_empty());
@@ -380,7 +382,7 @@ fn source_rect_cannot_change_while_cuts_exist() {
     assert!(edits.set_source_rect(next));
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     assert!(!edits.set_source_rect(ImagePixelRect::new(0, 0, 4, 4, (8, 8)).unwrap()));
     assert_eq!(edits.source_rect, next);
 }
@@ -391,7 +393,7 @@ fn cut_start_is_rejected_while_preview_is_pending() {
     edits.toggle_mode();
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     edits.revision = 1;
     edits.set_desired_from(fingerprint(edits.source_rect));
     assert!(!edits.preview_is_current());
@@ -407,7 +409,7 @@ fn loupe_is_suppressed_when_armed_or_cuts_exist() {
     edits.toggle_mode();
     edits
         .cuts
-        .push(CutBand::new(CutAxis::Columns, 1, 2).unwrap());
+        .push(CutBand::try_new(CutAxis::Columns, 1, 2).unwrap());
     assert!(edits.loupe_suppressed());
 }
 
@@ -419,7 +421,7 @@ fn column_cut_preserves_top_left_and_height() {
     let cut = output_display_for(
         &token,
         rect,
-        &[CutBand::new(CutAxis::Columns, 2, 4).unwrap()],
+        &[CutBand::try_new(CutAxis::Columns, 2, 4).unwrap()],
     )
     .unwrap();
     assert_eq!(cut.start, full.start);
@@ -450,13 +452,8 @@ fn pointer_edges_map_to_the_inclusive_pixel_edge_domain() {
 
 #[test]
 fn composed_board_origin_stays_put_while_size_contracts() {
-    let source = crate::canvas_export::CanvasExportRect::new(10.0, 20.0, 80.0, 40.0).unwrap();
-    let composed = crate::backend::wayland::state::region_capture::world_rect_for_composed_region(
-        source,
-        (8, 8),
-        (6, 4),
-    )
-    .unwrap();
+    let source = CanvasExportRect::new(10.0, 20.0, 80.0, 40.0).unwrap();
+    let composed = region_capture::world_rect_for_composed_region(source, (8, 8), (6, 4)).unwrap();
     assert_eq!(composed.x, 10.0);
     assert_eq!(composed.y, 20.0);
     assert_eq!(composed.width, 60.0);

@@ -15,6 +15,10 @@ use super::types::{
 };
 #[cfg(all(test, feature = "tray"))]
 use super::types::{OverlayActionIntents, VisibilityIntents};
+#[cfg(all(test, feature = "tray"))]
+use crate::backend::wayland::RuntimeWakeHandle;
+#[cfg(all(test, feature = "tray"))]
+use crate::backend::wayland::RuntimeWakeSource;
 #[cfg(feature = "tray")]
 use crate::config::TrayIconStyle;
 #[cfg(feature = "tray")]
@@ -69,7 +73,7 @@ impl WayscriberTray {
     }
     #[cfg(test)]
     pub(crate) fn new_for_tests(toggle_flag: Arc<AtomicBool>, quit_flag: Arc<AtomicBool>) -> Self {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         Self::new_for_tests_with_wake(toggle_flag, quit_flag, wake.handle())
     }
 
@@ -77,7 +81,7 @@ impl WayscriberTray {
     pub(crate) fn new_for_tests_with_wake(
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
-        control_wake: crate::backend::wayland::RuntimeWakeHandle,
+        control_wake: RuntimeWakeHandle,
     ) -> Self {
         Self::for_tests(toggle_flag, quit_flag, control_wake, "true".into())
     }
@@ -91,7 +95,7 @@ impl WayscriberTray {
         quit_flag: Arc<AtomicBool>,
         configurator_binary: String,
     ) -> Self {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         Self::for_tests(toggle_flag, quit_flag, wake.handle(), configurator_binary)
     }
 
@@ -99,7 +103,7 @@ impl WayscriberTray {
     fn for_tests(
         toggle_flag: Arc<AtomicBool>,
         quit_flag: Arc<AtomicBool>,
-        control_wake: crate::backend::wayland::RuntimeWakeHandle,
+        control_wake: RuntimeWakeHandle,
         configurator_binary: String,
     ) -> Self {
         let visibility_intents = Arc::new(VisibilityIntents::with_ready(toggle_flag));

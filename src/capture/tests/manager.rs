@@ -1,22 +1,25 @@
-use std::{
-    os::fd::AsRawFd,
-    path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
+use std::os::fd::AsRawFd;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 
+use tokio::runtime::Handle;
+use tokio::sync::Notify;
+use tokio::task;
 use tokio::time::{Duration, sleep};
 
+use crate::backend::wayland::RuntimeWakeSource;
+use crate::capture::dependencies::{CaptureDependencies, CaptureFuture, CaptureSource};
+use crate::capture::file::FileSaveConfig;
+use crate::capture::manager::{CaptureManager, CapturePoll, CaptureSubmitError};
+use crate::capture::types::{
+    CaptureDestination, CaptureError, CaptureFailureKind, CaptureOutcome, CaptureType,
+};
 use crate::capture::{
     DesktopBackdropCaptureRequest, DesktopBackdropGeometry, DocumentDeliveryRequest,
     ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
     RenderedDocument, RenderedImage,
-    dependencies::{CaptureDependencies, CaptureFuture, CaptureSource},
-    file::FileSaveConfig,
-    manager::{CaptureManager, CapturePoll, CaptureSubmitError},
-    types::{CaptureDestination, CaptureError, CaptureFailureKind, CaptureOutcome, CaptureType},
 };
 
 use super::fixtures::{MockClipboard, MockSaver, MockSource, create_placeholder_image};
@@ -24,8 +27,8 @@ use super::fixtures::{MockClipboard, MockSaver, MockSource, create_placeholder_i
 struct PanicSource;
 
 struct GatedSource {
-    started: Arc<tokio::sync::Notify>,
-    release: Arc<tokio::sync::Notify>,
+    started: Arc<Notify>,
+    release: Arc<Notify>,
 }
 
 impl CaptureSource for PanicSource {
@@ -105,13 +108,10 @@ async fn completion_is_observable_when_the_notifier_runs() {
     };
     let notifications = Arc::new(AtomicUsize::new(0));
     let notified = Arc::clone(&notifications);
-    let mut manager = CaptureManager::with_dependencies_and_test_notifier(
-        &tokio::runtime::Handle::current(),
-        deps,
-        move || {
+    let mut manager =
+        CaptureManager::with_dependencies_and_test_notifier(&Handle::current(), deps, move || {
             notified.fetch_add(1, Ordering::Release);
-        },
-    );
+        });
     let accepted = manager
         .request_capture(
             CaptureType::FullScreen,
@@ -131,8 +131,8 @@ async fn completion_is_observable_when_the_notifier_runs() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn completion_wakes_an_already_blocked_runtime_poll_after_publication() {
-    let started = Arc::new(tokio::sync::Notify::new());
-    let release = Arc::new(tokio::sync::Notify::new());
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
     let deps = CaptureDependencies {
         source: Arc::new(GatedSource {
             started: Arc::clone(&started),
@@ -148,15 +148,12 @@ async fn completion_wakes_an_already_blocked_runtime_poll_after_publication() {
             calls: Arc::new(Mutex::new(0)),
         }),
     };
-    let runtime_wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+    let runtime_wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = runtime_wake.handle();
-    let mut manager = CaptureManager::with_dependencies_and_test_notifier(
-        &tokio::runtime::Handle::current(),
-        deps,
-        move || {
+    let mut manager =
+        CaptureManager::with_dependencies_and_test_notifier(&Handle::current(), deps, move || {
             wake_handle.wake().unwrap();
-        },
-    );
+        });
     let accepted = manager
         .request_capture(
             CaptureType::FullScreen,
@@ -167,8 +164,8 @@ async fn completion_wakes_an_already_blocked_runtime_poll_after_publication() {
     started.notified().await;
 
     let wake_fd = runtime_wake.poll_fd().as_raw_fd();
-    let (polling_tx, polling_rx) = std::sync::mpsc::sync_channel(0);
-    let poller = std::thread::spawn(move || {
+    let (polling_tx, polling_rx) = mpsc::sync_channel(0);
+    let poller = thread::spawn(move || {
         let mut pollfd = libc::pollfd {
             fd: wake_fd,
             events: libc::POLLIN,
@@ -207,13 +204,10 @@ async fn worker_panic_wakes_and_reports_the_active_operation_once() {
     };
     let notifications = Arc::new(AtomicUsize::new(0));
     let notified = Arc::clone(&notifications);
-    let mut manager = CaptureManager::with_dependencies_and_test_notifier(
-        &tokio::runtime::Handle::current(),
-        deps,
-        move || {
+    let mut manager =
+        CaptureManager::with_dependencies_and_test_notifier(&Handle::current(), deps, move || {
             notified.fetch_add(1, Ordering::Release);
-        },
-    );
+        });
     let accepted = manager
         .request_capture(
             CaptureType::FullScreen,
@@ -241,7 +235,7 @@ async fn normal_shutdown_does_not_publish_a_failure_notification() {
     let notifications = Arc::new(AtomicUsize::new(0));
     let notified = Arc::clone(&notifications);
     let mut manager = CaptureManager::with_dependencies_and_test_notifier(
-        &tokio::runtime::Handle::current(),
+        &Handle::current(),
         CaptureDependencies::default(),
         move || {
             notified.fetch_add(1, Ordering::Release);
@@ -249,7 +243,7 @@ async fn normal_shutdown_does_not_publish_a_failure_notification() {
     );
 
     manager.shutdown();
-    tokio::task::yield_now().await;
+    task::yield_now().await;
 
     assert_eq!(notifications.load(Ordering::Acquire), 0);
     assert!(matches!(manager.poll(), CapturePoll::Idle));
@@ -277,8 +271,7 @@ async fn test_capture_manager_with_dependencies() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager =
-        CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps.clone());
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps.clone());
 
     manager
         .request_capture(
@@ -337,8 +330,7 @@ async fn capture_manager_records_failure_status() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager =
-        CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps.clone());
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps.clone());
 
     manager
         .request_capture(
@@ -385,7 +377,7 @@ async fn capture_manager_preserves_user_cancellation_as_a_terminal_outcome() {
             calls: Arc::new(Mutex::new(0)),
         }),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
     manager
         .request_capture(
             CaptureType::FullScreen,
@@ -422,7 +414,7 @@ async fn desktop_backdrop_completion_releases_the_manager_for_pdf_delivery() {
             calls: Arc::new(Mutex::new(0)),
         }),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
     let backdrop_id = manager
         .request_desktop_backdrop_capture(DesktopBackdropCaptureRequest {
             logical_width: 100,
@@ -489,7 +481,7 @@ async fn request_image_delivery_queues_manager_backed_path() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
 
     manager
         .request_image_delivery(ImageDeliveryRequest {
@@ -549,7 +541,7 @@ async fn request_document_delivery_reports_board_pdf_success() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
 
     manager
         .request_document_delivery(DocumentDeliveryRequest {
@@ -598,7 +590,7 @@ async fn request_image_delivery_records_canvas_save_failure() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
 
     manager
         .request_image_delivery(ImageDeliveryRequest {
@@ -655,7 +647,7 @@ async fn request_document_delivery_records_board_pdf_save_failure() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
 
     manager
         .request_document_delivery(DocumentDeliveryRequest {
@@ -707,7 +699,7 @@ async fn request_image_delivery_preserves_clipboard_success_when_file_fails() {
         saver: Arc::new(saver),
         clipboard: Arc::new(clipboard),
     };
-    let mut manager = CaptureManager::with_dependencies(&tokio::runtime::Handle::current(), deps);
+    let mut manager = CaptureManager::with_dependencies(&Handle::current(), deps);
 
     manager
         .request_image_delivery(ImageDeliveryRequest {
@@ -735,7 +727,7 @@ async fn request_image_delivery_preserves_clipboard_success_when_file_fails() {
 
 #[tokio::test]
 async fn request_render_image_returns_the_rendered_image_without_delivery() {
-    let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
+    let mut manager = CaptureManager::new(&Handle::current());
 
     manager
         .request_render_image(RenderImageRequest {
@@ -756,7 +748,7 @@ async fn request_render_image_returns_the_rendered_image_without_delivery() {
 
 #[tokio::test]
 async fn request_render_image_reports_render_failure_and_keeps_the_manager_healthy() {
-    let mut manager = CaptureManager::new(&tokio::runtime::Handle::current());
+    let mut manager = CaptureManager::new(&Handle::current());
 
     manager
         .request_render_image(RenderImageRequest {

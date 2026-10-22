@@ -1,4 +1,5 @@
-use super::*;
+use super::super::WaylandState;
+use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 
 mod access;
 mod pointer;

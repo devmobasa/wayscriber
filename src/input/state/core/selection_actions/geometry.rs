@@ -1,6 +1,5 @@
 use super::super::base::InputState;
-use crate::draw::ShapeId;
-use crate::draw::TextMeasurer;
+use crate::draw::{ShapeId, TextMeasurer};
 use crate::util::Rect;
 
 fn selection_rect(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> Option<Rect> {

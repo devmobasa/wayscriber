@@ -60,6 +60,8 @@
 //! finished temp file into place — so the file is either that edit or what it
 //! said before, never half of either.
 
+use std::io;
+
 use super::RuntimeWakeHandle;
 use super::state::{
     WaylandState, queue_keybinding_edit, queue_preset_action, queue_quick_color_edit,
@@ -611,7 +613,7 @@ impl ConfigEditWorker {
         unwritten
     }
 
-    fn start(&mut self) -> std::io::Result<()> {
+    fn start(&mut self) -> io::Result<()> {
         let (command_tx, command_rx) = sync_channel(self.capacity);
         let (completion_tx, completion_rx) = sync_channel(self.capacity);
         let wake = self.wake.clone();
@@ -657,6 +659,10 @@ fn join_identities(identities: &[ConfigEditIdentity]) -> String {
 /// Nothing here can block on the failure: a dropped receiver makes `send`
 /// return rather than wait, and the wake is skipped with it, because there is no
 /// completion for the loop to pick up.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a panic while writing one edit must still answer that edit, and the worker keeps writing the edits queued behind it"
+)]
 fn run_worker(
     commands: &Receiver<ConfigEdit>,
     completions: &SyncSender<ConfigEditCompletion>,

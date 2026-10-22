@@ -1,4 +1,4 @@
-use crate::draw::TextMeasurer;
+use crate::draw::{Shape, TextMeasurer};
 use crate::input::{DrawingState, InputState};
 use std::time::Instant;
 
@@ -74,7 +74,7 @@ impl InputState {
     pub(crate) fn commit_text_edit_with(
         &mut self,
         measurer: &TextMeasurer,
-        new_shape: crate::draw::Shape,
+        new_shape: Shape,
     ) -> bool {
         let undo_limit = self.history_limits.undo_stack_limit();
         let Some(change) = self.text_editing.commit_existing(

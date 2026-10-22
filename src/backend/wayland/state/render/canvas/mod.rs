@@ -3,9 +3,23 @@ mod context;
 mod overlays;
 mod text;
 
-use super::super::*;
+use crate::domain::BoardGrid;
+use crate::draw;
+use crate::draw::{
+    DrawnShape, RenderCaches, SpotlightMagnifierOutcome, SpotlightMagnifierSource, SpotlightPass,
+    TextMeasurer,
+};
+use crate::input::state::{SpotlightFrameRegions, Toast, ToastPriority};
+use crate::input::tool::ProvisionalToolStroke;
+use crate::util::Rect;
+
+use super::super::WaylandState;
+use super::super::perf::PerfRenderBreakdown;
 use crate::i18n::tr;
+use anyhow::Result;
 pub(super) use context::CanvasRenderCtx;
+use log::debug;
+use std::time::Instant;
 
 const SPOTLIGHT_MAGNIFIER_TOAST_SOURCE: &str = "spotlight-magnifier";
 
@@ -41,7 +55,7 @@ impl WaylandState {
     fn warn_once_for_arrived_unavailable_magnification(
         &mut self,
         has_magnified_region: bool,
-        source: crate::draw::SpotlightMagnifierSource,
+        source: SpotlightMagnifierSource,
         show_toast: bool,
     ) {
         if self
@@ -68,9 +82,9 @@ impl WaylandState {
 
     fn push_spotlight_magnifier_toast(&mut self, message: &str) {
         self.input_state.push_toast(
-            crate::input::state::ToastPriority::Critical,
+            ToastPriority::Critical,
             SPOTLIGHT_MAGNIFIER_TOAST_SOURCE,
-            crate::input::state::Toast::warning(message),
+            Toast::warning(message),
         );
     }
 
@@ -195,7 +209,7 @@ impl WaylandState {
             let (screen_x, screen_y) = self.pointer.position();
             self.canvas_world_coords(screen_x as f64, screen_y as f64)
         });
-        let crate::input::state::SpotlightFrameRegions {
+        let SpotlightFrameRegions {
             regions: spotlight_regions,
             committed_magnified,
         } = self.input_state.spotlight_frame_regions(spotlight_cursor);
@@ -205,7 +219,7 @@ impl WaylandState {
             magnifier_source,
             render_transients,
         );
-        match crate::draw::render_spotlight_magnification_pass(
+        match draw::render_spotlight_magnification_pass(
             ctx,
             &spotlight_regions,
             self.input_state.style.spotlight_feather,
@@ -222,10 +236,10 @@ impl WaylandState {
             // It also ends any run of render failures: the flag below tracks
             // failing *renders*, and a frame that never attempted one must not
             // leave it armed to swallow the next real failure.
-            Ok(crate::draw::SpotlightMagnifierOutcome::SourceUnavailable) => {
+            Ok(SpotlightMagnifierOutcome::SourceUnavailable) => {
                 self.spotlight.clear_render_warning();
             }
-            Ok(crate::draw::SpotlightMagnifierOutcome::AllocationFailed) => {
+            Ok(SpotlightMagnifierOutcome::AllocationFailed) => {
                 self.push_spotlight_magnifier_warning(
                     tr("Spotlight magnification could not allocate its render buffer."),
                     render_transients,
@@ -238,7 +252,7 @@ impl WaylandState {
                     render_transients,
                 );
             }
-            Ok(crate::draw::SpotlightMagnifierOutcome::Rendered(metrics)) => {
+            Ok(SpotlightMagnifierOutcome::Rendered(metrics)) => {
                 if let Some(perf) = perf.as_mut() {
                     perf.stages.spotlight_snapshot = perf
                         .stages
@@ -254,17 +268,17 @@ impl WaylandState {
                 }
                 self.spotlight.clear_render_warning();
             }
-            Ok(crate::draw::SpotlightMagnifierOutcome::NotNeeded) => {
+            Ok(SpotlightMagnifierOutcome::NotNeeded) => {
                 self.spotlight.clear_render_warning();
             }
         }
         // Remember for the next frame's damage decision: once the last spotlight
         // is gone this buffer still carries its dim until a full repaint.
         self.spotlight.note_frame(!spotlight_regions.is_empty());
-        crate::draw::render_spotlight_pass(
+        draw::render_spotlight_pass(
             ctx,
             &spotlight_regions,
-            crate::draw::SpotlightPass {
+            SpotlightPass {
                 dim_opacity: self.input_state.style.spotlight_dim_opacity,
                 feather: self.input_state.style.spotlight_feather,
             },
@@ -303,7 +317,7 @@ impl WaylandState {
         let (caches, measurer) = self.render.draw_text_parts_mut();
         let mut render = crate::draw::RenderCtx::new(ctx, caches);
         let rendered_provisional = match provisional {
-            crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(params) => {
+            ProvisionalToolStroke::BlurReplayPreview(params) => {
                 render.render_blur_rect(params, &replay_ctx);
                 true
             }
@@ -347,14 +361,14 @@ impl WaylandState {
 
 #[allow(clippy::too_many_arguments)]
 fn render_committed_canvas_shapes(
-    measurer: &crate::draw::TextMeasurer,
-    shapes: &[crate::draw::DrawnShape],
+    measurer: &TextMeasurer,
+    shapes: &[DrawnShape],
     layer_cache: &super::super::canvas_layer::CanvasLayerCache,
-    draw_caches: &mut crate::draw::RenderCaches,
+    draw_caches: &mut RenderCaches,
     canvas: &CanvasRenderCtx<'_>,
     layer_cache_ready: bool,
     eraser_ctx: &mut background::CanvasEraserContext,
-    grid: crate::domain::BoardGrid,
+    grid: BoardGrid,
     mut perf: Option<&mut PerfRenderBreakdown>,
 ) -> Result<()> {
     let ctx = canvas.cairo;
@@ -383,7 +397,7 @@ fn render_committed_canvas_shapes(
         cairo: ctx,
         caches: draw_caches,
     };
-    let mut render_shape = |shape: &crate::draw::DrawnShape| {
+    let mut render_shape = |shape: &DrawnShape| {
         super::super::canvas_layer::render_committed_shape(
             measurer,
             &mut render,
@@ -424,7 +438,7 @@ fn render_committed_canvas_shapes(
     Ok(())
 }
 
-fn union_damage_bounds(regions: &[crate::util::Rect]) -> Option<crate::util::Rect> {
+fn union_damage_bounds(regions: &[Rect]) -> Option<Rect> {
     regions.iter().copied().reduce(|union, region| {
         let min_x = union.x.min(region.x);
         let min_y = union.y.min(region.y);
@@ -436,7 +450,7 @@ fn union_damage_bounds(regions: &[crate::util::Rect]) -> Option<crate::util::Rec
             .y
             .saturating_add(union.height)
             .max(region.y.saturating_add(region.height));
-        crate::util::Rect {
+        Rect {
             x: min_x,
             y: min_y,
             width: max_x - min_x,
@@ -446,22 +460,22 @@ fn union_damage_bounds(regions: &[crate::util::Rect]) -> Option<crate::util::Rec
 }
 
 fn safe_shape_damage_bounds(
-    bounds: crate::util::Rect,
+    bounds: Rect,
     width: u32,
     height: u32,
     canvas_transform_active: bool,
-) -> Option<crate::util::Rect> {
+) -> Option<Rect> {
     let margin = 2;
     let x = bounds.x.saturating_sub(margin);
     let y = bounds.y.saturating_sub(margin);
     let width_with_margin = bounds.width.saturating_add(margin * 2);
     let height_with_margin = bounds.height.saturating_add(margin * 2);
     if canvas_transform_active {
-        return crate::util::Rect::new(x, y, width_with_margin, height_with_margin);
+        return Rect::new(x, y, width_with_margin, height_with_margin);
     }
     let x = x.max(0);
     let y = y.max(0);
-    crate::util::Rect::new(
+    Rect::new(
         x,
         y,
         width_with_margin.min((width as i32).saturating_sub(x)),
@@ -469,7 +483,7 @@ fn safe_shape_damage_bounds(
     )
 }
 
-fn rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
+fn rects_intersect(a: Rect, b: Rect) -> bool {
     let a_right = a.x.saturating_add(a.width);
     let a_bottom = a.y.saturating_add(a.height);
     let b_right = b.x.saturating_add(b.width);
@@ -477,7 +491,7 @@ fn rects_intersect(a: crate::util::Rect, b: crate::util::Rect) -> bool {
     !(a.x >= b_right || a_right <= b.x || a.y >= b_bottom || a_bottom <= b.y)
 }
 
-fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_>) -> usize {
+fn provisional_point_count(stroke: &ProvisionalToolStroke<'_>) -> usize {
     match stroke {
         crate::input::tool::ProvisionalToolStroke::BorrowedFreehand { points, .. }
         | crate::input::tool::ProvisionalToolStroke::BorrowedPressureFreehand { points, .. }
@@ -485,9 +499,9 @@ fn provisional_point_count(stroke: &crate::input::tool::ProvisionalToolStroke<'_
         | crate::input::tool::ProvisionalToolStroke::EraserPreview { points, .. }
         | crate::input::tool::ProvisionalToolStroke::Laser { points, .. }
         | crate::input::tool::ProvisionalToolStroke::Recognized { ink: points, .. } => points.len(),
-        crate::input::tool::ProvisionalToolStroke::Shape(_)
-        | crate::input::tool::ProvisionalToolStroke::BlurReplayPreview(_)
-        | crate::input::tool::ProvisionalToolStroke::None => 0,
+        ProvisionalToolStroke::Shape(_)
+        | ProvisionalToolStroke::BlurReplayPreview(_)
+        | ProvisionalToolStroke::None => 0,
     }
 }
 

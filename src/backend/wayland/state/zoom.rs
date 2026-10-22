@@ -1,6 +1,9 @@
-use super::*;
+use super::WaylandState;
+use super::core::overlay::{OverlaySuppression, OverlaySuppressionKeyboardPolicy};
 use crate::backend::wayland::zoom::ZoomCaptureBackend;
-use crate::input::{ZoomAnchor, ZoomRequest};
+use crate::input::{ZoomAction, ZoomAnchor, ZoomRequest};
+use anyhow::Result;
+use log::{debug, info, warn};
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn sync_input_zoom_state(&mut self) {

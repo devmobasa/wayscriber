@@ -14,6 +14,7 @@ use crate::ui_text::UiTextEngine;
 use crate::backend::wayland::toolbar::events::HitKind;
 use crate::backend::wayland::toolbar::format_binding_label;
 use crate::backend::wayland::toolbar::rows::{grid_layout, row_item_width};
+use crate::ui::theme::toolbar;
 use crate::ui::toolbar::session_format::{
     strip_session_extension, truncate_middle, truncate_start,
 };
@@ -26,11 +27,11 @@ use super::super::tree::WidgetTree;
 
 /// Content width inside the popover padding. Shared with the GTK popover
 /// viewport via the theme token so the frontends cannot drift.
-pub(super) const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+pub(super) const MENU_CONTENT_W: f64 = toolbar::MENU_CONTENT_W;
 /// Content column for the Canvas popover. It matches the text-menu width so
 /// the Step Undo/Redo cluster has comfortable spacing, and is shared with the
 /// GTK canvas viewport via the theme token so the frontends cannot drift.
-pub(super) const CANVAS_MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W;
+pub(super) const CANVAS_MENU_CONTENT_W: f64 = toolbar::CANVAS_MENU_CONTENT_W;
 const MENU_PAD: f64 = 10.0;
 const MENU_GAP: f64 = 5.0;
 const MENU_BUTTON_H: f64 = 24.0;
@@ -45,7 +46,7 @@ const MENU_PATH_H: f64 = 12.0;
 const MENU_CONFIRM_LABEL_H: f64 = 18.0;
 /// Cap on the visible content height; taller content scrolls internally.
 /// Shared with the GTK `ScrolledWindow` cap via the theme token.
-pub(super) const MENU_MAX_CONTENT_H: f64 = crate::ui::theme::toolbar::MENU_MAX_CONTENT_H;
+pub(super) const MENU_MAX_CONTENT_H: f64 = toolbar::MENU_MAX_CONTENT_H;
 const MENU_SCROLLBAR_W: f64 = 6.0;
 pub(super) const MENU_LABEL_FONT: f64 = 12.0;
 pub(super) const MENU_META_FONT: f64 = 11.0;
@@ -712,7 +713,7 @@ fn append_settings_notices(
 
 fn settings_notice_height(engine: &UiTextEngine, text: &str, bold: bool) -> f64 {
     let style = UiTextStyle {
-        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        family: toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: if bold {
             cairo::FontWeight::Bold

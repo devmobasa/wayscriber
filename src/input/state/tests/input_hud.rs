@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::create_test_input_state;
 use crate::config::{Action, InputHudConfig};
 use crate::input::state::{InputHudActiveSource, InputHudEntryKind, InputHudSettings};
@@ -15,8 +18,8 @@ fn enabled_hud_state() -> InputState {
 
 #[test]
 fn toggle_input_hud_action_changes_state_and_redraws() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -41,8 +44,8 @@ fn toggle_input_hud_action_changes_state_and_redraws() {
 /// source-independent and toasts immediately.
 #[test]
 fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -76,8 +79,8 @@ fn toggle_input_hud_defers_the_source_announcement_to_the_backend() {
 /// swallowed exactly like `ToggleClickHighlight` is.
 #[test]
 fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -112,8 +115,8 @@ fn presenter_mode_forces_input_hud_and_gates_the_manual_toggle() {
 /// Presenter mode leaves an already-enabled HUD on after exit.
 #[test]
 fn presenter_mode_restores_a_manually_enabled_input_hud() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -176,8 +179,8 @@ fn system_source_suppresses_overlay_notes() {
 /// an earlier session of the feature.
 #[test]
 fn disabling_the_hud_drops_its_chips() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -200,8 +203,8 @@ fn disabling_the_hud_drops_its_chips() {
 /// presenter gate applies to it too.
 #[test]
 fn toolbar_checkbox_toggles_the_input_hud() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,

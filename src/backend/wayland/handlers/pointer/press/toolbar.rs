@@ -1,5 +1,12 @@
 //! Presses taken by the inline strip, toolbar surfaces, and toolbar menus.
-use super::*;
+use crate::backend::wayland::state::{
+    ContactOwner, WaylandState, debug_toolbar_drag_logging_enabled, drag_log, surface_id,
+};
+use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::ui::toolbar::ToolbarEvent;
+use log::debug;
+use smithay_client_toolkit::seat::pointer::{BTN_LEFT, BTN_RIGHT, PointerEvent};
+use wayland_client::QueueHandle;
 
 impl WaylandState {
     /// The inline strip, a toolbar surface, and open toolbar menus take a press

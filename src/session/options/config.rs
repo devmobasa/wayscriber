@@ -19,6 +19,7 @@ pub fn options_from_config(
     Ok(options_from_settings(session_cfg, base_dir, display_id))
 }
 
+#[must_use]
 pub fn options_from_config_for_named_file(
     session_cfg: &SessionConfig,
     path: PathBuf,

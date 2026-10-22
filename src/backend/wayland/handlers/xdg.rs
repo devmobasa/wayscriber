@@ -151,10 +151,11 @@ mod tests {
     use smithay_client_toolkit::compositor::CompositorHandler;
 
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
+    use crate::config::Config;
 
     #[test]
     fn configure_output_guess_yields_to_the_compositor_enter() {
-        let mut fixture = HandlerFixture::with_outputs(crate::config::Config::default(), 2);
+        let mut fixture = HandlerFixture::with_outputs(Config::default(), 2);
         let outputs: Vec<_> = fixture.state.protocol.output().outputs().collect();
         for (output, name) in outputs.iter().zip(["DP-1", "DP-2"]) {
             fixture.complete_output_metadata_for(output.clone(), name);

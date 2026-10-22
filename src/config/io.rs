@@ -1,11 +1,15 @@
-use super::ColorSpec;
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
+use crate::durable_io;
+
 use super::action_meta::action_label;
 use super::keybindings::{Action, Shortcut};
 use super::paths::primary_config_dir;
 use super::salvage::deserialize_salvaging;
 use super::types::{PRESET_SLOTS_MAX, ToolPresetConfig};
 use super::validate::ConfigValidationReport;
-use super::{Config, ConfigDocument};
+use super::{ColorSpec, Config, ConfigDocument};
 use crate::domain::Color;
 use crate::durable_io::{
     AtomicWriteOptions, DestinationExpectation, DurableIoError, FileIdentity, OverwriteMode,
@@ -59,6 +63,7 @@ pub struct ConfigSectionError {
 impl ConfigSectionError {
     /// Whether this entry is `section` itself or lies inside it, so a check
     /// for `session` also sees a failed `session.storage`.
+    #[must_use]
     pub fn is_within(&self, section: &str) -> bool {
         self.section
             .strip_prefix(section)
@@ -66,8 +71,8 @@ impl ConfigSectionError {
     }
 }
 
-impl std::fmt::Display for ConfigSectionError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ConfigSectionError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(formatter, "[{}] {}", self.section, self.error)
     }
 }
@@ -92,6 +97,7 @@ impl LoadedConfig {
     /// their section is partly unreadable — destructive commands that would
     /// act on default paths, or policies that fail closed — check this instead
     /// of trusting the defaulted values.
+    #[must_use]
     pub fn section_failed(&self, section: &str) -> bool {
         self.section_errors
             .iter()
@@ -106,13 +112,13 @@ impl Config {
     ///
     /// # Errors
     /// Returns an error if the config directory cannot be determined (e.g., HOME not set).
-    pub fn get_config_path() -> Result<PathBuf> {
+    pub fn config_path() -> Result<PathBuf> {
         Ok(primary_config_dir()?.join("config.toml"))
     }
 
     /// Determines the directory containing the active configuration file based on the source.
     pub fn config_directory_from_source(_source: &ConfigSource) -> Result<PathBuf> {
-        let path = Self::get_config_path()?;
+        let path = Self::config_path()?;
         path.parent()
             .map(PathBuf::from)
             .ok_or_else(|| anyhow!("Config path {} has no parent directory", path.display()))
@@ -148,7 +154,7 @@ impl Config {
         let primary_path = primary_config_dir()?.join("config.toml");
 
         let (config_path, source) = if primary_path.exists() {
-            (primary_path.clone(), ConfigSource::Primary)
+            (primary_path, ConfigSource::Primary)
         } else {
             info!("Config file not found, using defaults");
             debug!("Expected config at: {}", primary_path.display());
@@ -205,7 +211,7 @@ impl Config {
     /// runs a caller's closure over the loaded config.
     #[cfg(test)]
     pub(crate) fn update_file(update: impl FnOnce(&mut Self)) -> Result<()> {
-        let config_path = Self::get_config_path()?;
+        let config_path = Self::config_path()?;
         let document = super::ConfigDocument::load_from_path(&config_path)?;
         let mut config = document.config().clone();
         update(&mut config);
@@ -261,8 +267,8 @@ pub struct ShortcutClaimedOnDisk {
     pub claimed_by: Action,
 }
 
-impl std::fmt::Display for ShortcutClaimedOnDisk {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ShortcutClaimedOnDisk {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "{} is already assigned to {} in config.toml",
@@ -272,7 +278,7 @@ impl std::fmt::Display for ShortcutClaimedOnDisk {
     }
 }
 
-impl std::error::Error for ShortcutClaimedOnDisk {}
+impl error::Error for ShortcutClaimedOnDisk {}
 
 /// The write landed, but the bytes it wrote do not parse back to the requested
 /// value.
@@ -293,8 +299,8 @@ pub struct ConfigEditNotReadBack {
     pub path: PathBuf,
 }
 
-impl std::fmt::Display for ConfigEditNotReadBack {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ConfigEditNotReadBack {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "{} was written to {}, but the file does not read back with the requested value",
@@ -304,7 +310,7 @@ impl std::fmt::Display for ConfigEditNotReadBack {
     }
 }
 
-impl std::error::Error for ConfigEditNotReadBack {}
+impl error::Error for ConfigEditNotReadBack {}
 
 /// The palette no longer has the slot a recolor was accepted for.
 ///
@@ -316,8 +322,8 @@ pub struct QuickColorSlotMissing {
     pub index: usize,
 }
 
-impl std::fmt::Display for QuickColorSlotMissing {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for QuickColorSlotMissing {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "quick color slot {} is no longer in config.toml",
@@ -326,7 +332,7 @@ impl std::fmt::Display for QuickColorSlotMissing {
     }
 }
 
-impl std::error::Error for QuickColorSlotMissing {}
+impl error::Error for QuickColorSlotMissing {}
 
 /// Whether retry can recover by reloading the changed source revision.
 pub(crate) fn is_stale_source_error(error: &anyhow::Error) -> bool {
@@ -456,7 +462,7 @@ fn edit_one_config_key_with_retry(
 
 /// Write exactly one action's `[keybindings]` entry.
 pub fn persist_keybinding_edit(action: Action, bindings: &[String]) -> Result<ConfigEditOutcome> {
-    write_keybinding_edit(&Config::get_config_path()?, action, bindings)
+    write_keybinding_edit(&Config::config_path()?, action, bindings)
 }
 
 /// Path-taking form, so the suite can drive real files without the process
@@ -545,7 +551,7 @@ pub fn persist_preset_slot(
     slot: usize,
     preset: Option<&ToolPresetConfig>,
 ) -> Result<ConfigEditOutcome> {
-    write_preset_slot(&Config::get_config_path()?, slot, preset)
+    write_preset_slot(&Config::config_path()?, slot, preset)
 }
 
 /// Path-taking form; test-only for the reason given on
@@ -576,7 +582,7 @@ fn write_preset_slot(
             config.presets.set_slot(slot, preset.cloned());
             Ok(())
         },
-        &|config| config.presets.get_slot(slot) == preset,
+        &|config| config.presets.slot(slot) == preset,
     )
 }
 
@@ -590,7 +596,7 @@ fn write_preset_slot(
 /// because there is no other way to express the color; the entries it gains
 /// carry the values that were already in effect, so no slot changes meaning.
 pub fn persist_quick_color(index: usize, color: Color) -> Result<ConfigEditOutcome> {
-    write_quick_color(&Config::get_config_path()?, index, color)
+    write_quick_color(&Config::config_path()?, index, color)
 }
 
 /// Path-taking form; test-only for the reason given on
@@ -764,7 +770,7 @@ pub(super) fn write_config_text_atomic(
     let mut options = AtomicWriteOptions::user_config_file();
     options.overwrite = overwrite;
     options.symlink = SymlinkPolicy::Reject;
-    match crate::durable_io::write_atomic_reporting_identity(
+    match durable_io::write_atomic_reporting_identity(
         destination,
         contents.as_bytes(),
         options,
@@ -785,28 +791,33 @@ pub(super) fn write_config_text_atomic(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::io;
+
+    use crate::test_temp;
+
     use super::*;
 
     #[test]
     fn unrelated_failure_with_stale_wording_does_not_reapply_the_edit() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let path = temp.path().join("config.toml");
         fs::write(&path, "[ui]\nshow_status_bar = true\n").unwrap();
-        let invocations = std::cell::Cell::new(0);
+        let invocations = Cell::new(0);
 
         let error = edit_one_config_key_with_retry(
             &path,
             "status",
             &|_| {
                 invocations.set(invocations.get() + 1);
-                Err(std::io::Error::other("unrelated file changed on disk")).context("edit failed")
+                Err(io::Error::other("unrelated file changed on disk")).context("edit failed")
             },
             &|_| false,
         )
         .unwrap_err();
 
         assert_eq!(invocations.get(), 1);
-        assert!(error.downcast_ref::<std::io::Error>().is_some());
+        assert!(error.downcast_ref::<io::Error>().is_some());
         assert_eq!(
             fs::read_to_string(path).unwrap(),
             "[ui]\nshow_status_bar = true\n"
@@ -816,10 +827,10 @@ mod tests {
     #[test]
     fn changed_source_reapplies_once_and_preserves_the_other_edit() {
         for collide_twice in [false, true] {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let path = temp.path().join("config.toml");
             fs::write(&path, "[ui]\nshow_status_bar = true\n").unwrap();
-            let invocations = std::cell::Cell::new(0);
+            let invocations = Cell::new(0);
 
             let result = edit_one_config_key_with_retry(
                 &path,
@@ -872,7 +883,7 @@ mod tests {
     /// has something to get wrong.
     #[test]
     fn document_config_is_a_fixed_point_of_validation() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let path = temp.path().join("config.toml");
         fs::write(
             &path,
@@ -920,7 +931,7 @@ mod tests {
     /// before the pair started.
     #[test]
     fn two_backups_in_the_same_second_keep_distinct_names_and_contents() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
 
         // Each attempt gets its own directory, so the `-1` suffix means "the
         // stamp collided" and nothing else. Two calls take microseconds; the

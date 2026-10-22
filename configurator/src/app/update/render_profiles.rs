@@ -1,3 +1,5 @@
+use wayscriber::render_profiles;
+
 use crate::models::{
     ColorPickerId, RenderProfileExportOption, RenderProfileMappingDraft, RenderProfileMappingSide,
     RenderProfileTextField,
@@ -57,7 +59,7 @@ impl ConfiguratorApp {
         if let Some(profile) = self.draft.render_profiles.profiles.get_mut(index) {
             match field {
                 RenderProfileTextField::Id => {
-                    let next_id = wayscriber::render_profiles::normalize_profile_id(&value);
+                    let next_id = render_profiles::normalize_profile_id(&value);
                     profile.id = value;
                     if self.draft.render_profiles.active == old_id {
                         self.draft.render_profiles.active = next_id.clone();

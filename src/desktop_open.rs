@@ -10,11 +10,13 @@
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
+use std::thread::{Builder, JoinHandle};
 
 use anyhow::{Context, Result, bail};
 
 use crate::i18n::tr;
-use crate::process_broker::{HelperKind, HelperLifetime};
+use crate::process_broker::{HelperKind, HelperLifetime, ProcessBroker};
+use crate::{process_broker, update_check};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DesktopOpenInvocation {
@@ -68,7 +70,7 @@ impl DesktopOpenInvocation {
 /// Runtime owners that exit after the action use this form so teardown cannot
 /// cancel a helper that must outlive the overlay.
 pub(crate) fn open(invocation: &DesktopOpenInvocation) -> Result<()> {
-    let broker = crate::process_broker::current()?;
+    let broker = process_broker::current()?;
     spawn_with_broker(&broker, invocation)
 }
 
@@ -78,11 +80,9 @@ pub(crate) fn open(invocation: &DesktopOpenInvocation) -> Result<()> {
 ///
 /// Callers that own the process broker must join the returned worker before
 /// tearing the broker down, or a still-in-flight spawn exchange can be cancelled.
-pub(crate) fn open_in_background(
-    invocation: DesktopOpenInvocation,
-) -> Result<std::thread::JoinHandle<()>> {
-    let broker = crate::process_broker::current()?;
-    std::thread::Builder::new()
+pub(crate) fn open_in_background(invocation: DesktopOpenInvocation) -> Result<JoinHandle<()>> {
+    let broker = process_broker::current()?;
+    Builder::new()
         .name("wayscriber-desktop-open".to_string())
         .spawn(move || {
             if let Err(err) = spawn_with_broker(&broker, &invocation) {
@@ -94,10 +94,7 @@ pub(crate) fn open_in_background(
         .context("failed to start desktop-open worker")
 }
 
-fn spawn_with_broker(
-    broker: &crate::process_broker::ProcessBroker,
-    invocation: &DesktopOpenInvocation,
-) -> Result<()> {
+fn spawn_with_broker(broker: &ProcessBroker, invocation: &DesktopOpenInvocation) -> Result<()> {
     broker
         .spawn(
             HelperKind::DesktopOpen,
@@ -117,7 +114,7 @@ pub(crate) fn path(path: &Path) -> DesktopOpenInvocation {
 /// Open an HTTPS URL on the update-check Wayscriber host allowlist
 /// (`wayscriber.com` and `www.wayscriber.com`).
 pub(crate) fn trusted_url(url: &str) -> Result<DesktopOpenInvocation> {
-    if !crate::update_check::is_trusted_url(url) {
+    if !update_check::is_trusted_url(url) {
         bail!("refusing to open an untrusted Wayscriber URL: {url:?}");
     }
     Ok(invocation(OsStr::new(url)))

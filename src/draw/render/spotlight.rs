@@ -10,6 +10,11 @@
 //! last also means the committed canvas dims as a whole, while the live preview,
 //! selection handles, click highlights, and UI drawn afterwards stay bright.
 
+use std::f64::consts;
+use std::time::{Duration, Instant};
+
+use crate::draw;
+use crate::draw::{Color, Frame, Shape};
 use crate::i18n::tr;
 
 /// One elliptical opening left bright by the pass, in logical canvas coordinates.
@@ -66,6 +71,7 @@ impl SpotlightMagnifierSource {
     /// A raster backdrop whose provenance has gone stale passes `None` here and
     /// degrades to the solid/transparent answer, which is what keeps a stale
     /// capture from being magnified as though it were live.
+    #[must_use]
     pub const fn from_backdrop(raster_token: Option<u64>, has_solid_color: bool) -> Self {
         match raster_token {
             Some(source_token) => Self::CompleteRaster { source_token },
@@ -75,6 +81,7 @@ impl SpotlightMagnifierSource {
     }
 
     /// Availability for a backdrop whose pixels cannot change under it.
+    #[must_use]
     pub const fn immutable_raster() -> Self {
         Self::CompleteRaster {
             source_token: IMMUTABLE_RASTER_SOURCE_TOKEN,
@@ -82,11 +89,13 @@ impl SpotlightMagnifierSource {
     }
 
     /// Whether the loupe has every pixel it needs to magnify faithfully.
+    #[must_use]
     pub const fn is_complete(self) -> bool {
         !matches!(self, Self::IncompleteTransparent)
     }
 
     /// Provenance identity of the raster backdrop, when there is one.
+    #[must_use]
     pub const fn raster_token(self) -> Option<u64> {
         match self {
             Self::CompleteRaster { source_token } => Some(source_token),
@@ -95,6 +104,7 @@ impl SpotlightMagnifierSource {
     }
 
     /// Stable, user-facing reason a loupe cannot preview right now.
+    #[must_use]
     pub fn unavailable_reason(self) -> Option<&'static str> {
         match self {
             Self::IncompleteTransparent => Some(tr("Freeze screen to preview")),
@@ -114,8 +124,8 @@ pub struct SpotlightMagnifierMetrics {
     pub regions: usize,
     pub copied_pixels: u64,
     pub strategy: SpotlightSnapshotStrategy,
-    pub snapshot_time: std::time::Duration,
-    pub paint_time: std::time::Duration,
+    pub snapshot_time: Duration,
+    pub paint_time: Duration,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,7 +205,7 @@ pub fn render_spotlight_magnification_pass(
 
     let has_magnification = regions
         .iter()
-        .any(|region| crate::draw::spotlight_magnification_is_active(region.magnification));
+        .any(|region| draw::spotlight_magnification_is_active(region.magnification));
     if !has_magnification {
         return Ok(SpotlightMagnifierOutcome::NotNeeded);
     }
@@ -207,9 +217,8 @@ pub fn render_spotlight_magnification_pass(
         .iter()
         .copied()
         .filter_map(|mut region| {
-            region.magnification =
-                crate::draw::normalize_spotlight_magnification(region.magnification);
-            crate::draw::spotlight_magnification_is_active(region.magnification)
+            region.magnification = draw::normalize_spotlight_magnification(region.magnification);
+            draw::spotlight_magnification_is_active(region.magnification)
                 .then(|| device_rect_for_region(ctx, region, target_width, target_height))
                 .flatten()
                 .map(|rect| (region, rect))
@@ -235,7 +244,7 @@ pub fn render_spotlight_magnification_pass(
         SpotlightSnapshotStrategy::FullSurface
     };
 
-    let snapshot_start = std::time::Instant::now();
+    let snapshot_start = Instant::now();
     target.flush();
     let snapshots = match strategy {
         SpotlightSnapshotStrategy::Regional => {
@@ -286,7 +295,7 @@ pub fn render_spotlight_magnification_pass(
     };
 
     let snapshot_time = snapshot_start.elapsed();
-    let paint_start = std::time::Instant::now();
+    let paint_start = Instant::now();
     for snapshot in &snapshots {
         paint_snapshot(ctx, snapshot, feather)?;
     }
@@ -438,19 +447,19 @@ fn paint_snapshot(
         return Ok(());
     }
 
-    crate::draw::with_saved_state(ctx, || {
+    draw::with_saved_state(ctx, || {
         // Establish the ellipse under the caller's transform. Cairo stores the
         // resulting clip in device space, so sampling can then use an identity CTM.
         ctx.new_path();
         ctx.save()?;
         ctx.translate(region.cx, region.cy);
         ctx.scale(rx, ry);
-        ctx.arc(0.0, 0.0, 1.0, 0.0, std::f64::consts::TAU);
+        ctx.arc(0.0, 0.0, 1.0, 0.0, consts::TAU);
         ctx.restore()?;
         ctx.clip();
         ctx.identity_matrix();
 
-        let magnification = crate::draw::normalize_spotlight_magnification(region.magnification);
+        let magnification = draw::normalize_spotlight_magnification(region.magnification);
         let pattern = cairo::SurfacePattern::create(&snapshot.surface);
         pattern.set_extend(cairo::Extend::Pad);
         pattern.set_filter(cairo::Filter::Bilinear);
@@ -495,12 +504,13 @@ fn paint_snapshot(
 ///
 /// The pass needs all regions at once, so each surface that renders a frame —
 /// the live canvas, exports, and board thumbnails — collects them the same way.
-pub fn spotlight_regions_for_frame(frame: &crate::draw::Frame) -> Vec<SpotlightRegion> {
+#[must_use]
+pub fn spotlight_regions_for_frame(frame: &Frame) -> Vec<SpotlightRegion> {
     frame
         .shapes
         .iter()
         .filter_map(|drawn| match &drawn.shape {
-            crate::draw::Shape::Spotlight {
+            Shape::Spotlight {
                 cx,
                 cy,
                 rx,
@@ -511,7 +521,7 @@ pub fn spotlight_regions_for_frame(frame: &crate::draw::Frame) -> Vec<SpotlightR
                 cy: f64::from(*cy),
                 rx: f64::from(*rx),
                 ry: f64::from(*ry),
-                magnification: crate::draw::normalize_spotlight_magnification(*magnification),
+                magnification: draw::normalize_spotlight_magnification(*magnification),
             }),
             _ => None,
         })
@@ -573,7 +583,7 @@ fn punch_opening(ctx: &cairo::Context, region: SpotlightRegion, feather: f64) {
     let _ = ctx.set_source(&gradient);
 
     ctx.new_sub_path();
-    ctx.arc(0.0, 0.0, 1.0, 0.0, std::f64::consts::TAU);
+    ctx.arc(0.0, 0.0, 1.0, 0.0, consts::TAU);
     let _ = ctx.fill();
     let _ = ctx.restore();
 }
@@ -582,7 +592,7 @@ fn punch_opening(ctx: &cairo::Context, region: SpotlightRegion, feather: f64) {
 pub fn render_spotlight_outline(
     ctx: &cairo::Context,
     region: SpotlightRegion,
-    color: crate::draw::Color,
+    color: Color,
     thick: f64,
 ) {
     let rx = region.rx.max(1.0);
@@ -597,7 +607,7 @@ pub fn render_spotlight_outline(
     ctx.translate(region.cx, region.cy);
     ctx.scale(rx, ry);
     ctx.new_sub_path();
-    ctx.arc(0.0, 0.0, 1.0, 0.0, std::f64::consts::TAU);
+    ctx.arc(0.0, 0.0, 1.0, 0.0, consts::TAU);
     let _ = ctx.restore();
 
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -887,7 +897,7 @@ mod tests {
         render_spotlight_outline(
             &ctx,
             CENTERED,
-            crate::draw::Color {
+            Color {
                 r: 1.0,
                 g: 0.0,
                 b: 0.0,
@@ -915,7 +925,7 @@ mod tests {
         render_spotlight_outline(
             &ctx,
             CENTERED,
-            crate::draw::Color {
+            Color {
                 r: 1.0,
                 g: 1.0,
                 b: 1.0,

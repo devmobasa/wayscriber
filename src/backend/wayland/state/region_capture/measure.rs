@@ -1,4 +1,5 @@
-use super::*;
+use crate::input::state::RegionPurposeTag;
+use crate::screen_pixels::ImagePixelRect;
 
 pub(super) fn measure_anchor(point: (f64, f64), bounds: (u32, u32)) -> Option<(f64, f64)> {
     if !point.0.is_finite() || !point.1.is_finite() || bounds.0 == 0 || bounds.1 == 0 {

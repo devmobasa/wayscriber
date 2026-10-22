@@ -7,8 +7,7 @@
 //! applied change reports.
 
 use super::InputState;
-use crate::draw::TextMeasurer;
-use crate::draw::{DrawnShape, FontDescriptor, Shape, families_match};
+use crate::draw::{DrawnShape, FontDescriptor, Shape, TextMeasurer, families_match};
 use crate::i18n::tr;
 
 fn text_font_descriptor(shape: &Shape) -> Option<&FontDescriptor> {
@@ -92,7 +91,7 @@ impl InputState {
         if self.selection_has_text() {
             return self.apply_weight_to_selected_text(measurer, weight);
         }
-        let descriptor = crate::draw::FontDescriptor::new(
+        let descriptor = FontDescriptor::new(
             self.style.font_descriptor.family.clone(),
             weight.to_string(),
             self.style.font_descriptor.style.clone(),
@@ -146,6 +145,6 @@ impl InputState {
             |shape| text_font_descriptor(shape).is_some(),
             move |shape| text_font_descriptor_mut(shape).is_some_and(&mut apply),
         );
-        self.report_selection_apply_result(result, property)
+        self.report_selection_apply_result(&result, property)
     }
 }

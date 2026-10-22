@@ -11,9 +11,14 @@
 use std::ffi::{OsStr, OsString};
 use std::io::Read;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs, io, process};
 
 use anyhow::{Context, Result};
+
+use crate::durable_io;
+use crate::durable_io::AtomicWriteOptions;
 
 /// The path a helper start must have been launched under to play a role.
 const LINK_ENV: &str = "WAYSCRIBER_TEST_FAKE_HELPER";
@@ -55,7 +60,7 @@ impl Role {
 /// A link named `name` in `directory` to this test binary.
 pub(crate) fn link(directory: &Path, name: &str) -> PathBuf {
     let link = directory.join(name);
-    std::os::unix::fs::symlink(std::env::current_exe().expect("test binary"), &link)
+    unix_fs::symlink(env::current_exe().expect("test binary"), &link)
         .expect("link the test binary under the helper's name");
     link
 }
@@ -75,19 +80,20 @@ pub(crate) fn environment<'a>(
     ]
 }
 
-// SAFETY: the loader calls each `.init_array` entry once, before `main`, with
-// the C calling convention. glibc passes `argc`, `argv`, and `envp`; under the
-// C ABI a function that declares no parameters ignores extra arguments, so an
-// `extern "C" fn()` is sound to register here. Unless this start is a helper
-// start, the function only reads the environment and `/proc` and returns. A
-// helper start never returns into `main`: it exits, and a panic aborts instead
-// of unwinding through the loader because the function is `extern "C"`.
+// The `unsafe(link_section)` attribute below is sound: the loader calls each
+// `.init_array` entry once, before `main`, with the C calling convention.
+// glibc passes `argc`, `argv`, and `envp`; under the C ABI a function that
+// declares no parameters ignores extra arguments, so an `extern "C" fn()` is
+// sound to register here. Unless this start is a helper start, the function
+// only reads the environment and `/proc` and returns. A helper start never
+// returns into `main`: it exits, and a panic aborts instead of unwinding
+// through the loader because the function is `extern "C"`.
 #[used]
 #[unsafe(link_section = ".init_array")]
 static PLAY_FAKE_HELPER: extern "C" fn() = play_fake_helper;
 
 extern "C" fn play_fake_helper() {
-    let Some(link) = std::env::var_os(LINK_ENV) else {
+    let Some(link) = env::var_os(LINK_ENV) else {
         return;
     };
     let Ok(mut arguments) = launch_arguments() else {
@@ -104,22 +110,22 @@ extern "C" fn play_fake_helper() {
             1
         }
     };
-    std::process::exit(status);
+    process::exit(status);
 }
 
 fn play(arguments: &[OsString]) -> Result<()> {
-    let role = std::env::var(ROLE_ENV).context("fake helper role")?;
+    let role = env::var(ROLE_ENV).context("fake helper role")?;
     let role = Role::ALL
         .into_iter()
         .find(|known| known.name() == role)
         .with_context(|| format!("unknown fake helper role {role:?}"))?;
-    let output = std::env::var_os(OUTPUT_ENV).context("fake helper output")?;
+    let output = env::var_os(OUTPUT_ENV).context("fake helper output")?;
 
     let report: Vec<u8> = match role {
         Role::Exit => return Ok(()),
         Role::ReportProcessGroup => {
             // SAFETY: getpgrp has no preconditions and cannot fail.
-            let leader = unsafe { libc::getpgrp() } == std::process::id() as libc::pid_t;
+            let leader = unsafe { libc::getpgrp() } == process::id() as libc::pid_t;
             if leader {
                 "process-group-leader"
             } else {
@@ -129,7 +135,7 @@ fn play(arguments: &[OsString]) -> Result<()> {
         }
         Role::CountInput => {
             let mut input = Vec::new();
-            std::io::stdin()
+            io::stdin()
                 .read_to_end(&mut input)
                 .context("read the helper's input")?;
             format!("{}\n", input.len()).into()
@@ -140,10 +146,10 @@ fn play(arguments: &[OsString]) -> Result<()> {
             .collect(),
     };
 
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         Path::new(&output),
         &report,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+        AtomicWriteOptions::private_runtime_file(),
     )?;
     Ok(())
 }
@@ -153,7 +159,7 @@ fn play(arguments: &[OsString]) -> Result<()> {
 /// run yet. They are kept as bytes, so an argument that is not UTF-8 cannot
 /// stop a helper start from recognising itself.
 pub(crate) fn launch_arguments() -> Result<Vec<OsString>> {
-    let raw = std::fs::read("/proc/self/cmdline").context("read /proc/self/cmdline")?;
+    let raw = fs::read("/proc/self/cmdline").context("read /proc/self/cmdline")?;
     let raw = raw.strip_suffix(b"\0").unwrap_or(&raw);
 
     Ok(raw

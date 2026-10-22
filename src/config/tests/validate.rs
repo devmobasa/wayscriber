@@ -1,3 +1,6 @@
+use crate::config;
+use crate::input::{DragBindableTool, Tool};
+
 use super::super::*;
 use crate::input::state::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
 
@@ -90,14 +93,14 @@ fn shape_recognition_sensitivity_defaults_and_clamps() {
     let mut config = config_from_toml("[drawing]\n");
     assert_eq!(
         config.drawing.shape_recognition_sensitivity,
-        crate::config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY
+        config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY
     );
 
     config.drawing.shape_recognition_sensitivity = u8::MAX;
     config.validate_and_clamp();
     assert_eq!(
         config.drawing.shape_recognition_sensitivity,
-        crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY
+        config::MAX_SHAPE_RECOGNITION_SENSITIVITY
     );
 }
 
@@ -508,7 +511,7 @@ fn validate_clamps_preset_fields() {
     };
     config.presets.slot_1 = Some(ToolPresetConfig {
         name: None,
-        tool: crate::input::Tool::Pen,
+        tool: Tool::Pen,
         color: ColorSpec::Name("red".to_string()),
         size: 120.0,
         tool_settings: Some(PresetToolStatesConfig {
@@ -964,26 +967,11 @@ fn validate_does_not_clamp_autosave_interval_to_idle() {
 fn drawing_drag_tool_defaults_match_legacy_mapping() {
     let config = Config::default();
 
-    assert_eq!(
-        config.drawing.drag_tool,
-        crate::input::DragBindableTool::Pen
-    );
-    assert_eq!(
-        config.drawing.shift_drag_tool,
-        crate::input::DragBindableTool::Line
-    );
-    assert_eq!(
-        config.drawing.ctrl_drag_tool,
-        crate::input::DragBindableTool::Rect
-    );
-    assert_eq!(
-        config.drawing.ctrl_shift_drag_tool,
-        crate::input::DragBindableTool::Arrow
-    );
-    assert_eq!(
-        config.drawing.tab_drag_tool,
-        crate::input::DragBindableTool::Ellipse
-    );
+    assert_eq!(config.drawing.drag_tool, DragBindableTool::Pen);
+    assert_eq!(config.drawing.shift_drag_tool, DragBindableTool::Line);
+    assert_eq!(config.drawing.ctrl_drag_tool, DragBindableTool::Rect);
+    assert_eq!(config.drawing.ctrl_shift_drag_tool, DragBindableTool::Arrow);
+    assert_eq!(config.drawing.tab_drag_tool, DragBindableTool::Ellipse);
 }
 
 /// Adding alpha must not rewrite anyone's config: an opaque color has to keep

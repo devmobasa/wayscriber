@@ -1,5 +1,9 @@
-use super::*;
+use crate::draw::DirtyFullReason;
+use crate::util::Rect;
+
+use super::super::WaylandState;
 use crate::backend::wayland::toolbar::ToolbarCursorHint;
+use std::time::{Duration, Instant};
 
 mod drag;
 mod focus;
@@ -15,7 +19,7 @@ impl WaylandState {
     /// leave the canvas alone.
     pub(in crate::backend::wayland) fn mark_inline_toolbar_rect_damage(&mut self) {
         if let Some((x, y, w, h)) = self.toolbar_chrome.inline_rect()
-            && let Some(rect) = crate::util::Rect::new(
+            && let Some(rect) = Rect::new(
                 x.floor() as i32 - 1,
                 y.floor() as i32 - 1,
                 w.ceil() as i32 + 2,
@@ -31,7 +35,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn mark_inline_toolbar_full_damage(&mut self) {
         self.input_state
             .dirty_tracker
-            .mark_full_for(crate::draw::DirtyFullReason::InlineToolbar);
+            .mark_full_for(DirtyFullReason::InlineToolbar);
         self.toolbar.mark_dirty();
         self.input_state.needs_redraw = true;
     }

@@ -1,21 +1,24 @@
+use std::mem;
+
 use log::{debug, info};
 
 use crate::backend::wayland::state::{
     ContactOwner, PerfInputSource, StylusDownAdmission, WaylandState,
 };
 use crate::config::keybindings::{StylusButton, linux};
-use crate::input::state::HelpOverlayPressSource;
-use crate::input::{DrawingState, MouseButton};
+use crate::config::{Action, TabletInputConfig};
+use crate::input::state::{HelpOverlayPressSource, RegionInputSource};
+use crate::input::{DrawingState, InputState, MouseButton};
 
-fn modal_blocks_stylus_barrel_actions(input_state: &crate::input::InputState) -> bool {
+fn modal_blocks_stylus_barrel_actions(input_state: &InputState) -> bool {
     input_state.modal_owns_pointer_shortcuts()
 }
 
 fn stylus_barrel_action(
-    input_state: &crate::input::InputState,
+    input_state: &InputState,
     button: u32,
-    tablet: &crate::config::TabletInputConfig,
-) -> Option<crate::config::Action> {
+    tablet: &TabletInputConfig,
+) -> Option<Action> {
     let stylus = linux::stylus_button(button)?;
     let trigger = input_state.stylus_trigger(stylus);
     if let Some(action) = input_state.find_trigger_action(&trigger) {
@@ -58,7 +61,7 @@ impl WaylandState {
     /// The real press router admits a contact before pressure mutates it. The
     /// first drawing sample is then replaced with this frame's pressure.
     pub(super) fn commit_pending_stylus_frame(&mut self) {
-        let pending = std::mem::take(&mut self.tablet.pending_frame);
+        let pending = mem::take(&mut self.tablet.pending_frame);
         if pending.is_empty() {
             return;
         }
@@ -179,7 +182,7 @@ impl WaylandState {
 
         if self.input_state.region_is_active() {
             let (x, y) = self.current_stylus_position();
-            self.begin_region_selection(crate::input::state::RegionInputSource::Stylus, x, y);
+            self.begin_region_selection(RegionInputSource::Stylus, x, y);
             return false;
         }
 

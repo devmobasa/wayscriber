@@ -77,6 +77,12 @@ impl FrozenState {
 
 #[cfg(test)]
 mod tests {
+    use tokio::runtime::Handle;
+    use tokio::task;
+
+    use crate::backend::wayland::RuntimeWakeSource;
+    use crate::input::InputState;
+
     use super::*;
     use crate::backend::wayland::acquisition::{
         ScreenAcquisitionOutcome, ScreenAcquisitionOwner, ScreenAcquisitionRegistry,
@@ -101,13 +107,13 @@ mod tests {
         .with_known_output_count(Some(1))
     }
 
-    async fn drain(frozen: &mut FrozenState, input: &mut crate::input::InputState) {
+    async fn drain(frozen: &mut FrozenState, input: &mut InputState) {
         for _ in 0..100 {
             frozen.poll_portal_capture(input, Instant::now(), None);
             if !frozen.portal.is_running() {
                 return;
             }
-            tokio::task::yield_now().await;
+            task::yield_now().await;
         }
 
         panic!("portal task did not finish");
@@ -116,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn retry_retains_the_acquisition_and_completes_once() {
         for second_change in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             let mut registry = ScreenAcquisitionRegistry::default();
@@ -132,7 +138,7 @@ mod tests {
 
             let old_generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     Ok((
@@ -164,7 +170,7 @@ mod tests {
 
             let fresh_generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     Ok((
@@ -209,7 +215,7 @@ mod tests {
     #[test]
     fn activation_rechecks_layout_and_topology_before_installing_a_portal_crop() {
         for live_topology_changed in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             let mut registry = ScreenAcquisitionRegistry::default();
@@ -257,7 +263,7 @@ mod tests {
     #[tokio::test]
     async fn cancellation_and_stable_raster_failure_do_not_schedule_retry() {
         for cancelled in [false, true] {
-            let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut frozen = FrozenState::new_with_runtime_wake(None, wake.handle());
             let mut input = make_test_input_state();
             let mut registry = ScreenAcquisitionRegistry::default();
@@ -269,7 +275,7 @@ mod tests {
             frozen.take_preflight_pending();
             let generation = frozen.layout_generations.desktop;
             frozen.portal.start(PortalTask::spawn(
-                &tokio::runtime::Handle::current(),
+                &Handle::current(),
                 wake.handle(),
                 async move {
                     if cancelled {

@@ -1,15 +1,21 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::Arc;
 
+use crate::backend::wayland::clipboard::{
+    ClipboardPasteCompletion, ClipboardPublishCompletion, transfer,
+};
 use crate::backend::wayland::{
     RuntimeOperationController, RuntimeOperationIdSource, RuntimeOperationPoll,
     RuntimeOperationSubmitFailure, RuntimeWakeHandle,
-    clipboard::{ClipboardPasteCompletion, ClipboardPublishCompletion, transfer},
 };
 use crate::clipboard_text::{
     ClipboardTextError, copy_text_via_command, read_clipboard_text_via_command,
 };
+use crate::i18n;
 use crate::input::state::{
-    ClipboardPasteRequest, TextClipboardRequest, TextPasteEdit, TextPasteTarget,
+    ClipboardFallbackSaveRequest, ClipboardPasteRequest, TextClipboardRequest, TextPasteEdit,
+    TextPasteTarget,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,8 +27,8 @@ pub(in crate::backend::wayland) enum HexCopyOutcome {
 impl HexCopyOutcome {
     pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Copied => crate::i18n::tr("Copied to clipboard"),
-            Self::Failed => crate::i18n::tr("Failed to copy to clipboard"),
+            Self::Copied => i18n::tr("Copied to clipboard"),
+            Self::Failed => i18n::tr("Failed to copy to clipboard"),
         }
     }
 }
@@ -36,8 +42,8 @@ pub(in crate::backend::wayland) enum TextCopyOutcome {
 impl TextCopyOutcome {
     pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Copied => crate::i18n::tr("Copied to clipboard"),
-            Self::Failed => crate::i18n::tr("Failed to copy to clipboard"),
+            Self::Copied => i18n::tr("Copied to clipboard"),
+            Self::Failed => i18n::tr("Failed to copy to clipboard"),
         }
     }
 }
@@ -63,9 +69,9 @@ impl ClipboardPasteSubmitFailure {
 impl TextPasteOutcome {
     pub(in crate::backend::wayland) fn message(&self) -> &'static str {
         match self {
-            Self::Text(_) => crate::i18n::tr("Pasted from clipboard"),
-            Self::Empty => crate::i18n::tr("Clipboard empty"),
-            Self::Failed => crate::i18n::tr("Failed to paste from clipboard"),
+            Self::Text(_) => i18n::tr("Pasted from clipboard"),
+            Self::Empty => i18n::tr("Clipboard empty"),
+            Self::Failed => i18n::tr("Failed to paste from clipboard"),
         }
     }
 }
@@ -76,7 +82,7 @@ pub(in crate::backend::wayland) struct ClipboardRuntime {
     paste: RuntimeOperationController<ClipboardPasteRequest, ClipboardPasteCompletion>,
     hex_copy: RuntimeOperationController<String, HexCopyOutcome>,
     pending_hex_copy: Option<String>,
-    fallback_save: RuntimeOperationController<u64, Result<std::path::PathBuf, String>>,
+    fallback_save: RuntimeOperationController<u64, Result<PathBuf, String>>,
     text_copy: RuntimeOperationController<TextClipboardRequest, TextCopyOutcome>,
     pending_text_copy: VecDeque<TextClipboardRequest>,
     text_paste: RuntimeOperationController<TextPasteTarget, TextPasteOutcome>,
@@ -100,30 +106,28 @@ impl ClipboardRuntime {
 
     pub(in crate::backend::wayland) fn submit_fallback_save(
         &mut self,
-        request: std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>,
-        operation: impl FnOnce(
-            std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>,
-        ) -> Result<std::path::PathBuf, String>
+        request: Arc<ClipboardFallbackSaveRequest>,
+        operation: impl FnOnce(&ClipboardFallbackSaveRequest) -> Result<PathBuf, String>
         + Send
         + 'static,
     ) -> Result<(), RuntimeOperationSubmitFailure<u64>> {
         self.fallback_save
             .try_submit(request.id, "clipboard-fallback-save", move || {
-                operation(request)
+                operation(&request)
             })
             .map(drop)
     }
 
     pub(in crate::backend::wayland) fn poll_fallback_save(
         &mut self,
-    ) -> RuntimeOperationPoll<u64, Result<std::path::PathBuf, String>> {
+    ) -> RuntimeOperationPoll<u64, Result<PathBuf, String>> {
         self.fallback_save.poll()
     }
 
     /// Finish an accepted file write before overlay teardown; never use in dispatch.
     pub(in crate::backend::wayland) fn wait_fallback_save(
         &mut self,
-    ) -> RuntimeOperationPoll<u64, Result<std::path::PathBuf, String>> {
+    ) -> RuntimeOperationPoll<u64, Result<PathBuf, String>> {
         self.fallback_save.wait()
     }
 
@@ -138,7 +142,7 @@ impl ClipboardRuntime {
     ) -> Result<(), RuntimeOperationSubmitFailure<u64>> {
         self.publish
             .try_submit(generation, "clipboard-publish", move || {
-                transfer::resolve_selection_clipboard_publish(generation, payload_json)
+                transfer::resolve_selection_clipboard_publish(generation, &payload_json)
             })
             .map(drop)
     }
@@ -369,11 +373,13 @@ fn rebase_text_paste_offset(offset: usize, edit: &TextPasteEdit) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state::TextCutTarget;
+
     use super::*;
     use crate::backend::wayland::{RuntimeOperationIdSource, RuntimeWakeSource};
 
     fn runtime() -> ClipboardRuntime {
-        let wake = RuntimeWakeSource::new().expect("runtime wake source");
+        let wake = RuntimeWakeSource::try_new().expect("runtime wake source");
         ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle())
     }
 
@@ -388,7 +394,7 @@ mod tests {
     fn cut_request(text: &str, start: usize) -> TextClipboardRequest {
         TextClipboardRequest {
             text: text.to_string(),
-            cut: Some(crate::input::state::TextCutTarget {
+            cut: Some(TextCutTarget {
                 generation: 7,
                 revision: 3,
                 range: start..start + text.len(),

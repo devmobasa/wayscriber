@@ -11,6 +11,7 @@ pub enum BoardBackground {
 }
 
 impl BoardBackground {
+    #[must_use]
     pub fn is_transparent(&self) -> bool {
         matches!(self, BoardBackground::Transparent)
     }

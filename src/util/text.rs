@@ -1,6 +1,7 @@
 //! Text utility functions.
 
 /// Truncate a string to a maximum length, adding ellipsis if truncated.
+#[must_use]
 pub fn truncate_with_ellipsis(text: &str, max_len: usize) -> String {
     if max_len == 0 {
         return text.to_string();

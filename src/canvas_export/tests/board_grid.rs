@@ -1,3 +1,9 @@
+use std::fs;
+use std::fs::File;
+use std::io::Cursor;
+
+use crate::test_temp;
+
 use super::*;
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{EraserBrush, EraserKind, Frame, RED, Shape, WHITE};
@@ -47,11 +53,9 @@ fn board_grid_png_erasers_restore_pattern_and_snapshot_is_independent() {
             });
             let png = render_canvas_png(&edited).unwrap();
             let mut before =
-                cairo::ImageSurface::create_from_png(&mut std::io::Cursor::new(&baseline.bytes))
-                    .unwrap();
+                cairo::ImageSurface::create_from_png(&mut Cursor::new(&baseline.bytes)).unwrap();
             let mut after =
-                cairo::ImageSurface::create_from_png(&mut std::io::Cursor::new(&png.bytes))
-                    .unwrap();
+                cairo::ImageSurface::create_from_png(&mut Cursor::new(&png.bytes)).unwrap();
             let before = before.data().unwrap();
             let after = after.data().unwrap();
             for y in 33..53 {
@@ -91,7 +95,7 @@ fn board_grid_pdf_stays_vector_without_erasers_and_leaves_margins_plain() {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 160).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         paint_pdf_page_background(&ctx, &page, 200.0, 160.0);
-        let backdrop = ExportBackdrop::new(&page.backdrop).unwrap();
+        let backdrop = ExportBackdrop::try_new(&page.backdrop).unwrap();
         draw_canvas_page_region(
             &TextMeasurer::default(),
             &mut RenderCtx::new(&ctx, &mut RenderCaches::default()),
@@ -160,10 +164,10 @@ fn board_grid_pdf_stays_vector_without_erasers_and_leaves_margins_plain() {
 
 fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
     use std::process::Command;
-    let folder = crate::test_temp::tempdir().unwrap();
+    let folder = test_temp::tempdir().unwrap();
     let path = folder.path().join("paper.pdf");
     let prefix = folder.path().join("paper");
-    std::fs::write(&path, pdf).unwrap();
+    fs::write(&path, pdf).unwrap();
     let output = Command::new("pdftoppm")
         .args(["-png", "-r", "72", "-singlefile"])
         .arg(&path)
@@ -176,7 +180,7 @@ fn check_pdf_pixels(pdf: &[u8], expected: &cairo::ImageSurface) {
         String::from_utf8_lossy(&output.stderr)
     );
     let mut image = cairo::ImageSurface::create_from_png(
-        &mut std::fs::File::open(prefix.with_extension("png")).unwrap(),
+        &mut File::open(prefix.with_extension("png")).unwrap(),
     )
     .unwrap();
     assert_eq!(

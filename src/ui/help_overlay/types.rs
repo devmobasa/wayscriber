@@ -1,3 +1,6 @@
+use crate::config::Action;
+use crate::label_format;
+
 pub(crate) type IconFn = fn(&cairo::Context, f64, f64, f64);
 
 #[derive(Clone)]
@@ -6,11 +9,11 @@ pub(crate) struct Row {
     pub(crate) action: &'static str,
     /// The action a click on this row executes (rows describing gestures or
     /// multi-action pairs stay non-clickable).
-    pub(crate) action_id: Option<crate::config::Action>,
+    pub(crate) action_id: Option<Action>,
 }
 
 impl Row {
-    pub(crate) fn with_action(mut self, action: crate::config::Action) -> Self {
+    pub(crate) fn with_action(mut self, action: Action) -> Self {
         self.action_id = Some(action);
         self
     }
@@ -18,7 +21,7 @@ impl Row {
     /// Whether this row only documents an action that has no binding. Such
     /// rows are hidden by default and shown on request or by search.
     pub(crate) fn is_unbound(&self) -> bool {
-        self.key == crate::label_format::NOT_BOUND_LABEL
+        self.key == label_format::NOT_BOUND_LABEL
     }
 }
 
@@ -71,5 +74,5 @@ pub(crate) struct HelpRowHit {
     pub(crate) y: f64,
     pub(crate) w: f64,
     pub(crate) h: f64,
-    pub(crate) action: crate::config::Action,
+    pub(crate) action: Action,
 }

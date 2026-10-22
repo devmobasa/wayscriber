@@ -68,7 +68,7 @@ pub(super) fn poll_with_retry<T>(
 }
 
 impl RuntimeWakeSource {
-    pub(crate) fn new() -> io::Result<Self> {
+    pub(crate) fn try_new() -> io::Result<Self> {
         // SAFETY: eventfd returns a new owned descriptor on success. EFD_NONBLOCK
         // keeps both producer writes and consumer drains bounded, and EFD_CLOEXEC
         // prevents subprocesses from extending the runtime descriptor lifetime.
@@ -208,8 +208,8 @@ impl RuntimeWakeHandle {
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
-    use std::thread;
     use std::time::{Duration, Instant};
+    use std::{fs, thread};
 
     use super::*;
 
@@ -229,7 +229,7 @@ mod tests {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
-            let state = std::fs::read_to_string(&stat_path).ok().and_then(|stat| {
+            let state = fs::read_to_string(&stat_path).ok().and_then(|stat| {
                 stat.rsplit_once(") ")
                     .and_then(|(_, suffix)| suffix.chars().next())
             });
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn wake_before_poll_is_observed_and_drained() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         source.handle().wake().unwrap();
 
         assert!(poll_readable(&source, 0));
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn wake_unblocks_a_waiting_poll() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         let handle = source.handle();
         let (poll_entry_tx, poll_entry_rx) = mpsc::channel();
         let poller = thread::spawn(move || {
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn multiple_wakes_coalesce() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         let handle = source.handle();
         for _ in 0..32 {
             handle.wake().unwrap();
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn handle_can_safely_outlive_source() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         let handle = source.handle();
         drop(source);
 
@@ -299,13 +299,13 @@ mod tests {
 
     #[test]
     fn empty_drain_reports_no_consumed_wake() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         assert!(!source.drain().unwrap());
     }
 
     #[test]
     fn wait_readable_times_out_without_a_wake() {
-        let source = RuntimeWakeSource::new().unwrap();
+        let source = RuntimeWakeSource::try_new().unwrap();
         assert!(!source.wait_readable(Some(Duration::ZERO)).unwrap());
     }
 

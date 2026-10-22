@@ -7,15 +7,27 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-
-use crate::backend::wayland::state::MoveDragKind;
-use crate::config::{
-    Config, ToolbarItemOrderGroup, ToolbarSectionVisibility, TopDisplayMode,
-    fold_legacy_section_flags, item_visibility_setting, resettable_individual_toolbar_item_ids,
-};
+use crate::backend::wayland::state::{MoveDragKind, ToolbarChrome};
+use crate::config::ToolbarItemOrderGroup;
+#[cfg(test)]
+use crate::config::{Config, TopDisplayMode, resettable_individual_toolbar_item_ids};
 use crate::input::InputState;
-use crate::runtime_ui_state::*;
+use crate::input::boards::BoardIdentityGeneration;
+#[cfg(test)]
+use crate::runtime_ui_state::{
+    BeginPersistenceRecoveryResult, CheckoutPersistenceRecoveryHandleResult, InteractionSeedTarget,
+    InteractionSeedValue, PersistedTopDisplayMode, PersistenceIncidentId,
+    PersistenceRecoveryAction, PersistenceRecoveryRequest, PersistenceRecoveryResult,
+    PreviewFinishResult, RequestResetResult, RuntimePreviewFinishIntent,
+    RuntimeStateFailurePathEffect, RuntimeStateIoError, RuntimeStateObservedPathEffect,
+    RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation, RuntimeStateWriterCompletion,
+    RuntimeUiMutationScope, RuntimeUiMutationValues, RuntimeUiStateStore, SourceMutationResult,
+    SubmitSourceMutationResult,
+};
+use crate::runtime_ui_state::{
+    PreviewRollbackSnapshot, RuntimeStateWriterCommand, RuntimeUiPreviewSession,
+    RuntimeUiStateController, RuntimeUiStateWriter,
+};
 use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
 
 mod board;
@@ -33,18 +45,18 @@ pub(in crate::backend::wayland) use seed_refresh::{
     RuntimeUiSeedRefresh, SeedRefreshContext, refresh_runtime_ui_config_seeds,
 };
 
-use live_state::{
-    apply_live_board_state, apply_live_toolbar_positions, apply_live_toolbar_state,
-    apply_persisted_top_display_mode, runtime_preview_authority, top_display_mode_values,
-};
+#[cfg(test)]
+use live_state::top_display_mode_values;
+#[cfg(test)]
 pub(in crate::backend::wayland) use live_state::{user_click_highlight_enabled, user_tool_preview};
-use positions::{
-    position_rollback, position_seed_targets, position_values, rejected_source_mutation,
-};
+use positions::position_rollback;
+#[cfg(test)]
 pub(in crate::backend::wayland) use rollback::apply_toolbar_runtime_rollback;
+use seeds::toolbar_values;
+#[cfg(test)]
 use seeds::{
     board_pin_seeds_from_input, retain_stored_board_pin_seeds_for_session_restore,
-    runtime_seeds_from_config, toolbar_values,
+    runtime_seeds_from_config,
 };
 pub(in crate::backend::wayland) use seeds::{click_highlight_values, single_bool_seed_target};
 
@@ -56,7 +68,7 @@ pub(in crate::backend::wayland) struct ToolbarPositionSnapshot {
 }
 
 impl ToolbarPositionSnapshot {
-    fn from_chrome(chrome: &crate::backend::wayland::state::ToolbarChrome) -> Self {
+    fn from_chrome(chrome: &ToolbarChrome) -> Self {
         Self {
             top: chrome.top_offset(),
         }
@@ -106,7 +118,7 @@ pub(in crate::backend::wayland) struct PreparedBoardPinMutation {
 #[derive(Debug)]
 struct DeferredBoardPinRestore {
     board_id: String,
-    board_identity_generation: crate::input::boards::BoardIdentityGeneration,
+    board_identity_generation: BoardIdentityGeneration,
     pin_seed: bool,
     pinned: bool,
     authority_epoch: u64,

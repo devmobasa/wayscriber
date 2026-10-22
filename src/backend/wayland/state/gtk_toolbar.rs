@@ -2,7 +2,15 @@
 //! feedback draining, and state pushes. See `crate::toolbar_gtk` for the
 //! threading model.
 
+use std::time::Instant;
+
+use smithay_client_toolkit::shell::wlr_layer::Layer;
 use wayland_client::{Connection, QueueHandle};
+
+use crate::backend::wayland::RuntimeWakeHandle;
+use crate::config::ChordModifiers;
+use crate::input::InputState;
+use crate::toolbar_gtk::GtkToolbarKind;
 
 use super::WaylandState;
 use crate::backend::wayland::handlers::keyboard::ForwardedKey;
@@ -11,7 +19,7 @@ use crate::toolbar_gtk::select::{
 };
 use crate::toolbar_gtk::{GtkToolbarBridge, GtkToolbarFeedback, GtkToolbarUpdate};
 
-fn gtk_toolbar_feedback_blocked(input_state: &crate::input::InputState) -> bool {
+fn gtk_toolbar_feedback_blocked(input_state: &InputState) -> bool {
     input_state.command_palette_is_engaged()
         || (input_state.region_is_engaged()
             && input_state
@@ -38,15 +46,14 @@ impl WaylandState {
     /// Spawns the GTK toolbar thread when the resolved frontend is GTK.
     pub(in crate::backend::wayland) fn spawn_gtk_toolbar_if_selected(
         &mut self,
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeHandle,
     ) {
         let request = requested_backend(&self.config);
         let preconditions = GtkPreconditions {
             feature_compiled: cfg!(feature = "toolbar-gtk"),
             layer_shell: self.protocol.layer_shell().is_some(),
             force_inline: super::force_inline_toolbars_requested(&self.config),
-            main_surface_uses_overlay_layer: self.surface.placement().layer()
-                == smithay_client_toolkit::shell::wlr_layer::Layer::Overlay,
+            main_surface_uses_overlay_layer: self.surface.placement().layer() == Layer::Overlay,
         };
         match resolve_frontend(request, preconditions) {
             ToolbarFrontend::Gtk => {
@@ -102,8 +109,7 @@ impl WaylandState {
                         phase,
                         ..
                     } if phase.is_end()
-                        && self.toolbar_drag.gtk_preview_kind()
-                            == Some(crate::toolbar_gtk::GtkToolbarKind::Top) =>
+                        && self.toolbar_drag.gtk_preview_kind() == Some(GtkToolbarKind::Top) =>
                     {
                         self.toolbar_drag.set_gtk_rebase(None);
                         let offset = self.toolbar_chrome.top_offset();
@@ -139,7 +145,15 @@ impl WaylandState {
                     logo,
                 } => {
                     if !self.input_state.modal_owns_pointer_shortcuts() {
-                        self.try_dispatch_gdk_pointer_shortcut(button, ctrl, shift, alt, logo);
+                        self.try_dispatch_gdk_pointer_shortcut(
+                            button,
+                            ChordModifiers {
+                                ctrl,
+                                shift,
+                                alt,
+                                logo,
+                            },
+                        );
                     }
                 }
                 GtkToolbarFeedback::Key {
@@ -162,11 +176,10 @@ impl WaylandState {
                     );
                 }
                 GtkToolbarFeedback::EscapeDismissed => {
-                    self.input_state
-                        .note_escape_dismissal(std::time::Instant::now());
+                    self.input_state.note_escape_dismissal(Instant::now());
                 }
                 GtkToolbarFeedback::KeyboardReleased => {
-                    self.reclaim_keyboard_after_toolbar_release(std::time::Instant::now());
+                    self.reclaim_keyboard_after_toolbar_release(Instant::now());
                 }
                 GtkToolbarFeedback::TopHover { hovered } => {
                     self.toolbar_chrome.set_gtk_top_hover(hovered);
@@ -257,6 +270,8 @@ impl WaylandState {
 
 #[cfg(test)]
 mod modal_tests {
+    use crate::draw::TextMeasurer;
+
     use super::*;
     use crate::config::Action;
     use crate::input::state::test_support::make_test_input_state;
@@ -278,16 +293,12 @@ mod modal_tests {
         use crate::input::state::RegionPurposeTag;
 
         let mut input_state = make_test_input_state();
-        input_state.activate_region_with(
-            &crate::draw::TextMeasurer::default(),
-            RegionPurposeTag::Ocr,
-            1,
-        );
+        input_state.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
         assert!(!gtk_toolbar_feedback_blocked(&input_state));
 
         input_state.cancel_region_ui_only();
         input_state.activate_region_with(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             RegionPurposeTag::CaptureDeliver,
             2,
         );

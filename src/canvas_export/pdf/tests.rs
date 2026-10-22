@@ -1,3 +1,11 @@
+use std::process::Output;
+use std::{fs, thread};
+
+use crate::config::PdfLabelContentMode;
+use crate::image_decode::EncodedImageFormat;
+use crate::screen_pixels::EmbeddedImageLimits;
+use crate::{image_decode, test_temp};
+
 use super::*;
 use crate::config::{PdfExportConfig, PdfFitMode, PdfOrientation, PdfPageSize};
 use crate::draw::{FontDescriptor, Frame, RED, Shape, WHITE};
@@ -135,9 +143,9 @@ fn rendered_pdf_reports_exact_page_count_and_ordered_sizes() {
         labels: Default::default(),
     })
     .expect("pdf");
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("out.pdf");
-    std::fs::write(&path, bytes).expect("write pdf");
+    fs::write(&path, bytes).expect("write pdf");
 
     let output = Command::new("pdfinfo")
         .env("LC_ALL", "C")
@@ -178,11 +186,11 @@ fn text_pdf(text_halo_enabled: bool) -> Vec<u8> {
 
 #[test]
 fn pdf_export_honours_the_text_halo_setting() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     for enabled in [false, true] {
         let path = temp.path().join(format!("halo-{enabled}.pdf"));
         let prefix = temp.path().join(format!("halo-{enabled}"));
-        std::fs::write(&path, text_pdf(enabled)).expect("write text PDF");
+        fs::write(&path, text_pdf(enabled)).expect("write text PDF");
         checked_pdf_output(
             Command::new("pdftoppm")
                 .env("LC_ALL", "C")
@@ -192,11 +200,11 @@ fn pdf_export_honours_the_text_halo_setting() {
                 .output()
                 .expect("pdftoppm is required for PDF artifact tests (install poppler)"),
         );
-        let bytes = std::fs::read(prefix.with_extension("png")).expect("rasterized PDF");
-        let image = crate::image_decode::decode_rgba(
-            crate::image_decode::EncodedImageFormat::Png,
+        let bytes = fs::read(prefix.with_extension("png")).expect("rasterized PDF");
+        let image = image_decode::decode_rgba(
+            EncodedImageFormat::Png,
             &bytes,
-            crate::screen_pixels::EmbeddedImageLimits::default().into(),
+            EmbeddedImageLimits::default().into(),
         )
         .expect("decode rasterized PDF");
         assert_eq!((image.width, image.height), (400, 120));
@@ -282,24 +290,24 @@ fn worker_exports_three_page_pdf_from_unicode_metadata() {
         .collect();
     let snapshot = BoardPdfExportSnapshot {
         pages,
-        labels: crate::config::PdfLabelConfig {
+        labels: PdfLabelConfig {
             enabled: true,
-            content: crate::config::PdfLabelContentMode::BoardName,
+            content: PdfLabelContentMode::BoardName,
             ..Default::default()
         },
     };
     // Only value snapshots cross the worker boundary; text resources are
     // constructed by the export root on the worker thread.
-    let bytes = std::thread::spawn(move || render_board_pdf(&snapshot))
+    let bytes = thread::spawn(move || render_board_pdf(&snapshot))
         .join()
         .unwrap()
         .unwrap();
     assert!(bytes.starts_with(b"%PDF-"));
     // Cairo can compress page dictionaries into PDF object streams. Ask the
     // same PDF reader used by the existing page-layout test to inspect them.
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let path = temp.path().join("worker-pages.pdf");
-    std::fs::write(&path, bytes).expect("write worker PDF");
+    fs::write(&path, bytes).expect("write worker PDF");
     let info = checked_pdf_output(
         Command::new("pdfinfo")
             .env("LC_ALL", "C")
@@ -314,7 +322,7 @@ fn worker_exports_three_page_pdf_from_unicode_metadata() {
     );
 }
 
-fn checked_pdf_output(output: std::process::Output) -> String {
+fn checked_pdf_output(output: Output) -> String {
     assert!(
         output.status.success(),
         "PDF reader failed: {}",

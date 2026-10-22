@@ -1,10 +1,8 @@
 // Hooks up smithay's registry bookkeeping so other handler modules can request globals.
-use smithay_client_toolkit::{
-    output::OutputState,
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
-    seat::SeatState,
-};
+use smithay_client_toolkit::output::OutputState;
+use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
+use smithay_client_toolkit::registry_handlers;
+use smithay_client_toolkit::seat::SeatState;
 
 use super::super::state::WaylandState;
 

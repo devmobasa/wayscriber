@@ -4,6 +4,7 @@ mod owner;
 
 use cache::{TextCacheKey, TextMeasurementCache};
 pub use owner::TextMeasurer;
+use pangocairo::functions;
 
 /// Cached text measurement results from Pango layout.
 #[derive(Clone, Debug)]
@@ -71,7 +72,7 @@ pub(crate) fn configured_layout(
     font_desc_str: &str,
     wrap_width: Option<i32>,
 ) -> pango::Layout {
-    let layout = pangocairo::functions::create_layout(ctx);
+    let layout = functions::create_layout(ctx);
     let font_desc = pango::FontDescription::from_string(font_desc_str);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);

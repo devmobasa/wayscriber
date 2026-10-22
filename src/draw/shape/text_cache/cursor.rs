@@ -1,4 +1,9 @@
-use super::*;
+use super::owner::TextMeasurer;
+use super::{
+    CaretGeometry, TextPreviewGeometry, VisualCaretDirection, VisualLineDirection, VisualLineEdge,
+    caret_geometry_in, configured_layout, hit_position_to_byte, logical_bounds_in,
+    snap_char_boundary,
+};
 
 impl TextMeasurer {
     /// Hit-test a point against a rendered text run, returning the caret byte

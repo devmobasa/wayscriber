@@ -1,12 +1,11 @@
 use log::{debug, info};
-use smithay_client_toolkit::{
-    compositor::CompositorState,
-    shell::{
-        WaylandSurface,
-        wlr_layer::{KeyboardInteractivity, Layer, LayerShell, LayerSurfaceConfigure},
-    },
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::{
+    KeyboardInteractivity, Layer, LayerShell, LayerSurfaceConfigure,
 };
-use wayland_client::{QueueHandle, protocol::wl_output};
+use wayland_client::QueueHandle;
+use wayland_client::protocol::wl_output;
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::state::WaylandState;

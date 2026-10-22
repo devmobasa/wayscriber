@@ -12,6 +12,7 @@
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
+use std::{env, fs};
 
 use crate::env_vars::{DESKTOP_STARTUP_ID_ENV, XDG_ACTIVATION_TOKEN_ENV};
 
@@ -30,11 +31,11 @@ pub(crate) fn var_os(name: &str) -> Option<OsString> {
 }
 
 fn var_os_in(launch_environment: &Path, name: &str) -> Option<OsString> {
-    match std::fs::read(launch_environment) {
+    match fs::read(launch_environment) {
         Ok(environment) => {
             value_in(&environment, name).map(|value| OsString::from_vec(value.to_vec()))
         }
-        Err(_) => std::env::var_os(name),
+        Err(_) => env::var_os(name),
     }
 }
 

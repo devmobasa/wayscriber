@@ -1,5 +1,23 @@
-use super::*;
+use std::io::ErrorKind;
+
+use crate::session;
+
+use super::super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, temp_path};
+use super::super::generation::{ArtifactSetView, UnreadablePolicy};
+use super::super::types::SessionSnapshot;
+use super::model::{HistoryFallbackStrategy, SaveAsOverwrite, SaveSnapshotReport, log_near_limit};
+use super::payload::{PayloadCandidate, PayloadStamp, payload_within_limit};
+use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
+use crate::session::options::SessionOptions;
+use crate::time_utils::now_rfc3339;
+use anyhow::{Context, Result, anyhow};
+use log::{info, warn};
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 mod transaction;
 
@@ -23,7 +41,7 @@ pub(crate) fn save_snapshot_as_with_report(
     }
 
     let session_path = options.session_file_path();
-    crate::session::validate_named_session_file_for_foreground(&session_path)?;
+    session::validate_named_session_file_for_foreground(&session_path)?;
     let initial_artifacts = collect_save_as_artifacts(options)?;
     ensure_save_as_overwrite_allowed(&initial_artifacts, overwrite, &session_path)?;
 
@@ -125,7 +143,7 @@ pub(crate) fn save_snapshot_as_with_report(
 
     let commit_started = Instant::now();
     let commit_result = (|| {
-        crate::session::validate_named_session_file_for_foreground(&session_path)?;
+        session::validate_named_session_file_for_foreground(&session_path)?;
         let lock_time_artifacts = collect_save_as_artifacts(options)?;
         ensure_save_as_overwrite_allowed(&lock_time_artifacts, overwrite, &session_path)?;
         let sidecars = matches!(overwrite, SaveAsOverwrite::ConfirmReplace)
@@ -177,7 +195,7 @@ pub(crate) fn save_snapshot_as_requires_overwrite(options: &SessionOptions) -> R
     }
 
     let session_path = options.session_file_path();
-    crate::session::validate_named_session_file_for_foreground(&session_path)?;
+    session::validate_named_session_file_for_foreground(&session_path)?;
     Ok(collect_save_as_artifacts(options)?.has_any())
 }
 
@@ -224,7 +242,7 @@ fn ensure_save_as_overwrite_allowed(
 fn artifact_path_exists(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
         Err(err) => Err(err)
             .with_context(|| format!("failed to inspect session artifact {}", path.display())),
     }
@@ -232,7 +250,7 @@ fn artifact_path_exists(path: &Path) -> Result<bool> {
 
 fn save_as_non_lock_sidecar_paths(options: &SessionOptions) -> Result<Vec<PathBuf>> {
     let session_path = options.session_file_path();
-    let mut paths = crate::session::named_session_non_lock_artifact_paths(&session_path)?;
+    let mut paths = session::named_session_non_lock_artifact_paths(&session_path)?;
     paths.retain(|path| path != &session_path);
     Ok(paths)
 }

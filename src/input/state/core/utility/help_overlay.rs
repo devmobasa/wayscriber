@@ -1,3 +1,7 @@
+use crate::config::Action;
+use crate::help_overlay_interaction::{HelpOverlayRegion, HelpRenderResult};
+use crate::input::state::core::modal::ModalSurface;
+
 use super::super::base::InputState;
 
 /// Cursor hint for the help overlay.
@@ -16,7 +20,7 @@ pub enum HelpOverlayCursorHint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelpOverlayClick {
     /// A clickable row (or the "Replay tour" footer) was hit; run this action.
-    Run(crate::config::Action),
+    Run(Action),
     /// The footer toggle that shows or hides actions without a binding.
     ToggleUnbound,
     /// Inside the overlay chrome but not on an interactive element (no-op).
@@ -46,7 +50,7 @@ pub(crate) enum HelpOverlayPressSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelpOverlayReleaseOutcome {
     /// Press and release landed on the SAME clickable row; run its action.
-    Run(crate::config::Action),
+    Run(Action),
     /// Press and release both landed on the unbound-actions toggle.
     ToggleUnbound,
     /// Press and release both landed outside the overlay box; dismiss it.
@@ -59,15 +63,12 @@ pub enum HelpOverlayReleaseOutcome {
 impl InputState {
     /// Install the geometry returned by the public help result renderer for
     /// subsequent click and cursor queries on this input owner.
-    pub fn install_help_overlay_render_result(
-        &mut self,
-        result: crate::help_overlay_interaction::HelpRenderResult,
-    ) {
+    pub fn install_help_overlay_render_result(&mut self, result: HelpRenderResult) {
         self.help_overlay.install_render_result(result);
     }
 
     fn open_help_overlay_internal(&mut self, quick_mode: bool, track_usage: bool) {
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::HelpOverlay);
+        self.close_modals_for_open(ModalSurface::HelpOverlay);
         self.help_overlay.open(quick_mode);
         if track_usage {
             self.pending_onboarding_usage.used_help_overlay = true;
@@ -116,12 +117,8 @@ impl InputState {
     /// help layout: a clickable row/footer action, inside chrome, or a dismiss.
     pub fn help_overlay_click_at(&self, x: i32, y: i32) -> HelpOverlayClick {
         match self.help_overlay.region_at(x as f64, y as f64) {
-            Some(crate::help_overlay_interaction::HelpOverlayRegion::Row(action)) => {
-                HelpOverlayClick::Run(action)
-            }
-            Some(crate::help_overlay_interaction::HelpOverlayRegion::ToggleUnbound) => {
-                HelpOverlayClick::ToggleUnbound
-            }
+            Some(HelpOverlayRegion::Row(action)) => HelpOverlayClick::Run(action),
+            Some(HelpOverlayRegion::ToggleUnbound) => HelpOverlayClick::ToggleUnbound,
             Some(_) => HelpOverlayClick::Inside,
             None => HelpOverlayClick::Outside,
         }
@@ -178,16 +175,11 @@ impl InputState {
         }
 
         match self.help_overlay.region_at(x as f64, y as f64)? {
-            crate::help_overlay_interaction::HelpOverlayRegion::Search => {
-                Some(HelpOverlayCursorHint::Text)
-            }
-            crate::help_overlay_interaction::HelpOverlayRegion::Row(_)
-            | crate::help_overlay_interaction::HelpOverlayRegion::ToggleUnbound => {
+            HelpOverlayRegion::Search => Some(HelpOverlayCursorHint::Text),
+            HelpOverlayRegion::Row(_) | HelpOverlayRegion::ToggleUnbound => {
                 Some(HelpOverlayCursorHint::Pointer)
             }
-            crate::help_overlay_interaction::HelpOverlayRegion::Inside => {
-                Some(HelpOverlayCursorHint::Default)
-            }
+            HelpOverlayRegion::Inside => Some(HelpOverlayCursorHint::Default),
         }
     }
 }

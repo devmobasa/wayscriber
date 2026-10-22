@@ -6,15 +6,18 @@ use crate::canvas_export::page::{
     CanvasExportBackdropSnapshot, CanvasExportRect, CanvasPageExportSnapshot, ExportBackdrop,
     SpotlightPassSnapshot, draw_canvas_page_region,
 };
+#[cfg(test)]
+use crate::capture;
 use crate::capture::CaptureError;
 #[cfg(test)]
 use crate::capture::RenderedImage;
-use crate::draw::Frame;
+use crate::draw;
+use crate::draw::{Frame, TextMeasurer};
 use crate::screen_pixels::{ImagePixelRect, PackedArgb32, ScreenImage};
 
 #[derive(Debug, Clone)]
 pub(crate) struct CanvasRegionSource {
-    pub image: std::sync::Arc<ScreenImage>,
+    pub image: Arc<ScreenImage>,
     /// World-space bounds occupied by the entire captured image.
     pub logical_bounds: CanvasExportRect,
 }
@@ -67,8 +70,8 @@ impl CanvasRegionSource {
         let mut right = selection_right;
         let mut bottom = selection_bottom;
 
-        for region in crate::draw::spotlight_regions_for_frame(frame) {
-            if !crate::draw::spotlight_magnification_is_active(region.magnification) {
+        for region in draw::spotlight_regions_for_frame(frame) {
+            if !draw::spotlight_magnification_is_active(region.magnification) {
                 continue;
             }
             let region_left = (((region.cx - region.rx.abs() - self.logical_bounds.x) * scale_x)
@@ -163,7 +166,7 @@ pub(crate) fn render_canvas_region_pixels(
     snapshot: CanvasRegionExportSnapshot,
 ) -> Result<PackedArgb32, CaptureError> {
     let mut caches = RenderCaches::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let working_selection = snapshot
         .source
         .magnifier_working_selection(snapshot.selection, &snapshot.frame)
@@ -258,17 +261,19 @@ pub(crate) fn render_canvas_region_pixels(
 pub(crate) fn render_canvas_region_png(
     snapshot: CanvasRegionExportSnapshot,
 ) -> Result<RenderedImage, CaptureError> {
-    crate::capture::png::encode_packed_argb32_png(&render_canvas_region_pixels(snapshot)?)
+    capture::png::encode_packed_argb32_png(&render_canvas_region_pixels(snapshot)?)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::capture::{CutAxis, CutBand};
+
     use super::*;
     use crate::draw::{BlurStyle, EraserBrush, EraserKind, FontDescriptor, Frame, RED, Shape};
 
     fn solid_source(width: u32, height: u32, pixel: u32) -> CanvasRegionSource {
         CanvasRegionSource {
-            image: std::sync::Arc::new(ScreenImage {
+            image: Arc::new(ScreenImage {
                 data: (0..width.saturating_mul(height))
                     .flat_map(|_| pixel.to_ne_bytes())
                     .collect(),
@@ -297,7 +302,7 @@ mod tests {
         let source = CanvasRegionSource {
             image: Arc::new(ScreenImage {
                 data: (0..width.saturating_mul(height))
-                    .flat_map(|_| 0xFFFF_FFFF_u32.to_ne_bytes())
+                    .flat_map(|_| 0xffff_ffff_u32.to_ne_bytes())
                     .collect(),
                 width,
                 height,
@@ -347,7 +352,7 @@ mod tests {
 
     #[test]
     fn region_renderer_maps_world_shapes_into_native_crop_pixels_and_clips() {
-        let backdrop = 0xFF20_3040;
+        let backdrop = 0xff20_3040;
         let mut frame = Frame::new();
         frame.add_shape(Shape::Rect {
             x: 11,
@@ -380,13 +385,13 @@ mod tests {
 
         assert_eq!((rendered.width, rendered.height), (8, 8));
         assert_eq!(decoded_pixel(&rendered, 0, 0), backdrop);
-        assert_eq!(decoded_pixel(&rendered, 3, 3), 0xFFFF_0000);
+        assert_eq!(decoded_pixel(&rendered, 3, 3), 0xffff_0000);
         assert_eq!(decoded_pixel(&rendered, 7, 7), backdrop);
     }
 
     #[test]
     fn selected_output_is_cropped_while_shape_mapping_uses_the_full_source() {
-        let backdrop = 0xFF20_3040;
+        let backdrop = 0xff20_3040;
         let mut frame = Frame::new();
         frame.add_shape(Shape::Rect {
             x: 11,
@@ -408,16 +413,16 @@ mod tests {
         .expect("region renders");
 
         assert_eq!((rendered.width, rendered.height), (4, 4));
-        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xFFFF_0000);
+        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xffff_0000);
         assert_eq!(decoded_pixel(&rendered, 3, 3), backdrop);
     }
 
     #[test]
     fn empty_frame_preserves_every_selected_screen_pixel() {
         let source = CanvasRegionSource {
-            image: std::sync::Arc::new(ScreenImage {
+            image: Arc::new(ScreenImage {
                 data: (0_u32..16)
-                    .flat_map(|pixel| (0xFF00_0000 | pixel).to_ne_bytes())
+                    .flat_map(|pixel| (0xff00_0000 | pixel).to_ne_bytes())
                     .collect(),
                 width: 4,
                 height: 4,
@@ -435,16 +440,16 @@ mod tests {
         })
         .expect("raw crop renders");
 
-        assert_eq!(decoded_pixel(&rendered, 0, 0), 0xFF00_0005);
-        assert_eq!(decoded_pixel(&rendered, 1, 0), 0xFF00_0006);
-        assert_eq!(decoded_pixel(&rendered, 0, 1), 0xFF00_0009);
-        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xFF00_000A);
+        assert_eq!(decoded_pixel(&rendered, 0, 0), 0xff00_0005);
+        assert_eq!(decoded_pixel(&rendered, 1, 0), 0xff00_0006);
+        assert_eq!(decoded_pixel(&rendered, 0, 1), 0xff00_0009);
+        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xff00_000a);
     }
 
     #[test]
     fn region_capture_magnifies_its_immutable_screen_source() {
-        let black = 0xFF00_0000u32;
-        let red = 0xFFFF_0000u32;
+        let black = 0xff00_0000u32;
+        let red = 0xffff_0000u32;
         let mut pixels = vec![black; 8 * 8];
         for y in 0..8 {
             pixels[y * 8 + 2] = red;
@@ -485,8 +490,8 @@ mod tests {
 
     #[test]
     fn region_capture_samples_toward_a_spotlight_center_outside_the_crop() {
-        let black = 0xFF00_0000u32;
-        let red = 0xFFFF_0000u32;
+        let black = 0xff00_0000u32;
+        let red = 0xffff_0000u32;
         let mut pixels = vec![black; 8 * 8];
         for y in 0..8 {
             pixels[y * 8 + 3] = red;
@@ -523,13 +528,13 @@ mod tests {
 
         // The sampled coordinate lands three quarters across the red source
         // texel, so Cairo's bilinear filter produces 75% red over black.
-        assert_eq!(decoded_pixel(&rendered, 0, 4), 0xFFBF_0000);
+        assert_eq!(decoded_pixel(&rendered, 0, 4), 0xffbf_0000);
     }
 
     #[test]
     fn malformed_full_source_fails_closed() {
-        let mut source = solid_source(8, 8, 0xFFFF_FFFF);
-        std::sync::Arc::get_mut(&mut source.image)
+        let mut source = solid_source(8, 8, 0xffff_ffff);
+        Arc::get_mut(&mut source.image)
             .expect("test owns source")
             .data
             .pop();
@@ -545,7 +550,7 @@ mod tests {
 
     #[test]
     fn eraser_replays_the_original_screen_pixel_at_a_nonzero_world_origin() {
-        let backdrop = 0xFF20_3040;
+        let backdrop = 0xff20_3040;
         let mut frame = Frame::new();
         frame.add_shape(Shape::Rect {
             x: 10,
@@ -574,7 +579,7 @@ mod tests {
         .expect("region renders");
 
         assert_eq!(decoded_pixel(&rendered, 4, 4), backdrop);
-        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xFFFF_0000);
+        assert_eq!(decoded_pixel(&rendered, 1, 1), 0xffff_0000);
     }
 
     #[test]
@@ -584,14 +589,14 @@ mod tests {
         let mut data = Vec::with_capacity(width * height * 4);
         for _y in 0..height {
             for x in 0..width {
-                let channel = if (x / 2) % 2 == 0 { 0x10 } else { 0xE0 };
+                let channel = if (x / 2) % 2 == 0 { 0x10 } else { 0xe0 };
                 data.extend_from_slice(
-                    &u32::from_be_bytes([0xFF, channel, channel, channel]).to_ne_bytes(),
+                    &u32::from_be_bytes([0xff, channel, channel, channel]).to_ne_bytes(),
                 );
             }
         }
         let source = CanvasRegionSource {
-            image: std::sync::Arc::new(ScreenImage {
+            image: Arc::new(ScreenImage {
                 data,
                 width: width as u32,
                 height: height as u32,
@@ -663,7 +668,7 @@ mod tests {
             thick: 1.0,
         });
         let snapshot = CanvasRegionExportSnapshot {
-            source: solid_source(8, 8, 0xFF20_3040),
+            source: solid_source(8, 8, 0xff20_3040),
             selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
             frame,
             text_halo_enabled: true,
@@ -700,21 +705,21 @@ mod tests {
             thick: 1.0,
         });
         let snapshot = CanvasRegionExportSnapshot {
-            source: solid_source(8, 8, 0xFF20_3040),
+            source: solid_source(8, 8, 0xff20_3040),
             selection: ImagePixelRect::new(0, 0, 8, 8, (8, 8)).unwrap(),
             frame,
             text_halo_enabled: true,
             spotlight: SpotlightPassSnapshot::default(),
         };
         let base = render_canvas_region_pixels(snapshot).expect("flattened");
-        let cut = crate::capture::CutBand::new(crate::capture::CutAxis::Columns, 3, 5).unwrap();
-        let composed = crate::capture::apply_band_cuts(&base, &[cut]).expect("cut");
+        let cut = CutBand::try_new(CutAxis::Columns, 3, 5).unwrap();
+        let composed = capture::apply_band_cuts(&base, &[cut]).expect("cut");
         assert_eq!((composed.width(), composed.height()), (6, 8));
-        assert_eq!(pixel_at(&composed, 2, 0), 0xFFFF_0000);
-        assert_eq!(pixel_at(&composed, 3, 0), 0xFFFF_0000);
-        assert_eq!(pixel_at(&base, 2, 0), 0xFFFF_0000);
-        assert_eq!(pixel_at(&base, 3, 0), 0xFFFF_0000);
-        assert_eq!(pixel_at(&base, 5, 0), 0xFFFF_0000);
+        assert_eq!(pixel_at(&composed, 2, 0), 0xffff_0000);
+        assert_eq!(pixel_at(&composed, 3, 0), 0xffff_0000);
+        assert_eq!(pixel_at(&base, 2, 0), 0xffff_0000);
+        assert_eq!(pixel_at(&base, 3, 0), 0xffff_0000);
+        assert_eq!(pixel_at(&base, 5, 0), 0xffff_0000);
     }
 
     #[test]
@@ -731,7 +736,7 @@ mod tests {
         let pixels = packed_argb32_from_surface(&mut surface, "stride-test").expect("packed");
         assert_eq!(pixels.stride(), width * 4);
         assert_eq!(pixels.data().len(), (width * height * 4) as usize);
-        assert_eq!(pixel_at(&pixels, 0, 0), 0xFFFF_0000);
-        assert_eq!(pixel_at(&pixels, 2, 1), 0xFFFF_0000);
+        assert_eq!(pixel_at(&pixels, 0, 0), 0xffff_0000);
+        assert_eq!(pixel_at(&pixels, 2, 1), 0xffff_0000);
     }
 }

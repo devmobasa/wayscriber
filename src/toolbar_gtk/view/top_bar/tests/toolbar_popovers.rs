@@ -1,5 +1,12 @@
 //! Shapes, overflow, layout, arrow-style, and key-relay assertions.
 
+use std::sync::mpsc;
+
+use gtk4::gdk::{Key, ModifierType};
+
+use crate::draw::ArrowStyle;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     FeedbackSender, GtkToolbarFeedback, ICON_BUTTON, ICON_SIZE, Tool, ToolbarEvent,
     ToolbarSnapshot, TopBar, TopStripPlan, model, plan_top_strip,
@@ -23,7 +30,7 @@ fn assert_shapes_popover_contract(regular: &ToolbarSnapshot) {
     let mut shapes = regular.clone();
     shapes.shape_picker_open = true;
     shapes.active_tool = Tool::RegularPolygon;
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let top = TopBar::new_for_test(FeedbackSender::new(tx));
     let content =
         top.build_shapes_popover_content(&shapes, (ICON_BUTTON, ICON_BUTTON), ICON_SIZE, true, 1.0);
@@ -102,7 +109,7 @@ fn assert_shapes_popover_contract(regular: &ToolbarSnapshot) {
 }
 
 fn assert_overflow_popover_contract(regular: &ToolbarSnapshot) {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let top = TopBar::new_for_test(FeedbackSender::new(tx));
     let mut plan = TopStripPlan::unconstrained();
     plan.dropped_tools = vec![Tool::Line, Tool::Arrow];
@@ -152,12 +159,9 @@ fn assert_overflow_popover_contract(regular: &ToolbarSnapshot) {
 /// The layout button opens a preset menu built from the shared entries; a
 /// row applies its preset. No click cycles presets any more.
 pub(super) fn assert_layout_menu_contract(regular: &ToolbarSnapshot) {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
-    top.build_strip(
-        regular,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), regular),
-    );
+    top.build_strip(regular, &plan_top_strip(&UiTextEngine::default(), regular));
     assert!(
         top.layout.mounted.is_some(),
         "the layout menu popover exists"
@@ -203,12 +207,9 @@ pub(super) fn assert_layout_menu_contract(regular: &ToolbarSnapshot) {
 /// style. The chip no longer cycles.
 pub(super) fn assert_arrow_style_menu_contract(regular: &ToolbarSnapshot) {
     let arrow = style_pill_tool_snapshot(regular, Tool::Arrow);
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
-    top.build_strip(
-        &arrow,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &arrow),
-    );
+    top.build_strip(&arrow, &plan_top_strip(&UiTextEngine::default(), &arrow));
     assert!(
         top.arrow_style.mounted.is_some(),
         "the arrow style menu popover exists"
@@ -228,7 +229,7 @@ pub(super) fn assert_arrow_style_menu_contract(regular: &ToolbarSnapshot) {
     );
 
     let mut open = arrow.clone();
-    open.arrow_style = crate::draw::ArrowStyle::Double;
+    open.arrow_style = ArrowStyle::Double;
     open.arrow_style_menu_open = true;
     let content = top.build_arrow_style_menu_content(&open, 1.0);
     for entry in model::arrow_style_menu_entries(open.arrow_style) {
@@ -268,12 +269,9 @@ pub(super) fn assert_key_relay_contract(regular: &ToolbarSnapshot) {
     use crate::toolbar_gtk::widgets::key_relay_controller;
     use gtk4::glib::translate::IntoGlib;
 
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
-    top.build_strip(
-        regular,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), regular),
-    );
+    top.build_strip(regular, &plan_top_strip(&UiTextEngine::default(), regular));
 
     let window_relay = key_relay_controller(&top.window).expect("toolbar window relays keys");
     for (name, resources) in top.popover_resources() {
@@ -284,12 +282,8 @@ pub(super) fn assert_key_relay_contract(regular: &ToolbarSnapshot) {
     }
 
     for (keyval, state, expected_shift) in [
-        (
-            gtk4::gdk::Key::Escape,
-            gtk4::gdk::ModifierType::empty(),
-            false,
-        ),
-        (gtk4::gdk::Key::S, gtk4::gdk::ModifierType::SHIFT_MASK, true),
+        (Key::Escape, ModifierType::empty(), false),
+        (Key::S, ModifierType::SHIFT_MASK, true),
     ] {
         let handled = window_relay.emit_by_name::<bool>("key-pressed", &[&keyval, &0u32, &state]);
         assert!(handled, "{keyval:?} is consumed by the relay");
@@ -306,14 +300,8 @@ pub(super) fn assert_key_relay_contract(regular: &ToolbarSnapshot) {
         );
     }
 
-    let handled = window_relay.emit_by_name::<bool>(
-        "key-pressed",
-        &[
-            &gtk4::gdk::Key::Tab,
-            &0u32,
-            &gtk4::gdk::ModifierType::empty(),
-        ],
-    );
+    let handled = window_relay
+        .emit_by_name::<bool>("key-pressed", &[&Key::Tab, &0u32, &ModifierType::empty()]);
     assert!(!handled, "Tab stays with GTK focus navigation");
     assert!(rx.try_recv().is_err(), "Tab is not relayed");
 

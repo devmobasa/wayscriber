@@ -1,3 +1,6 @@
+use crate::models::NamedColorOption;
+use crate::test_env;
+
 use super::*;
 
 #[test]
@@ -6,7 +9,7 @@ fn arrow_style_options_cover_the_core_enum() {
     // lists ever disagree, a style is reachable from the overlay but not from
     // the configurator — or worse, the combo row offers one that no longer
     // exists and picks the wrong index for everything after it.
-    let core = wayscriber::draw::ArrowStyle::ALL;
+    let core = ArrowStyle::ALL;
     let options = ArrowStyleOption::list();
     assert_eq!(options.len(), core.len());
     for (option, style) in options.iter().zip(core.iter()) {
@@ -20,17 +23,14 @@ fn arrow_style_options_cover_the_core_enum() {
 #[test]
 fn region_picker_options_cover_the_core_enum() {
     assert_eq!(
-        RegionPickerOption::from_picker(wayscriber::config::RegionPicker::Native),
+        RegionPickerOption::from_picker(RegionPicker::Native),
         RegionPickerOption::Native
     );
     assert_eq!(
-        RegionPickerOption::from_picker(wayscriber::config::RegionPicker::Slurp),
+        RegionPickerOption::from_picker(RegionPicker::Slurp),
         RegionPickerOption::Slurp
     );
-    assert_eq!(
-        RegionPickerOption::Slurp.to_picker(),
-        wayscriber::config::RegionPicker::Slurp
-    );
+    assert_eq!(RegionPickerOption::Slurp.to_picker(), RegionPicker::Slurp);
     assert_eq!(
         RegionPickerOption::list(),
         vec![RegionPickerOption::Native, RegionPickerOption::Slurp]
@@ -38,9 +38,11 @@ fn region_picker_options_cover_the_core_enum() {
 }
 use wayscriber::config::{
     Language, PdfFitMode, PdfLabelContentMode, PdfLabelPosition, PdfOrientation, PdfPageSize,
-    PdfTransparentBackground, ReducedMotion, SessionCompression, SessionStorageMode,
+    PdfTransparentBackground, ReducedMotion, RegionPicker, SessionCompression, SessionStorageMode,
     StatusPosition, UiTheme,
 };
+use wayscriber::draw::ArrowStyle;
+use wayscriber::i18n;
 
 #[test]
 fn font_style_option_handles_custom_values() {
@@ -66,7 +68,7 @@ fn font_weight_option_handles_custom_values() {
 
 #[test]
 fn config_values_do_not_follow_the_interface_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::config_values_do_not_follow_the_interface_language"
@@ -89,7 +91,7 @@ fn config_values_do_not_follow_the_interface_language() {
                 "red", "green", "blue", "yellow", "orange", "pink", "white", "black",
             ];
             for language in [Language::English, Language::SimplifiedChinese] {
-                wayscriber::i18n::set_language(language);
+                i18n::set_language(language);
                 // The overlay parses these words; a translated one is an
                 // invalid font value or an unknown color.
                 let styles: Vec<_> = FontStyleOption::list()
@@ -111,7 +113,7 @@ fn config_values_do_not_follow_the_interface_language() {
                     assert_eq!(FontWeightOption::from_value(value).1, value, "{language:?}");
                 }
 
-                let named: Vec<_> = crate::models::NamedColorOption::list()
+                let named: Vec<_> = NamedColorOption::list()
                     .iter()
                     .map(|option| option.as_value())
                     .collect();
@@ -184,7 +186,7 @@ fn language_option_round_trips() {
 
 #[test]
 fn language_option_labels_name_each_language_in_itself() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::language_option_labels_name_each_language_in_itself"
@@ -193,13 +195,13 @@ fn language_option_labels_name_each_language_in_itself() {
             use wayscriber::domain::Language;
 
             for language in [Language::English, Language::SimplifiedChinese] {
-                wayscriber::i18n::set_language(language);
+                i18n::set_language(language);
                 // The way back from a preview reads the same in every UI language.
                 assert_eq!(LanguageOption::English.label(), "English");
                 assert_eq!(LanguageOption::SimplifiedChinese.label(), "简体中文");
                 assert_eq!(
                     LanguageOption::Auto.label(),
-                    wayscriber::i18n::tr("Automatic (system locale)")
+                    i18n::tr("Automatic (system locale)")
                 );
             }
         },
@@ -208,7 +210,7 @@ fn language_option_labels_name_each_language_in_itself() {
 
 #[test]
 fn language_row_title_names_the_setting_in_every_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::language_row_title_names_the_setting_in_every_language"
@@ -222,7 +224,7 @@ fn language_row_title_names_the_setting_in_every_language() {
                 (Language::English, "Language / 语言"),
                 (Language::SimplifiedChinese, "语言 / Language"),
             ] {
-                wayscriber::i18n::set_language(language);
+                i18n::set_language(language);
                 assert_eq!(LanguageOption::row_title(), title);
             }
         },

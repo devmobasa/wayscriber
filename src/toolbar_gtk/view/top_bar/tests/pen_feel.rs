@@ -1,5 +1,15 @@
 //! Pen feel panel and delayed-snapshot meter-scroll assertions.
 
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+
+use gtk4::gdk::{Key, ModifierType};
+
+use crate::config::ToolbarStrokeControls;
+use crate::draw;
+use crate::input::InputState;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     FeedbackSender, GtkToolbarFeedback, STYLE_METER_W, STYLE_ROW_H, Tool, ToolbarEvent,
     ToolbarSnapshot, TopBar, model, plan_top_strip,
@@ -22,7 +32,7 @@ pub(super) fn assert_meter_scroll_survives_delayed_snapshots() {
         state.set_pen_smoothing(1);
         state.set_shape_recognition_sensitivity(1);
         let snapshot = ToolbarSnapshot::from_input(&state);
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         let refresh = super::super::meter::append_meter_bars(
             &FeedbackSender::new(tx),
@@ -45,7 +55,7 @@ pub(super) fn assert_meter_scroll_survives_delayed_snapshots() {
                     .ok()
             })
             .expect("meter scroll controller");
-        let scroll = |state: &mut crate::input::InputState, dy: f64, expected: u8| {
+        let scroll = |state: &mut InputState, dy: f64, expected: u8| {
             assert!(wheel.emit_by_name::<bool>("scroll", &[&0.0f64, &dy]));
             let GtkToolbarFeedback::Event { event, .. } = rx
                 .recv_timeout(Duration::from_secs(1))
@@ -85,15 +95,15 @@ fn named<W: IsA<gtk4::Widget>>(root: &impl IsA<gtk4::Widget>, id: &str) -> W {
 /// level events), the live preview, and the level's name and hint, which
 /// the panel's updaters keep current while it stays open.
 pub(super) fn assert_pen_feel_contract(regular: &ToolbarSnapshot) {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
     let mut shape_pen = style_pill_tool_snapshot(regular, Tool::LiveShape);
-    shape_pen.stroke_controls = crate::config::ToolbarStrokeControls::Panel;
+    shape_pen.stroke_controls = ToolbarStrokeControls::Panel;
     shape_pen.pen_smoothing = 3;
     shape_pen.shape_recognition_sensitivity = 3;
     top.build_strip(
         &shape_pen,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &shape_pen),
+        &plan_top_strip(&UiTextEngine::default(), &shape_pen),
     );
     assert!(top.feel.mounted.is_some(), "the chip carries its panel");
     assert_pen_feel_popover_relays_keys(&top, &rx);
@@ -129,7 +139,7 @@ pub(super) fn assert_pen_feel_contract(regular: &ToolbarSnapshot) {
 
     // Levels change while the panel stays open; nothing rebuilds.
     let mut changed = open.clone();
-    changed.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
+    changed.pen_smoothing = draw::MAX_PEN_SMOOTHING;
     changed.shape_recognition_sensitivity = 0;
     for updater in &updaters {
         updater(&changed);
@@ -145,7 +155,7 @@ pub(super) fn assert_pen_feel_contract(regular: &ToolbarSnapshot) {
     ] {
         assert_eq!(named::<gtk4::Label>(&content, id).text(), text, "{id}");
     }
-    for bar in 1..=crate::draw::MAX_PEN_SMOOTHING {
+    for bar in 1..=draw::MAX_PEN_SMOOTHING {
         let id = format!("top.feel.smoothing.level-{bar}");
         assert!(named::<gtk4::Button>(&content, &id).has_css_class("filled"));
     }
@@ -164,10 +174,7 @@ pub(super) fn assert_pen_feel_contract(regular: &ToolbarSnapshot) {
 /// Keys that reach the open panel go to the overlay like the other menus':
 /// Escape closes it, and a shortcut closes it and runs. Switching input on
 /// every snapshot leaves the popover targetable.
-fn assert_pen_feel_popover_relays_keys(
-    top: &TopBar,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
-) {
+fn assert_pen_feel_popover_relays_keys(top: &TopBar, rx: &Receiver<GtkToolbarFeedback>) {
     use crate::toolbar_gtk::widgets::key_relay_controller;
     use gtk4::glib::translate::IntoGlib;
 
@@ -178,11 +185,9 @@ fn assert_pen_feel_popover_relays_keys(
     assert!(resources.popover.can_target(), "the panel takes input");
 
     let relay = key_relay_controller(&resources.popover).expect("the panel relays keys");
-    for keyval in [gtk4::gdk::Key::Escape, gtk4::gdk::Key::s] {
-        let handled = relay.emit_by_name::<bool>(
-            "key-pressed",
-            &[&keyval, &0u32, &gtk4::gdk::ModifierType::empty()],
-        );
+    for keyval in [Key::Escape, Key::s] {
+        let handled =
+            relay.emit_by_name::<bool>("key-pressed", &[&keyval, &0u32, &ModifierType::empty()]);
         assert!(handled, "{keyval:?} leaves the panel for the overlay");
         assert_eq!(
             rx.recv_timeout(Duration::from_secs(1))
@@ -201,7 +206,7 @@ fn assert_pen_feel_popover_relays_keys(
 fn assert_pen_feel_section(
     content: &gtk4::Box,
     section: &model::PenFeelSection,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let key = section.setting.panel_key();
     assert_eq!(

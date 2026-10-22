@@ -1,3 +1,6 @@
+use std::f64::consts;
+
+use crate::config;
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{BLACK, PolygonKind, Shape};
 
@@ -55,7 +58,7 @@ fn trace(corners: &[(f64, f64)], start: f64, step: f64, wobble: f64) -> Vec<(i32
 fn regular(sides: usize, radius: (f64, f64), turn: f64) -> Vec<(f64, f64)> {
     (0..sides)
         .map(|index| {
-            let angle = turn + std::f64::consts::TAU * index as f64 / sides as f64;
+            let angle = turn + consts::TAU * index as f64 / sides as f64;
             (
                 200.0 + radius.0 * angle.cos(),
                 200.0 + radius.1 * angle.sin(),
@@ -69,7 +72,7 @@ fn open_arcs_spirals_repeated_loops_and_departing_tails_stay_ink() {
     let arc = |turns: f64, growth: f64| -> Vec<(i32, i32)> {
         (0..=(turns * 96.0).round() as usize)
             .map(|step| {
-                let angle = std::f64::consts::TAU * step as f64 / 96.0;
+                let angle = consts::TAU * step as f64 / 96.0;
                 let radius = 60.0 + growth * step as f64 / 96.0;
                 (
                     (200.0 + radius * angle.cos()).round() as i32,
@@ -90,7 +93,7 @@ fn open_arcs_spirals_repeated_loops_and_departing_tails_stay_ink() {
         ("retraced loop", retraced),
         ("departing tail", tail),
     ] {
-        for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+        for level in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
             assert!(recognize(&path, level).is_none(), "{name} at level {level}");
         }
     }
@@ -147,7 +150,7 @@ fn overlap_allows_small_radius_drift_but_rejects_spirals() {
             let path: Vec<_> = (0..=(turns * 360.0) as usize)
                 .map(|step| {
                     let fraction = step as f64 / 360.0;
-                    let angle = std::f64::consts::TAU * fraction;
+                    let angle = consts::TAU * fraction;
                     let radius = 60.0 + growth * fraction / turns;
                     (
                         (200.0 + radius * angle.cos()).round() as i32,
@@ -155,7 +158,7 @@ fn overlap_allows_small_radius_drift_but_rejects_spirals() {
                     )
                 })
                 .collect();
-            for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+            for level in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
                 let shape = recognize(&path, level);
                 if expected_ellipse {
                     assert!(
@@ -179,7 +182,7 @@ fn overlap_rejects_inward_curls() {
         let path: Vec<_> = (0..=468)
             .map(|step| {
                 let fraction = step as f64 / 360.0;
-                let angle = std::f64::consts::TAU * fraction;
+                let angle = consts::TAU * fraction;
                 let radius = 60.0 * (1.0 - inward * ((fraction - 1.1) / 0.2).clamp(0.0, 1.0));
                 (
                     (200.0 + radius * angle.cos()).round() as i32,
@@ -187,7 +190,7 @@ fn overlap_rejects_inward_curls() {
                 )
             })
             .collect();
-        for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+        for level in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
             assert!(
                 recognize(&path, level).is_none(),
                 "inward curl {inward}, level {level}"
@@ -204,7 +207,7 @@ fn circle_with_offset_overlap(
 ) -> Vec<(i32, i32)> {
     (0..=(360.0 * (1.0 + extra)).round() as usize)
         .map(|step| {
-            let angle = direction * std::f64::consts::TAU * step as f64 / 360.0;
+            let angle = direction * consts::TAU * step as f64 / 360.0;
             // The second pass differs from the first, even at the same angle.
             let radius = radius + if step > 360 { offset } else { 0.0 };
             (
@@ -227,7 +230,7 @@ fn short_offset_overshoots_preserve_closed_circle_recognition() {
             for direction in [-1.0, 1.0] {
                 for (extra, min_level) in [(0.03, 0), (0.08, 3)] {
                     let path = circle_with_offset_overlap(radius, extra, offset, direction);
-                    for level in min_level..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+                    for level in min_level..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
                         assert!(
                             matches!(recognize(&path, level), Some(Shape::Ellipse { .. })),
                             "radius {radius}, offset {offset}, extra {extra}, direction {direction}, level {level}"
@@ -253,7 +256,7 @@ fn long_offset_overlaps_allow_large_circle_retracing_but_reject_small_circle_dri
     ] {
         for direction in [-1.0, 1.0] {
             let path = circle_with_offset_overlap(radius, 0.3, offset, direction);
-            for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+            for level in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
                 let shape = recognize(&path, level);
                 if expected_ellipse {
                     assert!(
@@ -375,7 +378,7 @@ fn pixel_staircases_on_dense_diagonals_do_not_inflate_the_outline() {
 fn round_and_four_sided_strokes_never_become_triangles() {
     let lobed: Vec<_> = (0..64)
         .map(|index| {
-            let angle = std::f64::consts::TAU * f64::from(index) / 64.0;
+            let angle = consts::TAU * f64::from(index) / 64.0;
             let wobble = 1.0 + 0.13 * (3.0 * angle).sin();
             (
                 200.0 + 50.0 * wobble * angle.cos(),
@@ -406,17 +409,14 @@ fn round_and_four_sided_strokes_never_become_triangles() {
                 (140.0, 170.0),
             ],
         ),
-        (
-            "pentagon",
-            regular(5, (70.0, 70.0), -std::f64::consts::FRAC_PI_2),
-        ),
+        ("pentagon", regular(5, (70.0, 70.0), -consts::FRAC_PI_2)),
         ("hexagon", regular(6, (70.0, 70.0), 0.0)),
     ];
 
     for (name, outline) in outlines {
         for wobble in [0.0, 2.0] {
             let path = trace(&outline, 0.1, 3.0, wobble);
-            for sensitivity in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+            for sensitivity in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
                 assert_eq!(
                     triangle_points(recognize(&path, sensitivity)),
                     None,
@@ -504,7 +504,7 @@ const QUICK_RECTANGLES: [&[(f64, f64)]; 3] = [
 
 #[test]
 fn quick_rectangles_with_leaning_sides_are_rectangles_by_default() {
-    let default = crate::config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY;
+    let default = config::DEFAULT_SHAPE_RECOGNITION_SENSITIVITY;
 
     for corners in QUICK_RECTANGLES {
         let path = trace(corners, 0.05, 2.0, 1.0);
@@ -535,7 +535,7 @@ fn leaning_quadrilaterals_need_more_sensitivity_the_more_they_lean() {
     ];
     let path = trace(&trapezoid, 0.1, 3.0, 0.0);
 
-    let kinds: Vec<_> = (0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY)
+    let kinds: Vec<_> = (0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY)
         .map(|level| recognize(&path, level).map(|shape| shape.kind_name()))
         .collect();
 
@@ -565,7 +565,7 @@ fn diamonds_kites_and_round_strokes_never_become_rectangles() {
     for (name, outline) in outlines {
         for wobble in [0.0, 2.0] {
             let path = trace(&outline, 0.1, 3.0, wobble);
-            for level in 0..=crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
+            for level in 0..=config::MAX_SHAPE_RECOGNITION_SENSITIVITY {
                 assert!(
                     !matches!(recognize(&path, level), Some(Shape::Rect { .. })),
                     "{name} with wobble {wobble} at level {level}"

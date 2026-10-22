@@ -1,3 +1,6 @@
+use crate::session::catalog;
+use crate::{daemon, tray_action};
+
 use super::super::control::{
     DaemonToggleCommand, DaemonToggleCommands, DaemonToggleRequest,
     write_daemon_toggle_command_error, write_daemon_toggle_command_success,
@@ -110,7 +113,7 @@ impl Daemon {
 
     pub(super) fn process_queued_toggle_command(
         &mut self,
-        command: DaemonToggleCommand,
+        command: &DaemonToggleCommand,
         suppress_overlay_action_signal: &mut bool,
     ) {
         let result = self.process_single_toggle(
@@ -121,14 +124,14 @@ impl Daemon {
         match result {
             Ok(spawned_overlay) => {
                 *suppress_overlay_action_signal |= spawned_overlay;
-                if let Err(err) = write_daemon_toggle_command_success(&command) {
+                if let Err(err) = write_daemon_toggle_command_success(command) {
                     warn!("Failed to write daemon toggle response: {}", err);
                 }
             }
             Err(err) => {
                 let message = format!("{err:#}");
                 warn!("Toggle overlay failed: {}", message);
-                if let Err(response_err) = write_daemon_toggle_command_error(&command, &message) {
+                if let Err(response_err) = write_daemon_toggle_command_error(command, &message) {
                     warn!(
                         "Failed to write daemon toggle error response: {}",
                         response_err
@@ -143,7 +146,7 @@ impl Daemon {
         action: TrayAction,
         signal_visible_overlay: bool,
     ) -> Result<()> {
-        let action_path = crate::tray_action::queue_action(action)?;
+        let action_path = tray_action::queue_action(action)?;
 
         if signal_visible_overlay && self.overlay.state() == OverlayState::Visible {
             #[cfg(unix)]
@@ -187,7 +190,7 @@ impl Daemon {
         signal_toggle_requested: bool,
     ) -> Result<()> {
         let queued_requests = if signal_toggle_requested {
-            crate::daemon::take_daemon_toggle_requests(&self.instance_token)?
+            daemon::take_daemon_toggle_requests(&self.instance_token)?
         } else {
             DaemonToggleCommands {
                 commands: Vec::new(),
@@ -221,12 +224,12 @@ impl Daemon {
 
         let mut suppress_overlay_action_signal = false;
         for command in queued_requests.commands {
-            self.process_queued_toggle_command(command, &mut suppress_overlay_action_signal);
+            self.process_queued_toggle_command(&command, &mut suppress_overlay_action_signal);
         }
         Ok(())
     }
 }
 
 fn named_session_paths_match(left: &Path, right: &Path) -> bool {
-    crate::session::catalog::session_paths_match(left, right)
+    catalog::session_paths_match(left, right)
 }

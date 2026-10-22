@@ -1,11 +1,11 @@
-use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc};
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
 
-use crate::capture::{
-    clipboard,
-    file::{self, FileSaveConfig},
-    sources,
-    types::{CaptureError, CaptureType},
-};
+use crate::capture::file::{self, FileSaveConfig};
+use crate::capture::types::{CaptureError, CaptureType};
+use crate::capture::{clipboard, sources};
 
 /// Abstraction over how image data is captured for the different capture types.
 pub trait CaptureSource: Send + Sync {

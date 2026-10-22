@@ -7,6 +7,16 @@
 //! place that reconciles the two, so the effective source is always a function
 //! of `{HUD enabled} x {configured mode} x {probe result}`.
 
+#[cfg(feature = "input-monitor")]
+use crate::backend::wayland::input_monitor::InputMonitor;
+#[cfg(feature = "input-monitor")]
+use crate::backend::wayland::input_monitor::SystemInputEvent;
+#[cfg(feature = "input-monitor")]
+use crate::backend::wayland::input_monitor::SystemInputFailure;
+use crate::backend::wayland::{RuntimeWakeHandle, input_monitor};
+
+use std::mem;
+
 use super::WaylandState;
 use crate::config::InputHudMode;
 use crate::i18n::tr;
@@ -48,16 +58,23 @@ enum MonitorStart {
 /// System-reader lifecycle and reconciliation latches for the input HUD.
 pub(in crate::backend::wayland) struct InputHudRuntime {
     #[cfg(feature = "input-monitor")]
-    monitor_wake: crate::backend::wayland::RuntimeWakeHandle,
+    monitor_wake: RuntimeWakeHandle,
     #[cfg(feature = "input-monitor")]
-    monitor: Option<crate::backend::wayland::input_monitor::InputMonitor>,
+    monitor: Option<InputMonitor>,
     system_warned: bool,
     announce_pending: bool,
     last_request: Option<(bool, InputHudMode)>,
 }
 
 impl InputHudRuntime {
-    pub(super) fn new(monitor_wake: crate::backend::wayland::RuntimeWakeHandle) -> Self {
+    #[cfg_attr(
+        not(feature = "input-monitor"),
+        expect(
+            clippy::needless_pass_by_value,
+            reason = "the runtime keeps the wake handle only when `input-monitor` is enabled"
+        )
+    )]
+    pub(super) fn new(monitor_wake: RuntimeWakeHandle) -> Self {
         #[cfg(not(feature = "input-monitor"))]
         let _ = monitor_wake;
         Self {
@@ -84,7 +101,7 @@ impl InputHudRuntime {
     }
 
     fn take_announce(&mut self) -> bool {
-        std::mem::take(&mut self.announce_pending)
+        mem::take(&mut self.announce_pending)
     }
 
     fn clear_announce(&mut self) {
@@ -112,18 +129,14 @@ impl InputHudRuntime {
                 MonitorStart::Pending
             };
         }
-        match crate::backend::wayland::input_monitor::InputMonitor::start(self.monitor_wake.clone())
-        {
+        match InputMonitor::start(self.monitor_wake.clone()) {
             Ok(monitor) => {
                 self.monitor = Some(monitor);
                 log::info!("Input HUD: waiting for system-wide capture to come up");
                 MonitorStart::Pending
             }
             Err(err) => MonitorStart::Failed(
-                crate::backend::wayland::input_monitor::SystemInputFailure::StartFailed(
-                    err.to_string(),
-                )
-                .user_message(),
+                SystemInputFailure::StartFailed(err.to_string()).user_message(),
             ),
         }
     }
@@ -144,10 +157,10 @@ impl InputHudRuntime {
     }
 
     #[cfg(feature = "input-monitor")]
-    fn drain(&mut self) -> Vec<crate::backend::wayland::input_monitor::SystemInputEvent> {
+    fn drain(&mut self) -> Vec<SystemInputEvent> {
         self.monitor
             .as_mut()
-            .map(crate::backend::wayland::input_monitor::InputMonitor::drain)
+            .map(InputMonitor::drain)
             .unwrap_or_default()
     }
 
@@ -225,7 +238,7 @@ impl WaylandState {
         let wanted = self.input_state.input_hud_enabled().then(|| {
             resolve_input_hud_source(
                 self.input_state.input_hud_configured_mode(),
-                crate::backend::wayland::input_monitor::system_input_available(),
+                input_monitor::system_input_available(),
             )
         });
 
@@ -444,10 +457,12 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::RuntimeWakeSource;
+
     use super::*;
 
     fn runtime() -> InputHudRuntime {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new()
+        let wake = RuntimeWakeSource::try_new()
             .expect("runtime wake source")
             .handle();
         InputHudRuntime::new(wake)

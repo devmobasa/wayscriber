@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::capture_selection::{capture_region, interactive_region};
 use super::lifecycle_and_measure::ocr_region;
 use super::*;
@@ -28,9 +30,9 @@ fn each_purpose_keeps_its_event_geometry_and_terminal_ownership_contract() {
         let mut backend = Some(active_region_for(purpose));
         let mut input = make_test_input_state();
         if purpose == RegionPurposeTag::Measure {
-            input.activate_measure_mode_with(&crate::draw::TextMeasurer::default(), 1);
+            input.activate_measure_mode_with(&TextMeasurer::default(), 1);
         } else {
-            input.activate_region_with(&crate::draw::TextMeasurer::default(), purpose, 1);
+            input.activate_region_with(&TextMeasurer::default(), purpose, 1);
         }
         assert_eq!(
             input.region_state(),

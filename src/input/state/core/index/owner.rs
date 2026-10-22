@@ -1,5 +1,11 @@
 //! Spatial index guards, invalidation, and hit-query policy.
 
+use crate::util::Rect;
+
+#[cfg(test)]
+use std::cell::Cell;
+use std::cmp::Reverse;
+
 use super::grid::SpatialGrid;
 use crate::draw::{Frame, ShapeId, TextMeasurer};
 use crate::input::boards::BoardIdentityGeneration;
@@ -34,12 +40,12 @@ struct SpatialIndexCache {
 
 #[cfg(test)]
 std::thread_local! {
-    pub(super) static SPATIAL_SHAPE_INDEX_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static SPATIAL_SHAPE_INDEX_BUILDS: Cell<usize> = const { Cell::new(0) };
 }
 
 #[derive(Debug, Clone)]
 pub(in crate::input::state) struct CanvasIndex {
-    hit_test_cache: HashMap<ShapeId, crate::util::Rect>,
+    hit_test_cache: HashMap<ShapeId, Rect>,
     /// The frame whose shapes `hit_test_cache` describes. Shape ids are
     /// page-local, so an entry is only meaningful for the frame it came from.
     hit_test_cache_frame: Option<ActiveFrameOrderGuard>,
@@ -96,7 +102,7 @@ impl CanvasIndex {
     pub(super) fn invalidate_shape(
         &mut self,
         id: ShapeId,
-        new_bounds: Option<Option<crate::util::Rect>>,
+        new_bounds: Option<Option<Rect>>,
         guard: ActiveFrameOrderGuard,
     ) {
         self.content_generation = self.content_generation.wrapping_add(1);
@@ -286,7 +292,7 @@ impl CanvasIndex {
                         Some(shape_index)
                     })
                     .collect();
-                sorted_candidates.sort_unstable_by_key(|&index| std::cmp::Reverse(index));
+                sorted_candidates.sort_unstable_by_key(|&index| Reverse(index));
 
                 if !stale
                     && let Some(id) =

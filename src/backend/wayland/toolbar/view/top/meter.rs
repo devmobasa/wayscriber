@@ -2,6 +2,8 @@
 //! level, laid out abutting in a fixed-width row. The Pen feel panel lays the
 //! same bars out across its wider content column.
 
+use std::iter;
+
 use crate::backend::wayland::toolbar::layout::ToolbarLayoutSpec;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
@@ -73,17 +75,21 @@ pub(super) fn meter_bar_nodes(
         enabled.then(|| Interaction::click(zero.event, Some(zero.tooltip))),
     );
 
-    std::iter::once(dot).chain(meter.segments.into_iter().enumerate().map(
-        move |(index, segment)| {
-            WidgetNode::new(
-                segment.id,
-                (x + dot_w + index as f64 * bar_w, y, bar_w, h),
-                WidgetKind::MeterBar {
-                    filled: segment.filled,
-                    enabled,
-                },
-                enabled.then(|| Interaction::click(segment.event, Some(segment.tooltip))),
-            )
-        },
-    ))
+    iter::once(dot).chain(
+        meter
+            .segments
+            .into_iter()
+            .enumerate()
+            .map(move |(index, segment)| {
+                WidgetNode::new(
+                    segment.id,
+                    (x + dot_w + index as f64 * bar_w, y, bar_w, h),
+                    WidgetKind::MeterBar {
+                        filled: segment.filled,
+                        enabled,
+                    },
+                    enabled.then(|| Interaction::click(segment.event, Some(segment.tooltip))),
+                )
+            }),
+    )
 }

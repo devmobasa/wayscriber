@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,9 @@ mod move_file;
 
 pub(super) use duplicate::duplicate_session_catalog_entry;
 pub(super) use move_file::move_session_catalog_entry;
+use wayscriber::config::{Config, LoadedConfig};
+use wayscriber::session::{ClearToolStateOutcome, SessionOptions, catalog};
+use wayscriber::{paths, session};
 
 pub(super) async fn load_session_catalog() -> Result<Vec<SessionCatalogItem>, String> {
     run_blocking(
@@ -30,8 +34,7 @@ pub(super) async fn forget_session_catalog_entry(
     id: String,
 ) -> Result<SessionCatalogActionResult, String> {
     run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
-        let removed = wayscriber::session::catalog::forget_session_by_id(&id)
-            .map_err(|err| err.to_string())?;
+        let removed = catalog::forget_session_by_id(&id).map_err(|err| err.to_string())?;
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             if removed {
@@ -50,11 +53,8 @@ pub(super) async fn rename_session_catalog_entry(
     display_name: String,
 ) -> Result<SessionCatalogActionResult, String> {
     run_blocking(BlockingJobKind::SessionCatalogMutation, move || {
-        let renamed = wayscriber::session::catalog::rename_session_display_name_by_id(
-            &id,
-            display_name.trim(),
-        )
-        .map_err(|err| err.to_string())?;
+        let renamed = catalog::rename_session_display_name_by_id(&id, display_name.trim())
+            .map_err(|err| err.to_string())?;
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             if let Some(entry) = renamed {
@@ -95,7 +95,7 @@ pub(super) async fn clear_session_catalog_entry(
             return Err(blocker);
         }
 
-        let outcome = wayscriber::session::clear_named_session_non_lock_artifacts(&item.path)
+        let outcome = session::clear_named_session_non_lock_artifacts(&item.path)
             .map_err(|err| err.to_string())?;
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
@@ -125,8 +125,7 @@ pub(super) async fn clear_session_catalog_tool_state_entry(
         }
 
         let options = named_session_options_for_catalog_item(&item)?;
-        let outcome =
-            wayscriber::session::clear_tool_state(&options).map_err(|err| err.to_string())?;
+        let outcome = session::clear_tool_state(&options).map_err(|err| err.to_string())?;
         let items = load_session_catalog_sync()?;
         Ok(SessionCatalogActionResult::success(
             clear_tool_state_catalog_message(&item.display_name, outcome),
@@ -144,7 +143,7 @@ fn service_status_blocker(
 }
 
 fn load_session_catalog_sync() -> Result<Vec<SessionCatalogItem>, String> {
-    wayscriber::session::catalog::recent_sessions()
+    catalog::recent_sessions()
         .map_err(|err| err.to_string())?
         .into_iter()
         .map(SessionCatalogItem::from_entry)
@@ -160,10 +159,10 @@ fn find_session_catalog_item(id: &str) -> Result<SessionCatalogItem, String> {
 
 fn named_session_options_for_catalog_item(
     item: &SessionCatalogItem,
-) -> Result<wayscriber::session::SessionOptions, String> {
-    let loaded = wayscriber::config::Config::load().map_err(|err| err.to_string())?;
+) -> Result<SessionOptions, String> {
+    let loaded = Config::load().map_err(|err| err.to_string())?;
     ensure_session_config_available_for_destructive_action(&loaded)?;
-    let mut options = wayscriber::session::options_from_config_for_named_file(
+    let mut options = session::options_from_config_for_named_file(
         &loaded.config.session,
         item.path.clone(),
         None,
@@ -173,7 +172,7 @@ fn named_session_options_for_catalog_item(
 }
 
 fn ensure_session_config_available_for_destructive_action(
-    loaded: &wayscriber::config::LoadedConfig,
+    loaded: &LoadedConfig,
 ) -> Result<(), String> {
     if loaded.section_failed("session") {
         return Err(
@@ -184,24 +183,21 @@ fn ensure_session_config_available_for_destructive_action(
     Ok(())
 }
 
-fn clear_tool_state_catalog_message(
-    display_name: &str,
-    outcome: wayscriber::session::ClearToolStateOutcome,
-) -> String {
+fn clear_tool_state_catalog_message(display_name: &str, outcome: ClearToolStateOutcome) -> String {
     match outcome {
-        wayscriber::session::ClearToolStateOutcome::NoSession => {
+        ClearToolStateOutcome::NoSession => {
             trf("No saved session file found for {}.", &[&display_name])
         }
-        wayscriber::session::ClearToolStateOutcome::NoToolState => {
+        ClearToolStateOutcome::NoToolState => {
             trf("No saved tool state found for {}.", &[&display_name])
         }
-        wayscriber::session::ClearToolStateOutcome::Cleared {
+        ClearToolStateOutcome::Cleared {
             preserved_board_data: true,
         } => trf(
             tr("Cleared saved tool state for {}. Boards and history were preserved."),
             &[&display_name],
         ),
-        wayscriber::session::ClearToolStateOutcome::Cleared {
+        ClearToolStateOutcome::Cleared {
             preserved_board_data: false,
         } => trf(
             "Cleared saved tool state for {}. No board data was present.",
@@ -238,8 +234,8 @@ enum RuntimeLockKind {
 impl RuntimeLockKind {
     fn path(self) -> PathBuf {
         match self {
-            Self::Daemon => wayscriber::paths::daemon_lock_file(),
-            Self::Overlay => wayscriber::paths::overlay_lock_file(),
+            Self::Daemon => paths::daemon_lock_file(),
+            Self::Overlay => paths::overlay_lock_file(),
         }
     }
 
@@ -320,7 +316,7 @@ fn acquire_runtime_lock_for_inactive_operation(
 ) -> Result<File, String> {
     let path = kind.path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|err| {
+        fs::create_dir_all(parent).map_err(|err| {
             format!(
                 "{} is disabled because the {} lock directory could not be created: {} ({err})",
                 operation.label(),

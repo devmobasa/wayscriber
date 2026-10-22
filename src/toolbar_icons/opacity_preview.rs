@@ -94,6 +94,8 @@ pub(crate) fn draw_opacity_track(
 
 #[cfg(test)]
 mod tests {
+    use crate::ui::toolbar::ToolbarSnapshot;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarBindingHints;
@@ -102,10 +104,8 @@ mod tests {
     #[test]
     fn the_opacity_track_matches_stroke_alpha_through_the_minimum_plateau() {
         let state = make_test_input_state();
-        let mut snapshot = crate::ui::toolbar::ToolbarSnapshot::from_input_with_bindings(
-            &state,
-            ToolbarBindingHints::default(),
-        );
+        let mut snapshot =
+            ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
         snapshot.color.r = 0.0;
         snapshot.color.g = 0.0;
         snapshot.color.b = 0.0;

@@ -1,27 +1,37 @@
+use std::fs;
+use std::time::Instant;
+
+use crate::backend::wayland::session::driver;
+use crate::config::Config;
+use crate::draw::Shape;
+use crate::input::MouseButton;
+use crate::session::SessionOptions;
+use crate::{session, test_temp};
+
 use super::*;
 use crate::backend::wayland::handlers::test_support::HandlerFixture;
 use crate::input::DrawingState;
 use smithay_client_toolkit::seat::pointer::BTN_LEFT;
-use wayland_client::{Proxy, protocol::wl_pointer::WlPointer};
+use wayland_client::Proxy;
+use wayland_client::protocol::wl_pointer::WlPointer;
 
 #[test]
 fn unresolved_dirty_source_has_one_backoff_instead_of_an_idle_redraw_loop() {
     use crate::backend::wayland::session::SessionState;
-    let temp = crate::test_temp::tempdir().unwrap();
-    let mut options =
-        crate::session::SessionOptions::new(temp.path().to_path_buf(), "failed-launch");
+    let temp = test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "failed-launch");
     options.persist_transparent = true;
     options.set_named_file_target(temp.path().join("failed.wayscriber-session"));
-    std::fs::write(options.session_file_path(), b"unreadable").unwrap();
-    std::fs::write(
-        crate::session::append_path_suffix(
+    fs::write(options.session_file_path(), b"unreadable").unwrap();
+    fs::write(
+        session::append_path_suffix(
             &options.session_file_path(),
             ".corrupt-18446744073709551615",
         ),
         b"occupied",
     )
     .unwrap();
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     fixture.state.session = SessionState::new(Some(options));
     fixture
         .state
@@ -30,12 +40,12 @@ fn unresolved_dirty_source_has_one_backoff_instead_of_an_idle_redraw_loop() {
     fixture
         .state
         .input_state
-        .on_mouse_press(crate::input::MouseButton::Left, 600, 400);
+        .on_mouse_press(MouseButton::Left, 600, 400);
     fixture.state.input_state.on_mouse_motion(620, 420);
     fixture
         .state
         .input_state
-        .on_mouse_release(crate::input::MouseButton::Left, 620, 420);
+        .on_mouse_release(MouseButton::Left, 620, 420);
     fixture
         .state
         .session
@@ -56,20 +66,20 @@ fn unresolved_dirty_source_has_one_backoff_instead_of_an_idle_redraw_loop() {
             .pending_output_transition()
             .unwrap()
             .retry_at
-            > std::time::Instant::now()
+            > Instant::now()
     );
 }
 
-fn draw_line(fixture: &mut HandlerFixture) -> Vec<crate::draw::Shape> {
+fn draw_line(fixture: &mut HandlerFixture) -> Vec<Shape> {
     fixture
         .state
         .input_state
-        .on_mouse_press(crate::input::MouseButton::Left, 600, 400);
+        .on_mouse_press(MouseButton::Left, 600, 400);
     fixture.state.input_state.on_mouse_motion(620, 420);
     fixture
         .state
         .input_state
-        .on_mouse_release(crate::input::MouseButton::Left, 620, 420);
+        .on_mouse_release(MouseButton::Left, 620, 420);
     let shapes = fixture
         .state
         .input_state
@@ -86,11 +96,11 @@ fn draw_line(fixture: &mut HandlerFixture) -> Vec<crate::draw::Shape> {
 #[test]
 fn leaving_the_per_output_placeholder_keeps_early_ink_and_finishes_before_input() {
     use crate::backend::wayland::session::SessionState;
-    let temp = crate::test_temp::tempdir().unwrap();
-    let mut placeholder = crate::session::SessionOptions::new(temp.path().to_path_buf(), "startup");
+    let temp = test_temp::tempdir().unwrap();
+    let mut placeholder = SessionOptions::new(temp.path().to_path_buf(), "startup");
     placeholder.persist_transparent = true;
     placeholder.per_output = true;
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     fixture.state.session = SessionState::new(Some(placeholder.clone()));
     fixture
         .state
@@ -110,11 +120,11 @@ fn leaving_the_per_output_placeholder_keeps_early_ink_and_finishes_before_input(
     assert!(!fixture.state.session.is_dirty());
     // The early ink went to the placeholder's own file, as on main, rather
     // than being held unsaveable on screen.
-    let saved = crate::session::load_snapshot(&placeholder)
+    let saved = session::load_snapshot(&placeholder)
         .unwrap()
         .expect("early ink saved");
-    let points = |shape: &crate::draw::Shape| match shape {
-        crate::draw::Shape::Freehand { points, .. } => points.clone(),
+    let points = |shape: &Shape| match shape {
+        Shape::Freehand { points, .. } => points.clone(),
         other => panic!("expected the early stroke, got {other:?}"),
     };
     let saved_points = saved.boards[0].pages.pages[0]
@@ -128,7 +138,7 @@ fn leaving_the_per_output_placeholder_keeps_early_ink_and_finishes_before_input(
         fixture
             .state
             .session
-            .autosave_timeout(std::time::Instant::now(), &active),
+            .autosave_timeout(Instant::now(), &active),
         None
     );
 }
@@ -136,18 +146,17 @@ fn leaving_the_per_output_placeholder_keeps_early_ink_and_finishes_before_input(
 #[test]
 fn early_ink_on_an_unloaded_per_output_session_is_kept_and_its_retry_backs_off() {
     use crate::backend::wayland::session::SessionState;
-    let temp = crate::test_temp::tempdir().unwrap();
-    let mut options = crate::session::SessionOptions::new(temp.path().to_path_buf(), "startup");
+    let temp = test_temp::tempdir().unwrap();
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "startup");
     options.persist_transparent = true;
     options.per_output = true;
-    let mut fixture = HandlerFixture::new(crate::config::Config::default());
+    let mut fixture = HandlerFixture::new(Config::default());
     fixture.state.session = SessionState::new(Some(options.clone()));
     let shapes = draw_line(&mut fixture);
     fixture
         .state
         .begin_session_output_transition(Some("monitor-a".to_string()), "first monitor");
-    crate::backend::wayland::session::driver::finish_pending_session_command(&mut fixture.state)
-        .unwrap();
+    driver::finish_pending_session_command(&mut fixture.state).unwrap();
     assert_eq!(
         fixture
             .state
@@ -179,12 +188,12 @@ fn early_ink_on_an_unloaded_per_output_session_is_kept_and_its_retry_backs_off()
         assert!(!fixture.state.input_state.needs_redraw);
     }
     let retry = fixture.state.session.pending_output_transition().unwrap();
-    assert!(retry.retry_at > std::time::Instant::now());
+    assert!(retry.retry_at > Instant::now());
 }
 
 #[test]
 fn alt_text_drag_ends_through_the_real_pointer_release_handler() {
-    let mut config = crate::config::Config::default();
+    let mut config = Config::default();
     config.ui.show_onboarding_hints = false;
     let mut fixture = HandlerFixture::new(config);
     fixture.state.input_state.state = DrawingState::text_input(100, 100, "hello".to_string());

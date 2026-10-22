@@ -1,9 +1,28 @@
 //! Slider interaction retains the Cairo geometry and the active-drag update barrier.
+#[cfg(test)]
+use crate::toolbar_gtk::GtkToolbarFeedback;
+use crate::toolbar_gtk::css;
+use crate::toolbar_icons;
+
+use gtk4::accessible::Property;
+use gtk4::gdk::Key;
+#[cfg(test)]
+use gtk4::gdk::ModifierType;
+use gtk4::glib::Propagation;
+#[cfg(test)]
+use gtk4::prelude::GtkWindowExt;
+
+use std::cell::RefCell;
+use std::f64::consts;
+#[cfg(test)]
+use std::sync::mpsc;
+
 use super::rounded_rect_path;
 use crate::ui::theme::{ACCENT_RGB, Rgba, rgba, set_color};
 use crate::ui::toolbar::model::{OpacityPaint, ToolbarSliderSpec};
 use gtk4::prelude::*;
-use std::{cell::Cell, rc::Rc};
+use std::cell::Cell;
+use std::rc::Rc;
 
 const COLOR_TRACK_FILL: Rgba = rgba(ACCENT_RGB, 0.55);
 
@@ -26,7 +45,7 @@ struct SliderState {
     /// solid in the stroke color instead of filling with the accent.
     opacity_paint: Cell<Option<OpacityPaint>>,
     /// Told when Escape made this slider give up the toolbar's keyboard focus.
-    keyboard_released: std::cell::RefCell<Option<Rc<dyn Fn()>>>,
+    keyboard_released: RefCell<Option<Rc<dyn Fn()>>>,
 }
 
 impl SliderRow {
@@ -49,7 +68,7 @@ impl SliderRow {
             value: Cell::new(initial),
             dragging: Cell::new(false),
             opacity_paint: Cell::new(None),
-            keyboard_released: std::cell::RefCell::new(None),
+            keyboard_released: RefCell::new(None),
         });
 
         let area = gtk4::DrawingArea::builder()
@@ -58,10 +77,10 @@ impl SliderRow {
             .focus_on_click(false)
             .build();
         area.update_property(&[
-            gtk4::accessible::Property::Label(name),
-            gtk4::accessible::Property::ValueMin(spec.min),
-            gtk4::accessible::Property::ValueMax(spec.max),
-            gtk4::accessible::Property::Orientation(gtk4::Orientation::Horizontal),
+            Property::Label(name),
+            Property::ValueMin(spec.min),
+            Property::ValueMax(spec.max),
+            Property::Orientation(gtk4::Orientation::Horizontal),
         ]);
         update_accessible_value(&area, initial, format);
         area.set_content_height((16.0 * scale).round() as i32);
@@ -76,13 +95,13 @@ impl SliderRow {
             let radius = track_h / 2.0;
             let t = draw_state.spec.t_from_value(draw_state.value.get());
             if widget.has_focus() {
-                set_color(ctx, crate::toolbar_gtk::css::ACCENT);
+                set_color(ctx, css::ACCENT);
                 ctx.set_line_width(1.5);
                 rounded_rect_path(ctx, 1.0, 1.0, w - 2.0, h - 2.0, 3.0);
                 let _ = ctx.stroke();
             }
             if let Some(paint) = draw_state.opacity_paint.get() {
-                crate::toolbar_icons::draw_opacity_track(
+                toolbar_icons::draw_opacity_track(
                     ctx,
                     (0.0, 0.0, w, h),
                     paint.rgb,
@@ -91,13 +110,13 @@ impl SliderRow {
             } else {
                 // Track
                 rounded_rect_path(ctx, 0.0, track_y, w, track_h, radius);
-                set_color(ctx, crate::toolbar_gtk::css::TRACK_BACKGROUND);
+                set_color(ctx, css::TRACK_BACKGROUND);
                 let _ = ctx.fill();
                 // Filled portion (accent at reduced alpha)
                 rounded_rect_path(ctx, 0.0, track_y, (w * t).max(track_h), track_h, radius);
                 set_color(ctx, COLOR_TRACK_FILL);
                 let _ = ctx.fill();
-                crate::toolbar_icons::draw_slider_ticks(
+                toolbar_icons::draw_slider_ticks(
                     ctx,
                     (0.0, 0.0, w, h),
                     draw_state.spec.tick_positions(),
@@ -106,8 +125,8 @@ impl SliderRow {
             // Knob
             let knob_r = (h / 2.0).min(7.0);
             let knob_x = knob_r + t * (w - knob_r * 2.0);
-            ctx.arc(knob_x, h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
-            set_color(ctx, crate::toolbar_gtk::css::TRACK_KNOB);
+            ctx.arc(knob_x, h / 2.0, knob_r, 0.0, consts::PI * 2.0);
+            set_color(ctx, css::TRACK_KNOB);
             let _ = ctx.fill();
         });
 
@@ -135,7 +154,7 @@ impl SliderRow {
         });
         let update_state = state.clone();
         let update_area = area.clone();
-        let update_start = start_value.clone();
+        let update_start = start_value;
         let update_label = value_label.clone();
         let change = Rc::new(on_change);
         let update_change = change.clone();
@@ -166,7 +185,7 @@ impl SliderRow {
         let key_label = value_label.clone();
         let key_change = change.clone();
         key.connect_key_pressed(move |_, key, _, _| {
-            if key == gtk4::gdk::Key::Escape {
+            if key == Key::Escape {
                 if !key_state.dragging.get() {
                     if let Some(popover) = key_area
                         .ancestor(gtk4::Popover::static_type())
@@ -182,10 +201,10 @@ impl SliderRow {
                         }
                     }
                 }
-                return gtk4::glib::Propagation::Stop;
+                return Propagation::Stop;
             }
             let Some(value) = keyboard_value(key_state.spec, key_state.value.get(), key) else {
-                return gtk4::glib::Propagation::Proceed;
+                return Propagation::Proceed;
             };
             if !key_state.dragging.get() {
                 key_state.value.set(value);
@@ -194,7 +213,7 @@ impl SliderRow {
                 key_area.queue_draw();
                 key_change(value);
             }
-            gtk4::glib::Propagation::Stop
+            Propagation::Stop
         });
         area.add_controller(key);
         area.connect_has_focus_notify(|area| area.queue_draw());
@@ -207,13 +226,13 @@ impl SliderRow {
         let scroll_state = state.clone();
         let scroll_area = area.clone();
         let scroll_label = value_label.clone();
-        let scroll_change = change.clone();
+        let scroll_change = change;
         scroll.connect_scroll(move |_, _, dy| {
             if scroll_state.dragging.get() {
-                return gtk4::glib::Propagation::Stop;
+                return Propagation::Stop;
             }
             let Some(value) = wheel_value(scroll_state.spec, scroll_state.value.get(), dy) else {
-                return gtk4::glib::Propagation::Stop;
+                return Propagation::Stop;
             };
 
             scroll_state.value.set(value);
@@ -221,7 +240,7 @@ impl SliderRow {
             update_accessible_value(&scroll_area, value, format);
             scroll_area.queue_draw();
             scroll_change(value);
-            gtk4::glib::Propagation::Stop
+            Propagation::Stop
         });
         area.add_controller(scroll);
 
@@ -281,8 +300,8 @@ impl SliderRow {
 
 fn update_accessible_value(area: &gtk4::DrawingArea, value: f64, format: fn(f64) -> String) {
     area.update_property(&[
-        gtk4::accessible::Property::ValueNow(value),
-        gtk4::accessible::Property::ValueText(&format(value)),
+        Property::ValueNow(value),
+        Property::ValueText(&format(value)),
     ]);
 }
 
@@ -300,7 +319,7 @@ enum SliderStep {
 /// The keys a focused slider owns, keypad variants included. The key relay
 /// reads this same map, so the keys it leaves to a slider are exactly the
 /// keys the slider acts on.
-fn slider_step_for_key(key: gtk4::gdk::Key) -> Option<SliderStep> {
+fn slider_step_for_key(key: Key) -> Option<SliderStep> {
     use gtk4::gdk::Key;
 
     Some(match key {
@@ -314,7 +333,7 @@ fn slider_step_for_key(key: gtk4::gdk::Key) -> Option<SliderStep> {
     })
 }
 
-pub(super) fn is_slider_navigation_key(key: gtk4::gdk::Key) -> bool {
+pub(super) fn is_slider_navigation_key(key: Key) -> bool {
     slider_step_for_key(key).is_some()
 }
 
@@ -329,7 +348,7 @@ fn wheel_value(spec: ToolbarSliderSpec, value: f64, dy: f64) -> Option<f64> {
     Some(spec.step_value(value, notches))
 }
 
-fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> Option<f64> {
+fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: Key) -> Option<f64> {
     Some(match slider_step_for_key(key)? {
         SliderStep::Down => spec.step_value(value, -1.0),
         SliderStep::Up => spec.step_value(value, 1.0),
@@ -343,7 +362,7 @@ fn keyboard_value(spec: ToolbarSliderSpec, value: f64, key: gtk4::gdk::Key) -> O
 /// Called by the isolated GTK widget test after initialization.
 #[cfg(test)]
 pub(super) fn assert_widget_contract() {
-    let changes = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let changes = Rc::new(RefCell::new(Vec::new()));
     let observed = changes.clone();
     let slider = SliderRow::new(
         1.0,
@@ -372,14 +391,7 @@ pub(super) fn assert_widget_contract() {
         .filter_map(|i| controllers.item(i))
         .find_map(|item| item.downcast::<gtk4::EventControllerKey>().ok())
         .unwrap();
-    key.emit_by_name::<bool>(
-        "key-pressed",
-        &[
-            &gtk4::gdk::Key::Right,
-            &0u32,
-            &gtk4::gdk::ModifierType::empty(),
-        ],
-    );
+    key.emit_by_name::<bool>("key-pressed", &[&Key::Right, &0u32, &ModifierType::empty()]);
     // An off-grid 4.5 steps up to the adjacent whole value, 5, not 6.
     assert_eq!(slider.state.value.get(), 5.0);
     assert_eq!(changes.borrow().as_slice(), &[5.0]);
@@ -400,15 +412,11 @@ pub(super) fn assert_widget_contract() {
 fn assert_escape_contract(slider: &SliderRow, key: &gtk4::EventControllerKey) {
     let window = gtk4::Window::new();
     window.set_child(Some(&slider.root));
-    gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
+    GtkWindowExt::set_focus(&window, Some(&slider.area));
     let escape = || {
         key.emit_by_name::<bool>(
             "key-pressed",
-            &[
-                &gtk4::gdk::Key::Escape,
-                &0u32,
-                &gtk4::gdk::ModifierType::empty(),
-            ],
+            &[&Key::Escape, &0u32, &ModifierType::empty()],
         )
     };
     // The release callback reports only a release that happened: a drag
@@ -418,13 +426,13 @@ fn assert_escape_contract(slider: &SliderRow, key: &gtk4::EventControllerKey) {
     slider.on_keyboard_released(move || counted.set(counted.get() + 1));
     slider.state.dragging.set(true);
     assert!(escape());
-    assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_some());
+    assert!(GtkWindowExt::focus(&window).is_some());
     assert_eq!(releases.get(), 0, "a drag keeps the keyboard");
     slider.set_value(10.0);
     assert_eq!(slider.state.value.get(), 5.0);
     slider.state.dragging.set(false);
     assert!(escape());
-    assert!(gtk4::prelude::GtkWindowExt::focus(&window).is_none());
+    assert!(GtkWindowExt::focus(&window).is_none());
     assert_eq!(releases.get(), 1, "the release is reported once");
     assert_eq!(slider.state.value.get(), 5.0);
     window.set_child(None::<&gtk4::Widget>);
@@ -449,7 +457,7 @@ fn assert_escape_contract(slider: &SliderRow, key: &gtk4::EventControllerKey) {
 /// press to the slider and only tells the overlay, which arms its guard.
 #[cfg(test)]
 pub(super) fn assert_focused_slider_escape_stays_local() {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let slider = SliderRow::new(
         1.0,
         "Thickness",
@@ -462,21 +470,17 @@ pub(super) fn assert_focused_slider_escape_stays_local() {
     window.set_child(Some(&slider.root));
     super::install_key_relay(&window, &super::FeedbackSender::new(tx));
     let relay = super::key_relay_controller(&window).expect("the window relays keys");
-    gtk4::prelude::GtkWindowExt::set_focus(&window, Some(&slider.area));
+    GtkWindowExt::set_focus(&window, Some(&slider.area));
 
     let handled = relay.emit_by_name::<bool>(
         "key-pressed",
-        &[
-            &gtk4::gdk::Key::Escape,
-            &0u32,
-            &gtk4::gdk::ModifierType::empty(),
-        ],
+        &[&Key::Escape, &0u32, &ModifierType::empty()],
     );
 
     assert!(!handled, "Escape goes on to the focused slider");
     assert_eq!(
         rx.try_recv(),
-        Ok(crate::toolbar_gtk::GtkToolbarFeedback::EscapeDismissed),
+        Ok(GtkToolbarFeedback::EscapeDismissed),
         "the relay arms the overlay's Escape guard; the slider reports any release"
     );
     assert!(

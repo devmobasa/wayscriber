@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION;
+
 /// Spotlight tool settings.
 ///
 /// A spotlight dims the whole overlay except the regions it covers, so attention
@@ -28,7 +30,7 @@ impl Default for SpotlightConfig {
         Self {
             dim_opacity: default_spotlight_dim(),
             feather: default_spotlight_feather(),
-            magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
+            magnification: DEFAULT_SPOTLIGHT_MAGNIFICATION,
         }
     }
 }

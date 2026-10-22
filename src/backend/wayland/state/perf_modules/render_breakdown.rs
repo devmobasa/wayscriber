@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use log::info;
 
+use crate::draw::SpotlightSnapshotStrategy;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum PerfRenderProfileKind {
     #[default]
@@ -61,8 +63,7 @@ pub(in crate::backend::wayland) struct PerfRenderBreakdown {
     pub(in crate::backend::wayland) canvas_layer_cache_used: bool,
     pub(in crate::backend::wayland) spotlight_regions: usize,
     pub(in crate::backend::wayland) spotlight_copied_pixels: u64,
-    pub(in crate::backend::wayland) spotlight_strategy:
-        Option<crate::draw::SpotlightSnapshotStrategy>,
+    pub(in crate::backend::wayland) spotlight_strategy: Option<SpotlightSnapshotStrategy>,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -315,12 +316,10 @@ fn dominant_render_stage(stages: &PerfRenderStageDurations) -> (&'static str, Du
     .unwrap_or(("none", Duration::ZERO))
 }
 
-fn spotlight_strategy_label(
-    strategy: Option<crate::draw::SpotlightSnapshotStrategy>,
-) -> &'static str {
+fn spotlight_strategy_label(strategy: Option<SpotlightSnapshotStrategy>) -> &'static str {
     match strategy {
-        Some(crate::draw::SpotlightSnapshotStrategy::Regional) => "regional",
-        Some(crate::draw::SpotlightSnapshotStrategy::FullSurface) => "full_surface",
+        Some(SpotlightSnapshotStrategy::Regional) => "regional",
+        Some(SpotlightSnapshotStrategy::FullSurface) => "full_surface",
         None => "none",
     }
 }

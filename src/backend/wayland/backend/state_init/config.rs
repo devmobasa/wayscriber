@@ -1,15 +1,17 @@
 use log::{debug, info, warn};
+use tokio::runtime::Handle;
 
 use crate::backend::ExitAfterCaptureMode;
 use crate::config::{
     Action, Config, ConfigSectionError, ConfigSource, ConfigValidationReport,
-    DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution,
+    DefaultShortcutSkipped, InvalidKeybinding, KeybindingConflictResolution, KeybindingsConfig,
 };
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
-use crate::notification;
 use crate::onboarding::OnboardingStore;
+use crate::ui::anim;
+use crate::{i18n, notification};
 
 /// How long the keybinding warnings stay up. All of them are on the long side:
 /// they describe a config problem the user has to leave the overlay to fix.
@@ -95,8 +97,8 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
         }
     };
 
-    crate::ui::anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
-    crate::i18n::initialize(config.ui.language);
+    anim::set_motion_enabled(config.ui.reduced_motion.motion_enabled());
+    i18n::initialize(config.ui.language);
 
     let exit_after_capture_mode = match backend_exit_mode {
         ExitAfterCaptureMode::Auto if config.capture.exit_after_capture => {
@@ -126,7 +128,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
 /// the file with nothing but a log line.
 pub(super) fn notify_config_load_failure(
     input_state: &mut InputState,
-    tokio_handle: &tokio::runtime::Handle,
+    tokio_handle: &Handle,
     failure: Option<&ConfigLoadFailure>,
 ) {
     let Some(failure) = failure else {
@@ -190,7 +192,7 @@ pub(super) fn notify_config_load_failure(
 /// notification covers a launch the user is not looking at.
 pub(super) fn notify_keybinding_conflicts(
     input_state: &mut InputState,
-    tokio_handle: &tokio::runtime::Handle,
+    tokio_handle: &Handle,
     conflicts: &[KeybindingConflictResolution],
 ) {
     if conflicts.is_empty() {
@@ -221,7 +223,7 @@ pub(super) fn notify_keybinding_conflicts(
 /// forever if this did not say so, since the file keeps it.
 pub(super) fn notify_invalid_keybindings(
     input_state: &mut InputState,
-    tokio_handle: &tokio::runtime::Handle,
+    tokio_handle: &Handle,
     invalid: &[InvalidKeybinding],
 ) {
     if invalid.is_empty() {
@@ -258,7 +260,7 @@ pub(super) fn notify_invalid_keybindings(
 /// pushed last and styled as information rather than as a warning.
 pub(super) fn notify_skipped_default_shortcuts(
     input_state: &mut InputState,
-    tokio_handle: &tokio::runtime::Handle,
+    tokio_handle: &Handle,
     onboarding: &mut OnboardingStore,
     skipped: &[DefaultShortcutSkipped],
 ) {
@@ -295,9 +297,8 @@ fn skipped_default_notice_id(skipped: &[DefaultShortcutSkipped]) -> String {
         .iter()
         .map(|entry| {
             let skipped_action = entry.config_key().unwrap_or("runtime_action");
-            let claimed_by =
-                crate::config::KeybindingsConfig::config_key_for_action(entry.claimed_by())
-                    .unwrap_or("runtime_action");
+            let claimed_by = KeybindingsConfig::config_key_for_action(entry.claimed_by())
+                .unwrap_or("runtime_action");
             format!("{}:{skipped_action}:{claimed_by}", entry.binding())
         })
         .collect::<Vec<_>>();
@@ -406,7 +407,7 @@ fn keybinding_notification_body(entries: &[String], closing: &str) -> String {
 }
 
 fn config_path_display() -> String {
-    Config::get_config_path()
+    Config::config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }
@@ -442,7 +443,9 @@ fn log_config(config: &Config) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, iter};
+
+    use crate::config;
 
     use super::*;
     use crate::config::test_helpers::with_temp_config_home;
@@ -450,7 +453,7 @@ mod tests {
     #[test]
     fn load_applies_capture_exit_after_capture_to_auto_mode() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
@@ -470,7 +473,7 @@ mod tests {
     #[test]
     fn load_leaves_a_legacy_config_exactly_as_written() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
@@ -496,13 +499,13 @@ mod tests {
     #[test]
     fn load_reports_a_skipped_default_instead_of_resetting_the_section() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
             let original = format!(
                 "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\nexit = [\"Escape\", \"Ctrl+Q\", \"Q\"]\n",
-                crate::config::CURRENT_CONFIG_REVISION
+                config::CURRENT_CONFIG_REVISION
             );
             fs::write(&path, &original).expect("write colliding config");
 
@@ -559,13 +562,13 @@ mod tests {
     #[test]
     fn load_reports_a_conflict_between_two_authored_shortcuts() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
             let original = format!(
                 "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\"]\ncycle_toolbar_display = [\"F2\"]\n",
-                crate::config::CURRENT_CONFIG_REVISION
+                config::CURRENT_CONFIG_REVISION
             );
             fs::write(&path, &original).expect("write colliding config");
 
@@ -607,7 +610,7 @@ mod tests {
     #[test]
     fn load_reports_an_unparseable_shortcut_instead_of_defaulting_the_section() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
@@ -615,7 +618,7 @@ mod tests {
                 &path,
                 format!(
                     "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\nundo = [\"Ctrl+Alt+U\"]\n",
-                    crate::config::CURRENT_CONFIG_REVISION
+                    config::CURRENT_CONFIG_REVISION
                 ),
             )
             .expect("write config with a typo");
@@ -666,7 +669,7 @@ mod tests {
         );
         assert!(toast.contains("and 1 more"), "unexpected toast: {toast}");
 
-        let many = std::iter::repeat_n(conflicts[0].clone(), 7).collect::<Vec<_>>();
+        let many = iter::repeat_n(conflicts[0].clone(), 7).collect::<Vec<_>>();
         let body = keybinding_conflict_notification_body(&many, "/tmp/config.toml");
         assert_eq!(
             body.matches('•').count(),
@@ -678,7 +681,7 @@ mod tests {
     #[test]
     fn load_falls_back_to_defaults_when_config_is_invalid() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }
@@ -711,7 +714,7 @@ mod tests {
     #[test]
     fn load_keeps_the_rest_of_the_file_when_one_section_is_invalid() {
         with_temp_config_home(|_| {
-            let path = Config::get_config_path().expect("config path");
+            let path = Config::config_path().expect("config path");
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).expect("create config dir");
             }

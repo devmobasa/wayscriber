@@ -5,6 +5,7 @@
 //! a one-second timeout, or an ownership boundary that clears pending state.
 
 use std::collections::HashMap;
+use std::slice;
 use std::time::{Duration, Instant};
 
 use crate::config::{KeyBinding, Shortcut};
@@ -109,12 +110,12 @@ impl SequenceTrie {
             match self.lookup_steps(&steps, pending, now) {
                 SequenceMatch::None => {
                     // Mismatch: cancel, then re-evaluate the new chord once.
-                    self.dispatch_or_pending(std::slice::from_ref(chord), pending, now)
+                    self.dispatch_or_pending(slice::from_ref(chord), pending, now)
                 }
                 other => other,
             }
         } else {
-            self.dispatch_or_pending(std::slice::from_ref(chord), pending, now)
+            self.dispatch_or_pending(slice::from_ref(chord), pending, now)
         }
     }
 
@@ -148,7 +149,7 @@ impl SequenceTrie {
     }
 
     fn complete_single_match(&self, chord: &KeyBinding) -> SequenceMatch {
-        let Some(node) = self.node_for(std::slice::from_ref(chord)) else {
+        let Some(node) = self.node_for(slice::from_ref(chord)) else {
             return SequenceMatch::None;
         };
         node.action

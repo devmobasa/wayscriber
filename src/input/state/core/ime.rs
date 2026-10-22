@@ -12,7 +12,10 @@
 //! transient insertion preview that never enters the committed buffer until
 //! the IME commits it.
 
+use std::mem;
 use std::ops::Range;
+
+use crate::draw::TextMeasurer;
 
 use super::TextEditing;
 use super::base::{DrawingState, InputState};
@@ -245,7 +248,7 @@ impl TextEditing {
             return false;
         }
 
-        let pending = std::mem::take(&mut self.ime.pending);
+        let pending = mem::take(&mut self.ime.pending);
         let mut buffer_changed = false;
 
         if let DrawingState::TextInput {
@@ -383,11 +386,11 @@ impl InputState {
     }
 
     pub fn ime_apply_done(&mut self) -> bool {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.ime_apply_done_with(&measurer)
     }
 
-    pub(crate) fn ime_apply_done_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
+    pub(crate) fn ime_apply_done_with(&mut self, measurer: &TextMeasurer) -> bool {
         self.note_session_interaction_activity();
         let changed = self.text_editing.apply_ime_done(&mut self.state);
         if changed {
@@ -398,11 +401,11 @@ impl InputState {
     }
 
     pub fn ime_clear(&mut self) -> bool {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.ime_clear_with(&measurer)
     }
 
-    pub(crate) fn ime_clear_with(&mut self, measurer: &crate::draw::TextMeasurer) -> bool {
+    pub(crate) fn ime_clear_with(&mut self, measurer: &TextMeasurer) -> bool {
         let had_preedit = self.text_editing.clear_ime();
         if had_preedit {
             self.needs_redraw = true;

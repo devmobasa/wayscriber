@@ -64,6 +64,8 @@ pub(super) fn dispatch_events(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::io::ErrorKind;
     use std::os::fd::AsRawFd;
     use std::path::PathBuf;
     use std::time::Instant;
@@ -140,8 +142,8 @@ mod tests {
             if ready == 0 {
                 panic!("persistence worker did not wake the production route");
             }
-            let err = std::io::Error::last_os_error();
-            if err.kind() != std::io::ErrorKind::Interrupted {
+            let err = io::Error::last_os_error();
+            if err.kind() != ErrorKind::Interrupted {
                 panic!("runtime wake poll failed: {err}");
             }
         }
@@ -159,7 +161,7 @@ mod tests {
         session.record_input_dirty(started, true);
         let dirty_window = session.prepare_autosave_submission().unwrap();
 
-        let runtime_wake = RuntimeWakeSource::new().unwrap();
+        let runtime_wake = RuntimeWakeSource::try_new().unwrap();
         let mut controller = PersistenceController::start(runtime_wake.handle()).unwrap();
         let request_id = controller
             .try_submit(0, PersistenceOperation::PanicForTest)

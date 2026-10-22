@@ -116,16 +116,19 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
+    use crate::input::state::test_support;
+
     use super::super::super::types::PropertiesPanelHit;
     use super::*;
     use crate::draw::Shape;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
     fn open_rect_panel(state: &mut InputState) {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
             x: 10,
             y: 20,

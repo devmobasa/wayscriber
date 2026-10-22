@@ -1,3 +1,5 @@
+use crate::draw::color;
+
 use super::super::*;
 use crate::config::{QuickColorPalette, QuickColorPaletteEntry};
 
@@ -33,7 +35,7 @@ fn idle_mode_plain_letters_use_configured_quick_palette() {
     state.set_quick_colors(QuickColorPalette::from_entries(vec![
         QuickColorPaletteEntry {
             label: "First".to_string(),
-            color: crate::draw::color::RED,
+            color: color::RED,
         },
         QuickColorPaletteEntry {
             label: "Configured".to_string(),

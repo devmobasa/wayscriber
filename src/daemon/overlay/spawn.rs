@@ -1,3 +1,7 @@
+use std::fmt::{Display, Formatter};
+use std::path::Path;
+use std::{error, fmt};
+
 use anyhow::anyhow;
 use log::{info, warn};
 use std::collections::HashSet;
@@ -15,6 +19,13 @@ use super::super::types::OverlaySpawnCandidate;
 use super::super::types::OverlaySpawnErrorInfo;
 
 impl Daemon {
+    #[cfg_attr(
+        not(feature = "tray"),
+        expect(
+            clippy::needless_pass_by_value,
+            reason = "the tray status keeps the message only when `tray` is enabled"
+        )
+    )]
     pub(super) fn record_overlay_spawn_failure(&mut self, message: String) {
         let backoff = self.overlay.record_spawn_failure();
         warn!(
@@ -54,7 +65,7 @@ impl Daemon {
         }
 
         if let Some(arg0) = env::args_os().next() {
-            let arg0_path = std::path::Path::new(&arg0);
+            let arg0_path = Path::new(&arg0);
             if arg0_path.to_string_lossy().contains('/') {
                 if arg0_path.is_file() {
                     Self::push_spawn_candidate(&mut candidates, &mut seen, arg0, "argv0");
@@ -94,7 +105,7 @@ impl Daemon {
         &mut self,
         request: &OverlayLaunchRequest,
         candidates: &[OverlaySpawnCandidate],
-    ) -> std::result::Result<(), OverlayStartFailure> {
+    ) -> Result<(), OverlayStartFailure> {
         if candidates.is_empty() {
             return Err(OverlayStartFailure::BeforeAttempt(anyhow!(
                 "No overlay spawn candidates available"
@@ -158,8 +169,8 @@ impl SpawnAttemptsFailed {
     }
 }
 
-impl std::fmt::Display for SpawnAttemptsFailed {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SpawnAttemptsFailed {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "Unable to launch overlay process (tried current_exe/argv0/{PATH_ENV})"
@@ -167,10 +178,14 @@ impl std::fmt::Display for SpawnAttemptsFailed {
     }
 }
 
-impl std::error::Error for SpawnAttemptsFailed {}
+impl error::Error for SpawnAttemptsFailed {}
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::daemon::DaemonToggleRequest;
+
     use super::super::launch::{OverlayLaunch, build_overlay_launch};
     use super::*;
 
@@ -208,7 +223,7 @@ mod tests {
         ] {
             let mut daemon = Daemon::new(Some("whiteboard".into()), false, None, None);
             daemon.queue_overlay_launch(
-                Some(crate::daemon::DaemonToggleRequest {
+                Some(DaemonToggleRequest {
                     mode: Some("transparent".into()),
                     freeze: true,
                     exit_after_capture,
@@ -239,7 +254,7 @@ mod tests {
             Some("whiteboard".into()),
             false,
             None,
-            Some(std::path::PathBuf::from("/tmp/lecture.wayscriber-session")),
+            Some(PathBuf::from("/tmp/lecture.wayscriber-session")),
         );
 
         let launch = build_test_launch(&mut daemon);
@@ -262,13 +277,11 @@ mod tests {
             Some("whiteboard".into()),
             false,
             None,
-            Some(std::path::PathBuf::from("/tmp/default.wayscriber-session")),
+            Some(PathBuf::from("/tmp/default.wayscriber-session")),
         );
         daemon.queue_overlay_launch(
-            Some(crate::daemon::DaemonToggleRequest {
-                session_file: Some(std::path::PathBuf::from(
-                    "/tmp/requested.wayscriber-session",
-                )),
+            Some(DaemonToggleRequest {
+                session_file: Some(PathBuf::from("/tmp/requested.wayscriber-session")),
                 ..Default::default()
             }),
             None,

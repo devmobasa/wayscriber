@@ -3,6 +3,8 @@
 //! Pure geometry from the surface size, so the renderer and the pointer hit
 //! test cannot disagree about which row is under the cursor.
 
+use crate::draw;
+
 /// Most rows the panel will ever show. Enough to scan, few enough that laying
 /// each one out in its own font stays bounded whatever the system has installed.
 ///
@@ -73,6 +75,7 @@ pub struct FontPickerRow {
 ///
 /// One row is always reserved even with nothing to show, so the "no matches"
 /// note lands in the list rather than on the caption.
+#[must_use]
 pub fn font_picker_layout(
     surface_width: u32,
     surface_height: u32,
@@ -121,6 +124,7 @@ pub fn font_picker_layout(
 }
 
 /// The rows a layout shows, for the window starting at `scroll`.
+#[must_use]
 pub fn font_picker_rows(
     layout: FontPickerLayout,
     families: &[String],
@@ -142,7 +146,7 @@ pub fn font_picker_rows(
             width: layout.list_width,
             height: layout.row_height,
             selected: index == selected,
-            current: crate::draw::families_match(family, current),
+            current: draw::families_match(family, current),
         })
         .collect()
 }

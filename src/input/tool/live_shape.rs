@@ -1,9 +1,13 @@
 //! Recognize lines and closed shapes from a pen path. Ambiguous ink stays ink.
 
+#[cfg(test)]
+use std::cell::Cell;
 use std::cell::RefCell;
+use std::f64::consts;
 
+use crate::config;
 use crate::domain::{BoardGrid, BoardGridKind};
-use crate::draw::{Color, Shape};
+use crate::draw::{Color, Shape, shape};
 
 mod ellipse;
 mod grid;
@@ -21,7 +25,7 @@ mod triangle;
 pub(crate) struct LiveShapeMemo {
     last: RefCell<Option<(MemoKey, Option<Shape>)>>,
     #[cfg(test)]
-    runs: std::cell::Cell<usize>,
+    runs: Cell<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -70,7 +74,7 @@ impl LiveShapeMemo {
         self.runs.set(self.runs.get() + 1);
         // Quantize only when recognition runs. Preview, bounds and readout
         // reuse the cached result without allocating another path buffer.
-        let rounded = crate::draw::shape::quantize_path(points);
+        let rounded = shape::quantize_path(points);
         let shape = recognize(&rounded, color, thick, fill, grid, sensitivity);
         *self.last.borrow_mut() = Some((key, shape.clone()));
         shape
@@ -99,7 +103,7 @@ pub(super) fn recognize(
         .windows(2)
         .map(|pair| distance(pair[0], pair[1]))
         .sum();
-    let sensitivity = sensitivity.min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
+    let sensitivity = sensitivity.min(config::MAX_SHAPE_RECOGNITION_SENSITIVITY);
 
     if points.len() >= 8
         && bounds.width >= 24.0
@@ -240,7 +244,7 @@ fn fit_closed_lap(
     // Winding around the box center can cross a triangle's edge, so it fits
     // its own sides. Every candidate competes on the same completed lap.
     let (ellipse, rectangle) = if winding.is_some_and(|coverage| {
-        (0.8..=1.2).contains(&(coverage.winding.abs() / std::f64::consts::TAU))
+        (0.8..=1.2).contains(&(coverage.winding.abs() / consts::TAU))
             && coverage.travel <= coverage.winding.abs() * 1.5
     }) {
         (
@@ -393,7 +397,7 @@ fn distance(a: (i32, i32), b: (i32, i32)) -> f64 {
 }
 
 fn resampled_length(points: &[(i32, i32)]) -> f64 {
-    let Some(&first) = points.first() else {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
         return 0.0;
     };
     let mut anchor = first;
@@ -408,5 +412,5 @@ fn resampled_length(points: &[(i32, i32)]) -> f64 {
         }
     }
 
-    length + distance(anchor, *points.last().unwrap())
+    length + distance(anchor, last)
 }

@@ -1,3 +1,7 @@
+use std::time::{Duration, Instant};
+
+use crate::draw::TextMeasurer;
+
 use super::*;
 
 fn push_rect_create(state: &mut InputState, x: i32) {
@@ -27,7 +31,7 @@ fn push_rect_create(state: &mut InputState, x: i32) {
 
 #[test]
 fn undo_all_and_redo_all_process_entire_stack() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let frame = state.boards.active_frame_mut();
 
@@ -104,14 +108,14 @@ fn undo_all_with_delay_respects_history() {
     );
 
     state.start_undo_all_delayed(0);
-    state.tick_delayed_history(std::time::Instant::now());
+    state.tick_delayed_history(Instant::now());
     assert_eq!(state.boards.active_frame().shapes.len(), 0);
     assert_eq!(state.boards.active_frame().redo_stack_len(), 1);
 }
 
 #[test]
 fn redo_all_with_delay_replays_history() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let frame = state.boards.active_frame_mut();
 
@@ -136,7 +140,7 @@ fn redo_all_with_delay_replays_history() {
     assert_eq!(state.boards.active_frame().redo_stack_len(), 1);
 
     state.start_redo_all_delayed(0);
-    state.tick_delayed_history(std::time::Instant::now());
+    state.tick_delayed_history(Instant::now());
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
     assert_eq!(state.boards.active_frame().undo_stack_len(), 1);
 }
@@ -149,24 +153,24 @@ fn custom_undo_uses_step_budget_and_minimum_delay_between_steps() {
     assert_eq!(state.boards.active_frame().shapes.len(), 2);
 
     state.start_custom_undo(0, 5);
-    let now = std::time::Instant::now();
+    let now = Instant::now();
 
     assert!(state.has_pending_history());
     assert!(state.tick_delayed_history(now));
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
     assert!(state.has_pending_history());
 
-    assert!(!state.tick_delayed_history(now + std::time::Duration::from_millis(49)));
+    assert!(!state.tick_delayed_history(now + Duration::from_millis(49)));
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
 
-    assert!(state.tick_delayed_history(now + std::time::Duration::from_millis(50)));
+    assert!(state.tick_delayed_history(now + Duration::from_millis(50)));
     assert_eq!(state.boards.active_frame().shapes.len(), 0);
     assert!(!state.has_pending_history());
 }
 
 #[test]
 fn custom_redo_respects_step_budget() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     push_rect_create(&mut state, 0);
     push_rect_create(&mut state, 20);
@@ -174,7 +178,7 @@ fn custom_redo_respects_step_budget() {
     assert_eq!(state.boards.active_frame().redo_stack_len(), 2);
 
     state.start_custom_redo(0, 1);
-    assert!(state.tick_delayed_history(std::time::Instant::now()));
+    assert!(state.tick_delayed_history(Instant::now()));
 
     assert_eq!(state.boards.active_frame().shapes.len(), 1);
     assert_eq!(state.boards.active_frame().undo_stack_len(), 1);

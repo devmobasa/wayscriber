@@ -8,7 +8,7 @@ mod widgets;
 
 use wayscriber::i18n::tr;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use relm4::prelude::*;
@@ -47,11 +47,11 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
                 "Record a shortcut or sequence, reset one action, or edit the comma-separated list as text. Filter and sort to review many actions at once.",
             ))
             .build();
-        for field in fields
+        let tab_fields = fields
             .iter()
             .copied()
-            .filter(|field| keybinding_tab(*field) == tab)
-        {
+            .filter(|field| keybinding_tab(*field) == tab);
+        for field in tab_fields {
             let row = binding_row(&group, field, sender, &mut bindings, refresh.clone());
             slots.push((field, row, group.clone()));
         }
@@ -173,7 +173,7 @@ fn conflict_banner(
         .child(&row)
         .build();
 
-    let jump_field = std::rc::Rc::new(std::cell::Cell::new(None::<KeybindingField>));
+    let jump_field = Rc::new(Cell::new(None::<KeybindingField>));
     {
         let sender = sender.clone();
         let jump_field = jump_field.clone();

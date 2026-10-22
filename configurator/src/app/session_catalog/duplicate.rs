@@ -1,4 +1,7 @@
 use wayscriber::i18n::{tr, trf};
+use wayscriber::session;
+use wayscriber::session::catalog;
+use wayscriber::session::catalog::CatalogEvent;
 
 use std::path::{Path, PathBuf};
 
@@ -39,11 +42,11 @@ fn duplicate_session_catalog_entry_sync(
         return Err(blocker);
     }
 
-    let outcome = wayscriber::session::duplicate_named_session_primary(&item.path, target)
+    let outcome = session::duplicate_named_session_primary(&item.path, target)
         .map_err(|err| err.to_string())?;
-    let entry = match wayscriber::session::catalog::upsert_session_event_with_display_name(
+    let entry = match catalog::upsert_session_event_with_display_name(
         &outcome.target,
-        wayscriber::session::catalog::CatalogEvent::Saved,
+        CatalogEvent::Saved,
         &item.display_name,
     ) {
         Ok(entry) => entry,
@@ -81,11 +84,14 @@ fn duplicate_session_catalog_entry_sync(
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
+    use std::fs;
 
     use crate::models::{
         DaemonRuntimeStatus, DesktopEnvironment, LightShortcutApplyCapability,
         ShortcutApplyCapability, ShortcutBackend,
     };
+    use crate::test_env::EnvGuard;
+    use crate::test_temp;
     use wayscriber::env_vars::{CATALOG_HOOKS_TEST_ENV, XDG_DATA_HOME_ENV, XDG_RUNTIME_DIR_ENV};
 
     use super::*;
@@ -110,22 +116,22 @@ mod tests {
 
     #[test]
     fn duplicate_session_catalog_entry_copies_primary_and_catalogs_new_entry() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
-        let source_artifacts = wayscriber::session::named_session_artifact_paths(&source);
-        let target_artifacts = wayscriber::session::named_session_artifact_paths(&target);
-        std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-        std::fs::write(&source_artifacts.backup, b"backup").unwrap();
-        std::fs::write(&source_artifacts.lock, b"lock").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        let source_artifacts = session::named_session_artifact_paths(&source);
+        let target_artifacts = session::named_session_artifact_paths(&target);
+        fs::write(&source_artifacts.primary, b"primary").unwrap();
+        fs::write(&source_artifacts.backup, b"backup").unwrap();
+        fs::write(&source_artifacts.lock, b"lock").unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
@@ -134,14 +140,11 @@ mod tests {
             duplicate_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
                 .unwrap();
 
-        assert_eq!(
-            std::fs::read(&target_artifacts.primary).unwrap(),
-            b"primary"
-        );
+        assert_eq!(fs::read(&target_artifacts.primary).unwrap(), b"primary");
         assert!(!target_artifacts.backup.exists());
         assert!(!target_artifacts.lock.exists());
         assert!(result.message.contains("Duplicated Lecture"));
-        let recents = wayscriber::session::catalog::recent_sessions().unwrap();
+        let recents = catalog::recent_sessions().unwrap();
         assert_eq!(recents.len(), 2);
         assert_eq!(
             recents
@@ -155,52 +158,47 @@ mod tests {
 
     #[test]
     fn duplicate_session_catalog_entry_warns_when_catalog_update_fails_after_copy() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let _env = crate::test_env::EnvGuard::set(&[
+        let temp = test_temp::tempdir().unwrap();
+        let _env = EnvGuard::set(&[
             (CATALOG_HOOKS_TEST_ENV, temp.path().as_os_str()),
             (XDG_DATA_HOME_ENV, temp.path().as_os_str()),
             (XDG_RUNTIME_DIR_ENV, temp.path().as_os_str()),
         ]);
         let source = temp.path().join("lecture.wayscriber-session");
         let target = temp.path().join("lecture-copy.wayscriber-session");
-        std::fs::write(&source, b"primary").unwrap();
-        let source_entry = wayscriber::session::catalog::upsert_session_event_with_display_name(
+        fs::write(&source, b"primary").unwrap();
+        let source_entry = catalog::upsert_session_event_with_display_name(
             &source,
-            wayscriber::session::catalog::CatalogEvent::Saved,
+            CatalogEvent::Saved,
             "Lecture",
         )
         .unwrap();
         let lock_path = catalog_lock_path();
-        std::fs::remove_file(&lock_path).unwrap();
-        std::fs::create_dir(&lock_path).unwrap();
+        fs::remove_file(&lock_path).unwrap();
+        fs::create_dir(&lock_path).unwrap();
 
         let result =
             duplicate_session_catalog_entry_sync(&source_entry.id, &target, &inactive_status())
                 .unwrap();
 
-        std::fs::remove_dir(&lock_path).unwrap();
+        fs::remove_dir(&lock_path).unwrap();
         assert!(result.warning);
         assert!(
             result
                 .message
                 .contains("failed to update the session catalog")
         );
-        assert_eq!(std::fs::read(&target).unwrap(), b"primary");
+        assert_eq!(fs::read(&target).unwrap(), b"primary");
         assert_eq!(
             result.items.len(),
             1,
             "warning should keep the pre-copy catalog rows visible"
         );
-        assert_eq!(
-            wayscriber::session::catalog::recent_sessions()
-                .unwrap()
-                .len(),
-            1
-        );
+        assert_eq!(catalog::recent_sessions().unwrap().len(), 1);
     }
 
-    fn catalog_lock_path() -> std::path::PathBuf {
-        let catalog_path = wayscriber::session::catalog::catalog_path();
+    fn catalog_lock_path() -> PathBuf {
+        let catalog_path = catalog::catalog_path();
         let mut raw = OsString::from(catalog_path.as_os_str());
         raw.push(".lock");
         raw.into()

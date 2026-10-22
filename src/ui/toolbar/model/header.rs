@@ -143,6 +143,9 @@ fn segmented_control(
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::Language;
+    use crate::{i18n, test_env};
+
     use super::*;
 
     #[test]
@@ -167,14 +170,14 @@ mod tests {
 
     #[test]
     fn layout_ids_stay_english_and_unique_when_the_labels_translate() {
-        crate::test_env::in_language_isolated_child(
+        test_env::in_language_isolated_child(
             concat!(
                 module_path!(),
                 "::layout_ids_stay_english_and_unique_when_the_labels_translate"
             ),
             || {
                 let english = ToolbarLayoutMode::ALL.map(layout_mode_label);
-                crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
+                i18n::set_language(Language::SimplifiedChinese);
                 let chinese = ToolbarLayoutMode::ALL.map(layout_mode_label);
 
                 assert_eq!(

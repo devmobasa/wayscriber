@@ -1,4 +1,9 @@
-use super::*;
+use super::super::{
+    AbandonedPreviewResolutionReason, AcceptedStateRevision, ControllerBarrierPhase,
+    DurabilityOutcome, FlushOutcome, FlushRequestId, PipelineProtocolError, RuntimeUiFileStatus,
+    RuntimeUiLiveState, RuntimeUiWireState, ValidatedInteractionSeeds,
+};
+use super::{RuntimeUiStateController, UpdateSeedsResult};
 
 impl RuntimeUiStateController {
     #[cfg(test)]
@@ -67,13 +72,13 @@ impl RuntimeUiStateController {
 
     pub(crate) fn drain_lifecycle_controls(&mut self) {
         while let Ok(control) = self.lifecycle_rx.try_recv() {
-            self.apply_lifecycle_control(control);
+            self.apply_lifecycle_control(&control);
         }
     }
 
     pub(super) fn apply_seed_update(
         &mut self,
-        seeds: ValidatedInteractionSeeds,
+        seeds: &ValidatedInteractionSeeds,
     ) -> UpdateSeedsResult {
         let mut next_seeds = self.seeds.clone();
         let changed_targets = match next_seeds.update(seeds) {

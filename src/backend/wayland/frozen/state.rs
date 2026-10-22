@@ -2,6 +2,8 @@ mod activation;
 mod admission;
 mod direct;
 
+use std::mem;
+
 pub(super) use direct::{DirectCaptureAttempt, DirectCaptureContext};
 
 use crate::backend::wayland::capture_preflight::{
@@ -148,7 +150,7 @@ impl FrozenState {
     }
 
     pub(in crate::backend::wayland) fn take_pending_on_start(&mut self) -> bool {
-        std::mem::take(&mut self.pending_on_start)
+        mem::take(&mut self.pending_on_start)
     }
 
     pub(in crate::backend::wayland) fn preferred_backend(&self) -> Option<FrozenCaptureBackend> {
@@ -273,7 +275,7 @@ impl FrozenState {
 
     pub(in crate::backend::wayland) fn finish_preflight_failure(
         &mut self,
-        error: CapturePreflightError,
+        error: &CapturePreflightError,
         input_state: &mut InputState,
     ) {
         if !self.has_acquisition_attempt() {
@@ -329,8 +331,14 @@ impl FrozenState {
         &mut self,
         input_state: &mut InputState,
     ) {
-        debug_assert!(self.image().is_some());
-        debug_assert!(input_state.frozen_active());
+        debug_assert!(
+            self.image().is_some(),
+            "install the frozen image before reporting the acquisition ready"
+        );
+        debug_assert!(
+            input_state.frozen_active(),
+            "activate frozen mode before reporting the acquisition ready"
+        );
         self.finish_acquisition(
             ScreenAcquisitionOutcome::Ready {
                 installed_generation: self.image_generation(),
@@ -347,7 +355,10 @@ impl FrozenState {
         let Some((id, owner)) = self.acquisition_attempt.take() else {
             return;
         };
-        debug_assert!(self.acquisition_completion.is_none());
+        debug_assert!(
+            self.acquisition_completion.is_none(),
+            "start_capture_for refuses a new attempt while a completion is unclaimed"
+        );
         self.finish_attempt_resources();
         if !matches!(outcome, ScreenAcquisitionOutcome::Ready { .. }) {
             input_state.set_frozen_active(false);
@@ -462,6 +473,8 @@ fn next_capture_backend_after(
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::portal_task::PortalTask;
+
     use super::*;
     use crate::backend::wayland::acquisition::{
         ScreenAcquisitionCompletion, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
@@ -1000,9 +1013,9 @@ mod tests {
     fn cancel_clears_an_in_flight_portal_capture() {
         let mut state = FrozenState::new(None);
         let mut input_state = make_test_input_state();
-        state.portal.start(
-            crate::backend::wayland::portal_task::PortalTask::disconnected_for_test(Instant::now()),
-        );
+        state
+            .portal
+            .start(PortalTask::disconnected_for_test(Instant::now()));
 
         state.cancel(&mut input_state);
 
@@ -1364,8 +1377,10 @@ mod tests {
             .map_err(anyhow::Error::msg)
             .unwrap_err();
 
-        state
-            .finish_preflight_failure(CapturePreflightError::from_backend(error), &mut input_state);
+        state.finish_preflight_failure(
+            &CapturePreflightError::from_backend(error),
+            &mut input_state,
+        );
 
         assert_eq!(
             state
@@ -1384,7 +1399,7 @@ mod tests {
         state.take_preflight_pending();
         assert!(state.queue_portal_layout_retry(Some(1), true));
 
-        state.finish_preflight_failure(CapturePreflightError::LostSuppression, &mut input_state);
+        state.finish_preflight_failure(&CapturePreflightError::LostSuppression, &mut input_state);
 
         assert!(!state.has_layout_retry());
         assert!(!state.is_in_progress());

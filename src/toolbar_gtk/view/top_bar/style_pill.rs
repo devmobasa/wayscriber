@@ -7,7 +7,26 @@
 //! values (slider positions, swatch selection, numerals, segment actives,
 //! reset tooltips) run through stored updaters.
 
-use super::*;
+use gtk4::accessible::Property;
+use gtk4::glib::Propagation;
+
+use crate::toolbar_icons;
+
+use super::{
+    CHIP_SIZE, COMPACT_GAP, GAP, STYLE_FONT_PICK_W, STYLE_PILL_GAP, STYLE_RESET_W, STYLE_ROW_H,
+    STYLE_SEGMENT_LEAD, STYLE_SEL_VALUE_W, STYLE_SLIDER_W, STYLE_TAB_H, STYLE_VALUE_W, SWATCH_GAP,
+    SWATCH_SIZE, TopBar, effective_scale, set_semantic_widget_id,
+};
+use crate::toolbar_gtk::GtkToolbarFeedback;
+use crate::toolbar_gtk::widgets::{
+    SliderRow, SwatchButton, install_quick_color_recolor, send_event, set_active_class,
+    sized_button,
+};
+use crate::ui::toolbar::model::TopStripPlan;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Pill button on the shared `sized_button` chassis: non-focusable and
 /// releasing window keyboard focus on click, like every other top-bar
@@ -116,7 +135,7 @@ impl TopBar {
                     set_semantic_widget_id(&chip.button, control.id().as_ref());
                     let accessible_label = control.label(snapshot);
                     chip.button
-                        .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                        .update_property(&[Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
                     let event = control.click_event(snapshot);
                     chip.button.connect_clicked(move |_| {
@@ -140,7 +159,7 @@ impl TopBar {
                     let accessible_label = control.label(snapshot);
                     swatch
                         .button
-                        .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                        .update_property(&[Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
                     let event = control.click_event(snapshot);
                     swatch.button.connect_clicked(move |_| {
@@ -201,7 +220,7 @@ impl TopBar {
                     let accessible_label = control.label(snapshot);
                     slider
                         .root
-                        .update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                        .update_property(&[Property::Label(&accessible_label)]);
                     slider
                         .root
                         .set_tooltip_text(control.tooltip(snapshot).as_deref());
@@ -257,7 +276,7 @@ impl TopBar {
                             if let Some(event) = slider.nudge_event(steps).filter(|_| steps != 0) {
                                 send_event(&scroll_sender, event);
                             }
-                            gtk4::glib::Propagation::Stop
+                            Propagation::Stop
                         });
                         button.add_controller(scroll);
                     }
@@ -269,7 +288,7 @@ impl TopBar {
                         button.set_tooltip_text(Some(&tooltip));
                     }
                     let accessible_label = control.label(snapshot);
-                    button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                    button.update_property(&[Property::Label(&accessible_label)]);
                     append_gap(&pill, button.upcast_ref(), gap);
                     self.updaters.borrow_mut().push(Box::new(move |snapshot| {
                         button.set_label(&control.required_value_text(snapshot));
@@ -384,7 +403,7 @@ impl TopBar {
                         button.set_tooltip_text(Some(&tooltip));
                     }
                     let accessible_label = control.label(snapshot);
-                    button.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+                    button.update_property(&[Property::Label(&accessible_label)]);
                     let sender = self.feedback.clone();
                     let event = control.click_event(snapshot);
                     button.connect_clicked(move |_| {
@@ -481,7 +500,7 @@ impl OpacitySwatch {
         let draw_paint = paint.clone();
         area.set_draw_func(move |_, ctx, width, height| {
             let paint = draw_paint.get();
-            crate::toolbar_icons::draw_opacity_swatch(
+            toolbar_icons::draw_opacity_swatch(
                 ctx,
                 (0.0, 0.0, f64::from(width), f64::from(height)),
                 paint.rgb,

@@ -1,5 +1,7 @@
 //! Session persistence flags, preflight options, and path state.
 
+use std::mem;
+
 use crate::session::SessionOptions;
 use std::path::{Path, PathBuf};
 
@@ -48,7 +50,7 @@ impl SessionFlags {
     }
 
     pub(in crate::input::state) fn take_dirty(&mut self) -> bool {
-        std::mem::take(&mut self.dirty)
+        mem::take(&mut self.dirty)
     }
 
     pub(in crate::input::state) const fn preflight_options(&self) -> Option<&SessionOptions> {

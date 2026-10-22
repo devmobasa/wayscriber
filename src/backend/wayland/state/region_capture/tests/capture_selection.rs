@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::lifecycle_and_measure::ocr_region;
 use super::*;
 use crate::backend::wayland::state::region_capture::cut_review::{
@@ -93,7 +95,7 @@ fn interactive_release_enters_review_ready_for_the_first_cut_drag() {
     let mut input = make_test_input_state();
     let mut review_edits = None;
     input.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         RegionPurposeTag::CaptureInteractive,
         1,
     );
@@ -162,7 +164,7 @@ fn reselecting_before_a_cut_replaces_the_review_edit_geometry() {
     let mut input = make_test_input_state();
     let mut review_edits = None;
     input.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         RegionPurposeTag::CaptureInteractive,
         1,
     );

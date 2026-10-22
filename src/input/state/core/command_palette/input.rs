@@ -1,12 +1,16 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::core::modal::ModalSurface;
+use crate::input::state::{InputTextResources, ZoomAnchor};
+use crate::ui_text::UiTextEngine;
+
 use super::super::base::{
     InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,
 };
+use super::CommandPaletteCursorHint;
+use super::layout::{CommandPaletteGeometry, CommandPaletteRowAction};
 use super::search::CommandPaletteListRow;
-use super::{
-    CommandPaletteCursorHint,
-    layout::{CommandPaletteGeometry, CommandPaletteRowAction},
-};
-use crate::config::{KeyBinding, action_label, keybindings::default_keybindings};
+use crate::config::keybindings::default_keybindings;
+use crate::config::{KeyBinding, action_label};
 use crate::configurator_destination::keybindings_destination_for_action;
 use crate::domain::Action;
 use crate::i18n::trf;
@@ -109,7 +113,7 @@ impl InputState {
     }
 
     fn open_command_palette_internal(&mut self, track_usage: bool) {
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::CommandPalette);
+        self.close_modals_for_open(ModalSurface::CommandPalette);
         self.command_palette.open();
         self.reconcile_command_palette_scroll();
         self.clear_command_palette_repeat();
@@ -136,7 +140,7 @@ impl InputState {
     /// Returns true if the key was handled.
     pub(crate) fn handle_command_palette_key_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) -> bool {
         if !self.command_palette_is_engaged() {
@@ -177,7 +181,7 @@ impl InputState {
                     self.handle_action_anchored(
                         resources,
                         command.action,
-                        crate::input::state::ZoomAnchor::ScreenCenter,
+                        ZoomAnchor::ScreenCenter,
                     );
                 }
                 true
@@ -343,8 +347,8 @@ impl InputState {
         screen_width: u32,
         screen_height: u32,
     ) -> bool {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.handle_command_palette_click_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -359,7 +363,7 @@ impl InputState {
 
     pub(crate) fn handle_command_palette_click_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         x: i32,
         y: i32,
         screen_width: u32,
@@ -447,11 +451,7 @@ impl InputState {
                 Toast::info(command.label).duration_ms(self.command_palette_toast_duration_ms()),
             );
 
-            self.handle_action_anchored(
-                resources,
-                command.action,
-                crate::input::state::ZoomAnchor::ScreenCenter,
-            );
+            self.handle_action_anchored(resources, command.action, ZoomAnchor::ScreenCenter);
             return true;
         }
 

@@ -1,6 +1,8 @@
 //! Layer policy and bounded XDG fullscreen placement for frozen mode.
 use std::time::{Duration, Instant};
 
+use smithay_client_toolkit::shell::wlr_layer::Layer;
+
 const XDG_FROZEN_FULLSCREEN_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,13 +86,11 @@ impl SurfacePlacement {
         self.xdg_fullscreen
     }
 
-    pub(in crate::backend::wayland) fn layer(
-        &self,
-    ) -> smithay_client_toolkit::shell::wlr_layer::Layer {
+    pub(in crate::backend::wayland) fn layer(&self) -> Layer {
         if self.main_surface_uses_overlay_layer {
-            smithay_client_toolkit::shell::wlr_layer::Layer::Overlay
+            Layer::Overlay
         } else {
-            smithay_client_toolkit::shell::wlr_layer::Layer::Top
+            Layer::Top
         }
     }
 
@@ -144,9 +144,6 @@ mod tests {
 
         assert_eq!(placement.preferred_output_identity(), Some("DP-1"));
         assert!(placement.xdg_fullscreen());
-        assert_eq!(
-            placement.layer(),
-            smithay_client_toolkit::shell::wlr_layer::Layer::Overlay
-        );
+        assert_eq!(placement.layer(), Layer::Overlay);
     }
 }

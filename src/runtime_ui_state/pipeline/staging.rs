@@ -1,4 +1,9 @@
-use super::*;
+use super::super::{AcceptedStateRevision, RuntimeStateSourceRevision, RuntimeUiWireState};
+use super::{
+    DurabilityOutcome, FlushOutcome, HeldReplacementStage, PendingReplacement, PendingStage,
+    PersistencePipeline, PipelineProtocolError, SourceMutationKind, SourceMutationRequest,
+};
+use std::collections::VecDeque;
 
 impl PersistencePipeline {
     pub(crate) fn accept_replace(
@@ -144,7 +149,8 @@ impl PersistencePipeline {
         stages: &[HeldReplacementStage],
         reset_through: AcceptedStateRevision,
     ) {
-        for revision in stages.iter().flat_map(|stage| &stage.covered) {
+        let covered_revisions = stages.iter().flat_map(|stage| &stage.covered);
+        for revision in covered_revisions {
             self.settle_receipt(
                 *revision,
                 DurabilityOutcome::SupersededByReset { reset_through },
@@ -154,7 +160,8 @@ impl PersistencePipeline {
     }
 
     pub(crate) fn settle_held_external(&mut self, stages: &[HeldReplacementStage]) {
-        for revision in stages.iter().flat_map(|stage| &stage.covered) {
+        let covered_revisions = stages.iter().flat_map(|stage| &stage.covered);
+        for revision in covered_revisions {
             self.settle_receipt(*revision, DurabilityOutcome::ExternalSourceWon);
         }
         self.advance_settled_through();
@@ -165,7 +172,8 @@ impl PersistencePipeline {
         stages: &[HeldReplacementStage],
         source: &RuntimeStateSourceRevision,
     ) {
-        for revision in stages.iter().flat_map(|stage| &stage.covered) {
+        let covered_revisions = stages.iter().flat_map(|stage| &stage.covered);
+        for revision in covered_revisions {
             self.settle_receipt(
                 *revision,
                 DurabilityOutcome::Persisted {
@@ -236,7 +244,10 @@ impl PersistencePipeline {
         source: RuntimeStateSourceRevision,
         wire: RuntimeUiWireState,
     ) {
-        debug_assert!(self.in_flight.is_none());
+        debug_assert!(
+            self.in_flight.is_none(),
+            "install acknowledged authority only after the in-flight mutation settles"
+        );
         self.stable_source = source;
         self.acknowledged_wire = wire;
     }

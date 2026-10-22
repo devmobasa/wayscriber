@@ -1,3 +1,5 @@
+use crate::input::state::test_support;
+
 use super::*;
 
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
@@ -13,7 +15,7 @@ fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
 #[test]
 fn retained_color_popup_engine_shares_tooltip_damage_and_paint_across_targets() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.open_color_picker_popup();
     input.update_color_picker_popup_layout(800, 600);
     let layout = input.color_picker_popup_layout().unwrap();
@@ -35,12 +37,8 @@ fn retained_color_popup_engine_shares_tooltip_damage_and_paint_across_targets() 
                 let (text, x, y) = layout.action_tooltip_anchor_at(anchor.0, anchor.1).unwrap();
                 let tip = action_tooltip_geometry(&engine, text, x, y, 800.0, 600.0).unwrap();
                 assert!(bounds.0 <= tip.0 && bounds.1 <= tip.1);
-                assert!(
-                    bounds.0 + bounds.2 >= tip.0 + tip.2 + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET
-                );
-                assert!(
-                    bounds.1 + bounds.3 >= tip.1 + tip.3 + crate::ui::tooltip::TOOLTIP_PAINT_OUTSET
-                );
+                assert!(bounds.0 + bounds.2 >= tip.0 + tip.2 + tooltip::TOOLTIP_PAINT_OUTSET);
+                assert!(bounds.1 + bounds.3 >= tip.1 + tip.3 + tooltip::TOOLTIP_PAINT_OUTSET);
             }
             let actual = pixels(density, |ctx| {
                 render_color_picker_popup_with_engine(&engine, ctx, &input, 800, 600)

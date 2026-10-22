@@ -91,7 +91,7 @@ impl InputState {
 
     pub(in crate::input::state::core) fn report_selection_apply_result(
         &mut self,
-        result: SelectionApplyResult,
+        result: &SelectionApplyResult,
         label: &str,
     ) -> bool {
         if result.applicable == 0 {

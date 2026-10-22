@@ -1,10 +1,15 @@
 use wayscriber::i18n::{tr, trf};
 
 use std::collections::HashMap;
+use std::fs;
+use std::fs::Metadata;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
+use wayscriber::session::SessionArtifactKind;
 use wayscriber::session::catalog::CatalogEntry;
+use wayscriber::{session, time_utils};
 
 use super::daemon::DaemonRuntimeStatus;
 
@@ -269,9 +274,9 @@ pub struct SessionArtifactSummary {
 
 impl SessionArtifactSummary {
     pub fn from_primary_path(path: &Path) -> Result<Self, String> {
-        let artifacts = wayscriber::session::named_session_artifact_paths(path);
-        let non_lock_paths = wayscriber::session::named_session_non_lock_artifact_paths(path)
-            .map_err(|err| err.to_string())?;
+        let artifacts = session::named_session_artifact_paths(path);
+        let non_lock_paths =
+            session::named_session_non_lock_artifact_paths(path).map_err(|err| err.to_string())?;
 
         let mut summary = Self {
             primary_exists: artifact_exists(&artifacts.primary)?,
@@ -290,16 +295,10 @@ impl SessionArtifactSummary {
             };
             summary.non_lock_size_bytes =
                 summary.non_lock_size_bytes.saturating_add(metadata.len());
-            match wayscriber::session::named_session_artifact_kind(path, &artifact) {
-                Some(wayscriber::session::SessionArtifactKind::Backup) => {
-                    summary.backup_exists = true
-                }
-                Some(wayscriber::session::SessionArtifactKind::Recovery) => {
-                    summary.recovery_exists = true
-                }
-                Some(wayscriber::session::SessionArtifactKind::UnreadableCopy) => {
-                    summary.unreadable_copy_exists = true
-                }
+            match session::named_session_artifact_kind(path, &artifact) {
+                Some(SessionArtifactKind::Backup) => summary.backup_exists = true,
+                Some(SessionArtifactKind::Recovery) => summary.recovery_exists = true,
+                Some(SessionArtifactKind::UnreadableCopy) => summary.unreadable_copy_exists = true,
                 _ => {}
             }
         }
@@ -345,10 +344,10 @@ fn artifact_exists(path: &Path) -> Result<bool, String> {
     Ok(artifact_metadata(path)?.is_some())
 }
 
-fn artifact_metadata(path: &Path) -> Result<Option<std::fs::Metadata>, String> {
-    match std::fs::symlink_metadata(path) {
+fn artifact_metadata(path: &Path) -> Result<Option<Metadata>, String> {
+    match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(Some(metadata)),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
         Err(err) => Err(trf("failed to inspect {}: {}", &[&path.display(), &err])),
     }
 }
@@ -368,7 +367,7 @@ pub fn format_byte_count(bytes: u64) -> String {
 
 fn format_catalog_time(epoch_millis: u64) -> String {
     let time = UNIX_EPOCH + Duration::from_millis(epoch_millis);
-    wayscriber::time_utils::format_system_time(time, "%Y-%m-%d %H:%M")
+    time_utils::format_system_time(time, "%Y-%m-%d %H:%M")
         .unwrap_or_else(|| tr("Unknown").to_string())
 }
 

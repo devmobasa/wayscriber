@@ -373,6 +373,8 @@ impl ZoomState {
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::zoom;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
 
@@ -385,7 +387,7 @@ mod tests {
         assert_eq!(state.take_source_terminal(), None);
 
         state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            .start_capture(zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect("first capture starts");
         let first = state.current_capture_id().expect("first capture id");
         assert!(state.abort_capture());
@@ -399,7 +401,7 @@ mod tests {
         );
 
         state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            .start_capture(zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect("second capture starts");
         let second = state.current_capture_id().expect("second capture id");
         assert!(second > first);
@@ -410,13 +412,13 @@ mod tests {
         let mut state = ZoomState::new(None);
 
         state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            .start_capture(zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect("first capture starts");
         let first = state.current_capture_id().expect("first capture id");
         assert!(state.abort_capture());
 
         let error = state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            .start_capture(zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect_err("an undrained terminal blocks the next capture");
 
         assert_eq!(
@@ -466,7 +468,7 @@ mod tests {
             provenance,
         );
         state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::Portal)
+            .start_capture(zoom::ZoomCaptureBackend::Portal)
             .unwrap();
         let generation = state.image_generation();
         let mut changed = geometry.with_known_output_count(Some(2));
@@ -555,7 +557,7 @@ mod tests {
 
             state.finish_preflight_failure(
                 &mut input_state,
-                CapturePreflightError::Backend(message.to_string()),
+                &CapturePreflightError::Backend(message.to_string()),
             );
 
             assert_eq!(

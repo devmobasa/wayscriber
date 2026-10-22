@@ -1,6 +1,8 @@
 //! Painting primitives for the About dialog: rounded surfaces, the close
 //! affordance, and the focus ring that makes keyboard navigation visible.
 
+use std::f64::consts;
+
 use crate::ui::theme::Rgba;
 
 /// Visual state shared by every interactive element.
@@ -129,7 +131,7 @@ pub(super) fn draw_chevron(ctx: &cairo::Context, x: f64, center_y: f64, size: f6
 /// A filled status dot; the update card uses it as an at-a-glance signal.
 pub(super) fn draw_status_dot(ctx: &cairo::Context, center: (f64, f64), radius: f64, color: Rgba) {
     set_color(ctx, color);
-    ctx.arc(center.0, center.1, radius, 0.0, std::f64::consts::TAU);
+    ctx.arc(center.0, center.1, radius, 0.0, consts::TAU);
     let _ = ctx.fill();
 }
 
@@ -156,28 +158,10 @@ fn rounded_rect_path(ctx: &cairo::Context, rect: (f64, f64, f64, f64), radius: f
     let (x, y, width, height) = rect;
     let r = radius.min(width / 2.0).min(height / 2.0).max(0.0);
     ctx.new_sub_path();
-    ctx.arc(x + width - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-    ctx.arc(
-        x + width - r,
-        y + height - r,
-        r,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-    );
-    ctx.arc(
-        x + r,
-        y + height - r,
-        r,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::PI,
-    );
-    ctx.arc(
-        x + r,
-        y + r,
-        r,
-        std::f64::consts::PI,
-        3.0 * std::f64::consts::FRAC_PI_2,
-    );
+    ctx.arc(x + width - r, y + r, r, -consts::FRAC_PI_2, 0.0);
+    ctx.arc(x + width - r, y + height - r, r, 0.0, consts::FRAC_PI_2);
+    ctx.arc(x + r, y + height - r, r, consts::FRAC_PI_2, consts::PI);
+    ctx.arc(x + r, y + r, r, consts::PI, 3.0 * consts::FRAC_PI_2);
     ctx.close_path();
 }
 

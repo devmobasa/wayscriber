@@ -25,6 +25,7 @@ impl TopDisplayMode {
     /// The form persisted to config: `Hidden` collapses to `Full` so a
     /// cycle-hidden strip comes back visible on the next start (visibility
     /// at startup stays `top_pinned`'s job).
+    #[must_use]
     pub fn persisted(self) -> Self {
         match self {
             Self::Hidden => Self::Full,

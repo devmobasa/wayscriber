@@ -8,6 +8,7 @@
 
 use crate::input::InputState;
 use crate::ui::primitives::{draw_rounded_rect, text_extents_for_with_engine};
+use crate::ui::theme::popup;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::theme::overlay::{
@@ -71,9 +72,9 @@ pub(crate) fn render_precision_entry_popup_with_engine(
 
     // Panel card.
     draw_rounded_rect(ctx, x, y, POPUP_W, POPUP_H, RADIUS_STD);
-    set_rgba(ctx, crate::ui::theme::popup::bg_modal());
+    set_rgba(ctx, popup::bg_modal());
     let _ = ctx.fill_preserve();
-    set_rgba(ctx, crate::ui::theme::popup::border_modal());
+    set_rgba(ctx, popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
 

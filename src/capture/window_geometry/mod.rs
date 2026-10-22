@@ -3,8 +3,10 @@
 //! Queries are synchronous because the process broker is synchronous. Callers
 //! must run [`query_window_targets`] from an off-event-loop worker.
 
+use std::env;
 use std::ffi::OsStr;
 
+use crate::env_vars;
 use crate::process_broker::ProcessBroker;
 
 mod geometry;
@@ -59,7 +61,7 @@ pub(crate) fn detect_backend_from_env(
 
 /// Detect the current compositor from its session environment marker.
 pub(crate) fn detect_backend() -> Option<WindowGeometryBackend> {
-    let hyprland = std::env::var_os(crate::env_vars::HYPRLAND_INSTANCE_SIGNATURE_ENV);
-    let sway = std::env::var_os(crate::env_vars::SWAYSOCK_ENV);
+    let hyprland = env::var_os(env_vars::HYPRLAND_INSTANCE_SIGNATURE_ENV);
+    let sway = env::var_os(env_vars::SWAYSOCK_ENV);
     detect_backend_from_env(hyprland.as_deref(), sway.as_deref())
 }

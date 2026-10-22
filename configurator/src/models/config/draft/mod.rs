@@ -1,7 +1,6 @@
 mod from_config;
 
 use super::super::color::{ColorInput, ColorQuadInput};
-use super::super::fields::ZoomChipDisplayOption;
 use super::super::fields::{
     ArrowStyleOption, EraserModeOption, FontStyleOption, FontWeightOption, InputHudModeOption,
     InputHudPositionOption, LanguageOption, PdfFitModeOption, PdfLabelContentModeOption,
@@ -9,7 +8,7 @@ use super::super::fields::{
     PdfTransparentBackgroundOption, PresenterToolBehaviorOption, PresenterToolbarModeOption,
     ReducedMotionOption, SessionCompressionOption, SessionStorageModeOption, StatusPositionOption,
     ToolOption, ToolbarLayoutModeOption, ToolbarRebindModifierOption, ToolbarStrokeControlsOption,
-    UiThemeOption,
+    UiThemeOption, ZoomChipDisplayOption,
 };
 #[cfg(feature = "tablet-input")]
 use super::super::fields::{PressureThicknessEditModeOption, PressureThicknessEntryModeOption};

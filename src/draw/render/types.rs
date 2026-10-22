@@ -1,11 +1,11 @@
 use crate::draw::Color;
 
 /// Background replay context for tools that need access to the captured backdrop.
-pub struct EraserReplayContext<'a> {
+pub struct EraserReplayContext<'backdrop> {
     /// Optional pattern representing the current background (e.g., frozen image) in device space.
-    pub pattern: Option<&'a cairo::Pattern>,
+    pub pattern: Option<&'backdrop cairo::Pattern>,
     /// Optional surface representing the captured background image.
-    pub surface: Option<&'a cairo::ImageSurface>,
+    pub surface: Option<&'backdrop cairo::ImageSurface>,
     /// Stable cache key for the currently active backdrop image generation.
     pub backdrop_cache_key: Option<u64>,
     /// Solid background color (board modes) when no pattern is available.

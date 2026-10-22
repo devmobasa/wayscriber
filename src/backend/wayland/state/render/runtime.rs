@@ -1,3 +1,9 @@
+use std::mem;
+
+use crate::draw::{RenderCaches, TextMeasurer};
+use crate::ui::theme::Theme;
+use crate::ui::{HelpContentCache, UiRenderCaches};
+use crate::ui_text::UiTextEngine;
 use crate::util::Rect;
 
 use super::super::canvas_layer::CanvasLayerCache;
@@ -92,7 +98,7 @@ impl UiDamageHistory {
         current: Option<Rect>,
         regions: &mut Vec<Rect>,
     ) {
-        let previous = std::mem::replace(&mut self.prev[effect.index()], current);
+        let previous = mem::replace(&mut self.prev[effect.index()], current);
         match (previous, current) {
             (Some(previous), Some(current)) if previous == current => regions.push(current),
             (previous, current) => {
@@ -110,7 +116,7 @@ impl UiDamageHistory {
         current: Option<Rect>,
         regions: &mut Vec<Rect>,
     ) {
-        let previous = std::mem::replace(&mut self.prev[effect.index()], current);
+        let previous = mem::replace(&mut self.prev[effect.index()], current);
         if previous != current {
             regions.extend(previous);
             regions.extend(current);
@@ -157,28 +163,28 @@ impl UiDamageHistory {
 
 pub(in crate::backend::wayland) struct RenderRuntime {
     canvas_layer_cache: CanvasLayerCache,
-    draw_caches: crate::draw::RenderCaches,
-    theme: crate::ui::theme::Theme,
-    ui_caches: crate::ui::UiRenderCaches,
-    help_content: crate::ui::HelpContentCache,
-    ui_text: crate::ui_text::UiTextEngine,
-    text_measurer: crate::draw::TextMeasurer,
+    draw_caches: RenderCaches,
+    theme: Theme,
+    ui_caches: UiRenderCaches,
+    help_content: HelpContentCache,
+    ui_text: UiTextEngine,
+    text_measurer: TextMeasurer,
     ui_damage: UiDamageHistory,
     profile_ui_baseline: Vec<u8>,
 }
 
 impl RenderRuntime {
     pub(in crate::backend::wayland) fn new(
-        theme: crate::ui::theme::Theme,
-        ui_text: crate::ui_text::UiTextEngine,
-        text_measurer: crate::draw::TextMeasurer,
+        theme: Theme,
+        ui_text: UiTextEngine,
+        text_measurer: TextMeasurer,
     ) -> Self {
         Self {
             canvas_layer_cache: CanvasLayerCache::new(),
-            draw_caches: crate::draw::RenderCaches::default(),
+            draw_caches: RenderCaches::default(),
             theme,
-            ui_caches: crate::ui::UiRenderCaches::default(),
-            help_content: crate::ui::HelpContentCache::default(),
+            ui_caches: UiRenderCaches::default(),
+            help_content: HelpContentCache::default(),
             ui_text,
             text_measurer,
             ui_damage: UiDamageHistory::default(),
@@ -186,35 +192,31 @@ impl RenderRuntime {
         }
     }
 
-    pub(in crate::backend::wayland) fn text_measurer(&self) -> &crate::draw::TextMeasurer {
+    pub(in crate::backend::wayland) fn text_measurer(&self) -> &TextMeasurer {
         &self.text_measurer
     }
 
-    pub(in crate::backend::wayland) fn ui_text(&self) -> &crate::ui_text::UiTextEngine {
+    pub(in crate::backend::wayland) fn ui_text(&self) -> &UiTextEngine {
         &self.ui_text
     }
 
-    pub(in crate::backend::wayland::state) fn theme(&self) -> &crate::ui::theme::Theme {
+    pub(in crate::backend::wayland::state) fn theme(&self) -> &Theme {
         &self.theme
     }
 
     pub(in crate::backend::wayland::state) fn ui_parts_with_text_mut(
         &mut self,
-    ) -> (
-        &crate::ui::theme::Theme,
-        &mut crate::ui::UiRenderCaches,
-        &crate::ui_text::UiTextEngine,
-    ) {
+    ) -> (&Theme, &mut UiRenderCaches, &UiTextEngine) {
         (&self.theme, &mut self.ui_caches, &self.ui_text)
     }
 
     pub(in crate::backend::wayland::state) fn help_parts_mut(
         &mut self,
     ) -> (
-        &crate::ui::theme::Theme,
-        &mut crate::ui::UiRenderCaches,
-        &crate::ui_text::UiTextEngine,
-        &mut crate::ui::HelpContentCache,
+        &Theme,
+        &mut UiRenderCaches,
+        &UiTextEngine,
+        &mut HelpContentCache,
     ) {
         (
             &self.theme,
@@ -232,17 +234,17 @@ impl RenderRuntime {
 
     pub(in crate::backend::wayland::state) fn draw_text_parts_mut(
         &mut self,
-    ) -> (&mut crate::draw::RenderCaches, &crate::draw::TextMeasurer) {
+    ) -> (&mut RenderCaches, &TextMeasurer) {
         (&mut self.draw_caches, &self.text_measurer)
     }
 
     pub(in crate::backend::wayland::state) fn draw_ui_text_parts_mut(
         &mut self,
     ) -> (
-        &mut crate::draw::RenderCaches,
-        &mut crate::ui::UiRenderCaches,
-        &crate::ui_text::UiTextEngine,
-        &crate::draw::TextMeasurer,
+        &mut RenderCaches,
+        &mut UiRenderCaches,
+        &UiTextEngine,
+        &TextMeasurer,
     ) {
         (
             &mut self.draw_caches,
@@ -254,11 +256,7 @@ impl RenderRuntime {
 
     pub(in crate::backend::wayland::state) fn canvas_draw_parts_mut(
         &mut self,
-    ) -> (
-        &mut CanvasLayerCache,
-        &mut crate::draw::RenderCaches,
-        &crate::draw::TextMeasurer,
-    ) {
+    ) -> (&mut CanvasLayerCache, &mut RenderCaches, &TextMeasurer) {
         (
             &mut self.canvas_layer_cache,
             &mut self.draw_caches,
@@ -281,6 +279,8 @@ impl RenderRuntime {
 
 #[cfg(test)]
 mod tests {
+    use crate::ui::theme::ThemeMode;
+
     use super::super::tool_preview::mouse_tool_preview_damage_rect;
     use super::*;
     use crate::backend::wayland::state::buffer_damage::{BufferDamageTracker, FullDamageReason};
@@ -288,19 +288,19 @@ mod tests {
     #[test]
     fn runtime_themes_are_independent_of_other_owners() {
         let mut dark = RenderRuntime::new(
-            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Dark),
-            crate::ui_text::UiTextEngine::default(),
-            crate::draw::TextMeasurer::default(),
+            Theme::resolve(ThemeMode::Dark),
+            UiTextEngine::default(),
+            TextMeasurer::default(),
         );
         let light = RenderRuntime::new(
-            crate::ui::theme::Theme::resolve(crate::ui::theme::ThemeMode::Light),
-            crate::ui_text::UiTextEngine::default(),
-            crate::draw::TextMeasurer::default(),
+            Theme::resolve(ThemeMode::Light),
+            UiTextEngine::default(),
+            TextMeasurer::default(),
         );
-        assert_eq!(dark.theme(), &crate::ui::theme::Theme::dark());
-        assert_eq!(light.theme(), &crate::ui::theme::Theme::light());
+        assert_eq!(dark.theme(), &Theme::dark());
+        assert_eq!(light.theme(), &Theme::light());
         let (theme, _caches, _engine) = dark.ui_parts_with_text_mut();
-        assert_eq!(theme, &crate::ui::theme::Theme::dark());
+        assert_eq!(theme, &Theme::dark());
         assert_ne!(dark.theme(), light.theme());
     }
 

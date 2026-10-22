@@ -4,8 +4,12 @@
 //! layer and punches all the openings out of it. That makes spotlights the only
 //! shape kind the renderer collects up front instead of drawing in z-order.
 
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
 use crate::draw::{Shape, ShapeId, SpotlightRegion, TextMeasurer, spotlight_regions_for_frame};
-use crate::input::Tool;
+use crate::input::boards::{BoardIdentityGeneration, BoardManager};
+use crate::input::{Tool, hit_test};
+use crate::ui::toolbar::model::ToolbarSliderSpec;
+use crate::{draw, util};
 
 use super::{DrawingState, InputState};
 
@@ -32,7 +36,7 @@ pub(crate) struct SpotlightFrameRegions {
 pub(crate) struct FrameIdentity {
     /// Bumped whenever the set of boards is replaced, so a restored session
     /// cannot present itself as the same board list.
-    board_identity: crate::input::boards::BoardIdentityGeneration,
+    board_identity: BoardIdentityGeneration,
     board_id: String,
     page_index: usize,
     /// Bumped whenever pages are added or removed, so deleting a page and
@@ -42,7 +46,7 @@ pub(crate) struct FrameIdentity {
 }
 
 impl FrameIdentity {
-    pub(crate) fn of(boards: &crate::input::boards::BoardManager) -> Self {
+    pub(crate) fn of(boards: &BoardManager) -> Self {
         Self {
             board_identity: boards.board_identity_generation(),
             board_id: boards.active_board_id().to_string(),
@@ -59,7 +63,7 @@ struct SpotlightMagnificationGesture {
     frame: FrameIdentity,
     shape_id: ShapeId,
     /// Factor before the first tick, so the whole burst is one undo entry.
-    before: crate::draw::frame::ShapeSnapshot,
+    before: ShapeSnapshot,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -153,7 +157,7 @@ enum SpotlightWheelTarget {
 ///
 /// Compared rather than the whole `Shape`, which has no `PartialEq`, and the
 /// factor is the only field either gesture touches.
-fn snapshot_magnification(snapshot: &crate::draw::frame::ShapeSnapshot) -> Option<u64> {
+fn snapshot_magnification(snapshot: &ShapeSnapshot) -> Option<u64> {
     match snapshot.shape {
         Shape::Spotlight { magnification, .. } => Some(magnification.to_bits()),
         _ => None,
@@ -209,7 +213,7 @@ impl InputState {
         let mut regions = spotlight_regions_for_frame(self.boards.active_frame());
         let committed_magnified = regions
             .iter()
-            .any(|region| crate::draw::spotlight_magnification_is_active(region.magnification));
+            .any(|region| draw::spotlight_magnification_is_active(region.magnification));
 
         regions.extend(cursor.and_then(|cursor| self.provisional_spotlight_region(cursor)));
         SpotlightFrameRegions {
@@ -231,7 +235,7 @@ impl InputState {
             // Use the same predicate as ordinary hit testing. A former copy
             // disagreed about degenerate radii and the boundary epsilon, so a
             // loupe could be clickable and yet not answer the wheel.
-            if !crate::input::hit_test::ellipse_fill_hit(cx, cy, rx, ry, (x, y)) {
+            if !hit_test::ellipse_fill_hit(cx, cy, rx, ry, (x, y)) {
                 return None;
             }
             Some(if drawn.locked {
@@ -313,7 +317,7 @@ impl InputState {
         shape_id: ShapeId,
         magnification: f64,
     ) -> bool {
-        let normalized = crate::draw::normalize_spotlight_magnification(magnification);
+        let normalized = draw::normalize_spotlight_magnification(magnification);
         let frame = self.boards.active_frame_mut();
         let Some(drawn) = frame.shape_mut(shape_id) else {
             return false;
@@ -377,17 +381,15 @@ impl InputState {
         let Shape::Spotlight { magnification, .. } = drawn.shape else {
             return SpotlightWheelOutcome::NotOverLoupe;
         };
-        let before = crate::draw::frame::ShapeSnapshot {
+        let before = ShapeSnapshot {
             shape: drawn.shape.clone(),
             locked: drawn.locked,
         };
         // Snapped, not just stepped: a shape that somehow sits between steps
         // — an older session, a hand-edited file — is pulled back onto the
         // grid by the first tick instead of carrying its offset forever.
-        let target = crate::ui::toolbar::model::ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION
-            .normalize_value(
-                magnification + crate::draw::SPOTLIGHT_MAGNIFICATION_STEP * f64::from(steps),
-            );
+        let target = ToolbarSliderSpec::SPOTLIGHT_MAGNIFICATION
+            .normalize_value(magnification + draw::SPOTLIGHT_MAGNIFICATION_STEP * f64::from(steps));
         if !self.set_spotlight_shape_magnification_with(measurer, shape_id, target) {
             // An end of the range. The wheel still belongs to this loupe, so
             // the caller must not fall through to thickness: the pointer is
@@ -402,7 +404,7 @@ impl InputState {
                 shape_id,
                 before,
             });
-        if crate::draw::spotlight_magnification_is_active(target) {
+        if draw::spotlight_magnification_is_active(target) {
             self.request_spotlight_magnifier_feedback();
         }
         SpotlightWheelOutcome::Adjusted
@@ -451,7 +453,7 @@ impl InputState {
         let Some(drawn) = self.boards.active_frame().shape(shape_id) else {
             return;
         };
-        let after = crate::draw::frame::ShapeSnapshot {
+        let after = ShapeSnapshot {
             shape: drawn.shape.clone(),
             locked: drawn.locked,
         };
@@ -467,8 +469,8 @@ impl InputState {
     pub(crate) fn record_spotlight_magnification_change(
         &mut self,
         shape_id: ShapeId,
-        before: crate::draw::frame::ShapeSnapshot,
-        after: crate::draw::frame::ShapeSnapshot,
+        before: ShapeSnapshot,
+        after: ShapeSnapshot,
     ) {
         let after_factor = snapshot_magnification(&after);
         if snapshot_magnification(&before) == after_factor {
@@ -476,7 +478,7 @@ impl InputState {
         }
         let limit = self.history_limits.undo_stack_limit();
         self.boards.active_frame_mut().push_undo_action(
-            crate::draw::frame::UndoAction::Modify {
+            UndoAction::Modify {
                 shape_id,
                 before,
                 after,
@@ -486,7 +488,7 @@ impl InputState {
         self.mark_session_dirty();
         if after_factor
             .map(f64::from_bits)
-            .is_some_and(crate::draw::spotlight_magnification_is_active)
+            .is_some_and(draw::spotlight_magnification_is_active)
         {
             self.request_spotlight_magnifier_feedback();
         }
@@ -510,13 +512,13 @@ impl InputState {
             return None;
         }
 
-        let (cx, cy, rx, ry) = crate::util::ellipse_bounds(*start_x, *start_y, cursor.0, cursor.1);
+        let (cx, cy, rx, ry) = util::ellipse_bounds(*start_x, *start_y, cursor.0, cursor.1);
         Some(SpotlightRegion {
             cx: f64::from(cx),
             cy: f64::from(cy),
             rx: f64::from(rx),
             ry: f64::from(ry),
-            magnification: crate::draw::normalize_spotlight_magnification(
+            magnification: draw::normalize_spotlight_magnification(
                 self.style.spotlight_magnification,
             ),
         })
@@ -530,13 +532,13 @@ mod wheel_gesture_tests {
     fn gesture(shape_id: ShapeId) -> SpotlightMagnificationGesture {
         SpotlightMagnificationGesture {
             frame: FrameIdentity {
-                board_identity: crate::input::boards::BoardIdentityGeneration(1),
+                board_identity: BoardIdentityGeneration(1),
                 board_id: "transparent".to_string(),
                 page_index: 0,
                 page_generation: 0,
             },
             shape_id,
-            before: crate::draw::frame::ShapeSnapshot {
+            before: ShapeSnapshot {
                 shape: Shape::Spotlight {
                     cx: 20,
                     cy: 30,

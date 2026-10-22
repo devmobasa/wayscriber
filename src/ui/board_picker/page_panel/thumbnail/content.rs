@@ -1,7 +1,9 @@
+use crate::domain::BoardGrid;
+use crate::draw;
 use crate::draw::{
-    EraserReplayContext, SpotlightMagnifierScratch, SpotlightMagnifierSource, SpotlightPass,
-    render_eraser_stroke, render_spotlight_magnification_pass, render_spotlight_pass,
-    spotlight_regions_for_frame,
+    BoardPaper, EraserReplayContext, Frame, RenderCtx, Shape, SpotlightMagnifierScratch,
+    SpotlightMagnifierSource, SpotlightPass, SpotlightRegion, TextMeasurer, render_eraser_stroke,
+    render_spotlight_magnification_pass, render_spotlight_pass, spotlight_regions_for_frame,
 };
 use crate::i18n::tr;
 use crate::input::BoardBackground;
@@ -27,7 +29,7 @@ const TRANSPARENT_CROSS: Rgba = (1.0, 1.0, 1.0, 0.08);
 
 pub(super) fn render_page_content(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     args: PageContentArgs<'_, '_, '_>,
 ) {
     let PageContentArgs {
@@ -97,11 +99,11 @@ pub(super) fn render_page_content(
 #[allow(clippy::too_many_arguments)]
 fn render_frame_shapes(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
-    render: &mut crate::draw::RenderCtx<'_, '_>,
-    frame: &crate::draw::Frame,
+    measurer: &TextMeasurer,
+    render: &mut RenderCtx<'_, '_>,
+    frame: &Frame,
     background: &BoardBackground,
-    grid: crate::domain::BoardGrid,
+    grid: BoardGrid,
     target_width: u32,
     target_height: u32,
     text_halo_enabled: bool,
@@ -114,16 +116,14 @@ fn render_frame_shapes(
     };
     ctx.translate(-f64::from(view_x), -f64::from(view_y));
     let paper = match background {
-        BoardBackground::Solid(color) => {
-            crate::draw::BoardPaper::for_context(*color, grid, ctx).ok()
-        }
+        BoardBackground::Solid(color) => BoardPaper::for_context(*color, grid, ctx).ok(),
         BoardBackground::Transparent => None,
     };
     if let Some(paper) = &paper {
         let _ = paper.paint(ctx);
     }
     let eraser_ctx = EraserReplayContext {
-        pattern: paper.as_ref().map(crate::draw::BoardPaper::pattern),
+        pattern: paper.as_ref().map(BoardPaper::pattern),
         surface: None,
         backdrop_cache_key: None,
         bg_color: match background {
@@ -138,7 +138,7 @@ fn render_frame_shapes(
 
     for drawn in &frame.shapes {
         match &drawn.shape {
-            crate::draw::Shape::EraserStroke { points, brush } => {
+            Shape::EraserStroke { points, brush } => {
                 render_eraser_stroke(ctx, points, brush, &eraser_ctx);
             }
             _ => {
@@ -192,13 +192,13 @@ fn render_frame_shapes(
 fn render_unavailable_magnification_labels(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    regions: &[crate::draw::SpotlightRegion],
+    regions: &[SpotlightRegion],
 ) {
-    for region in regions
+    let magnified_regions = regions
         .iter()
-        .filter(|region| crate::draw::spotlight_magnification_is_active(region.magnification))
-    {
-        let label = crate::draw::format_spotlight_magnification(region.magnification);
+        .filter(|region| draw::spotlight_magnification_is_active(region.magnification));
+    for region in magnified_regions {
+        let label = draw::format_spotlight_magnification(region.magnification);
         let font_size = (region.ry.abs() * 0.35).clamp(18.0, 56.0);
         let style = UiTextStyle {
             family: "Sans",
@@ -287,6 +287,8 @@ pub(super) fn render_page_name_label(
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::RenderCaches;
+
     use super::*;
     use crate::draw::{Color, FontDescriptor, Frame, Shape};
 
@@ -322,12 +324,9 @@ mod tests {
             });
             render_page_content(
                 &UiTextEngine::default(),
-                &crate::draw::TextMeasurer::default(),
+                &TextMeasurer::default(),
                 PageContentArgs {
-                    render: &mut crate::draw::RenderCtx::new(
-                        &ctx,
-                        &mut crate::draw::RenderCaches::default(),
-                    ),
+                    render: &mut crate::draw::RenderCtx::new(&ctx, &mut RenderCaches::default()),
                     frame: &frame,
                     background,
                     grid: Default::default(),
@@ -364,12 +363,9 @@ mod tests {
             });
             render_page_content(
                 &UiTextEngine::default(),
-                &crate::draw::TextMeasurer::default(),
+                &TextMeasurer::default(),
                 PageContentArgs {
-                    render: &mut crate::draw::RenderCtx::new(
-                        &ctx,
-                        &mut crate::draw::RenderCaches::default(),
-                    ),
+                    render: &mut crate::draw::RenderCtx::new(&ctx, &mut RenderCaches::default()),
                     frame: &frame,
                     background: &BoardBackground::Solid(Color::new(1.0, 1.0, 1.0, 1.0)),
                     grid: Default::default(),
@@ -450,43 +446,42 @@ mod tests {
             x: 40,
             y: 36,
             text: "Image".into(),
-            color: crate::draw::BLACK,
+            color: draw::BLACK,
             size: 20.0,
             font_descriptor: Default::default(),
             background_enabled: false,
             wrap_width: None,
         });
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let engine = UiTextEngine::default();
-        let paint =
-            |measurer: &crate::draw::TextMeasurer, caches: &mut RenderCaches, density: i32| {
-                let mut surface =
-                    cairo::ImageSurface::create(cairo::Format::ARgb32, 124 * density, 64 * density)
-                        .unwrap();
-                surface.set_device_scale(density as f64, density as f64);
-                {
-                    let ctx = cairo::Context::new(&surface).unwrap();
-                    render_page_content(
-                        &engine,
-                        measurer,
-                        PageContentArgs {
-                            render: &mut RenderCtx::new(&ctx, caches),
-                            frame: &frame,
-                            background: &BoardBackground::Solid(crate::draw::WHITE),
-                            grid: Default::default(),
-                            x: 0.0,
-                            y: 0.0,
-                            width: 124.0,
-                            height: 64.0,
-                            screen_width: 120,
-                            screen_height: 60,
-                            text_halo_enabled: false,
-                        },
-                    );
-                }
-                surface.flush();
-                surface.data().unwrap().to_vec()
-            };
+        let paint = |measurer: &TextMeasurer, caches: &mut RenderCaches, density: i32| {
+            let mut surface =
+                cairo::ImageSurface::create(cairo::Format::ARgb32, 124 * density, 64 * density)
+                    .unwrap();
+            surface.set_device_scale(density as f64, density as f64);
+            {
+                let ctx = cairo::Context::new(&surface).unwrap();
+                render_page_content(
+                    &engine,
+                    measurer,
+                    PageContentArgs {
+                        render: &mut RenderCtx::new(&ctx, caches),
+                        frame: &frame,
+                        background: &BoardBackground::Solid(draw::WHITE),
+                        grid: Default::default(),
+                        x: 0.0,
+                        y: 0.0,
+                        width: 124.0,
+                        height: 64.0,
+                        screen_width: 120,
+                        screen_height: 60,
+                        text_halo_enabled: false,
+                    },
+                );
+            }
+            surface.flush();
+            surface.data().unwrap().to_vec()
+        };
         let baseline = Arc::strong_count(&bytes);
         let mut caches = RenderCaches::default();
         let first = paint(&measurer, &mut caches, 1);
@@ -500,7 +495,7 @@ mod tests {
         for density in [1, 2, 1] {
             let actual = paint(&measurer, &mut caches, density);
             let fresh = paint(
-                &crate::draw::TextMeasurer::default(),
+                &TextMeasurer::default(),
                 &mut RenderCaches::default(),
                 density,
             );
@@ -533,6 +528,10 @@ mod tests {
 
 #[cfg(test)]
 mod measurement {
+    use std::time::Instant;
+
+    use crate::draw::RenderCaches;
+
     use super::*;
     use crate::draw::{Color, DrawnShape, Frame, Shape};
 
@@ -542,8 +541,8 @@ mod measurement {
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 240, 160).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
         let engine = UiTextEngine::default();
-        let measurer = crate::draw::TextMeasurer::default();
-        let mut caches = crate::draw::RenderCaches::default();
+        let measurer = TextMeasurer::default();
+        let mut caches = RenderCaches::default();
         let mut render = crate::draw::RenderCtx {
             cairo: &ctx,
             caches: &mut caches,
@@ -574,7 +573,7 @@ mod measurement {
                     )
                 })
                 .collect();
-            let start = std::time::Instant::now();
+            let start = Instant::now();
             for _ in 0..100 {
                 render_page_content(
                     &engine,

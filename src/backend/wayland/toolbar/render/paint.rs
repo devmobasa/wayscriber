@@ -5,11 +5,16 @@
 //! paint time against each node's drawn rect (matching the legacy renderer),
 //! so pointer motion never rebuilds a tree.
 
+use std::f64::consts;
+
 use crate::backend::wayland::toolbar::view::{
     ButtonStyle, ShortcutBadgePlacement, WidgetKind, WidgetNode, WidgetTree,
 };
+use crate::toolbar_icons::MicroChipStyle;
 use crate::ui::theme::swatch::{chrome_rgb, swatch_edge_stroke};
+use crate::ui::theme::toolbar;
 use crate::ui_text::{UiTextEngine, UiTextStyle};
+use crate::{draw, toolbar_icons, ui};
 
 use super::widgets::constants::{
     COLOR_ACCENT, COLOR_BADGE_BACKGROUND, COLOR_BADGE_BORDER, COLOR_ICON_DEFAULT, COLOR_LABEL_HINT,
@@ -105,11 +110,11 @@ fn paint_preset_color_swatch(
     let sy = y + h - size - PRESET_SLOT_SWATCH_INSET;
     let swatch_path =
         |ctx: &cairo::Context| draw_round_rect(ctx, sx, sy, size, size, PRESET_SLOT_SWATCH_RADIUS);
-    crate::ui::checkerboard_behind(ctx, color.3, swatch_path);
+    ui::checkerboard_behind(ctx, color.3, swatch_path);
     ctx.set_source_rgba(color.0, color.1, color.2, color.3);
     swatch_path(ctx);
     let _ = ctx.fill();
-    let luminance = crate::draw::perceived_luminance(color.0, color.1, color.2);
+    let luminance = draw::perceived_luminance(color.0, color.1, color.2);
     set_color(
         ctx,
         if luminance < 0.3 {
@@ -129,7 +134,7 @@ fn draw_slider_knob(ctx: &cairo::Context, rect: (f64, f64, f64, f64), t: f64) {
     let knob_r = (h / 2.0).min(7.0);
     let knob_x = x + knob_r + t.clamp(0.0, 1.0) * (w - knob_r * 2.0);
     set_color(ctx, COLOR_TRACK_KNOB);
-    ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(knob_x, y + h / 2.0, knob_r, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 }
 
@@ -333,10 +338,10 @@ fn paint_node(
             draw_meter_bar(ctx, node.rect, *filled, is_hover, *enabled);
         }
         WidgetKind::MeterDot { active, enabled } => {
-            crate::toolbar_icons::draw_meter_dot(ctx, node.rect, *active, is_hover, *enabled);
+            toolbar_icons::draw_meter_dot(ctx, node.rect, *active, is_hover, *enabled);
         }
         WidgetKind::SmoothingPreview { level } => {
-            crate::toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
+            toolbar_icons::draw_smoothing_preview(ctx, node.rect, *level);
         }
         WidgetKind::Slider { t, spec } => {
             // Track and knob: a rounded track with the accent knob riding the
@@ -346,28 +351,23 @@ fn paint_node(
             set_color(ctx, COLOR_TRACK_BACKGROUND);
             draw_round_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
             let _ = ctx.fill();
-            crate::toolbar_icons::draw_slider_ticks(ctx, node.rect, spec.tick_positions());
+            toolbar_icons::draw_slider_ticks(ctx, node.rect, spec.tick_positions());
             draw_slider_knob(ctx, node.rect, *t);
         }
         WidgetKind::OpacitySlider { t, paint } => {
-            crate::toolbar_icons::draw_opacity_track(ctx, node.rect, paint.rgb, paint.alpha_stops);
+            toolbar_icons::draw_opacity_track(ctx, node.rect, paint.rgb, paint.alpha_stops);
             draw_slider_knob(ctx, node.rect, *t);
         }
         WidgetKind::ArrowStylePreview { style } => {
-            crate::toolbar_icons::draw_arrow_style_preview(
+            toolbar_icons::draw_arrow_style_preview(
                 ctx,
                 node.rect,
                 *style,
-                crate::ui::theme::toolbar::COLOR_TEXT_PRIMARY,
+                toolbar::COLOR_TEXT_PRIMARY,
             );
         }
         WidgetKind::OpacitySwatch { paint } => {
-            crate::toolbar_icons::draw_opacity_swatch(
-                ctx,
-                node.rect,
-                paint.rgb,
-                paint.stroke_alpha,
-            );
+            toolbar_icons::draw_opacity_swatch(ctx, node.rect, paint.rgb, paint.stroke_alpha);
         }
         WidgetKind::Swatch { color, selected } => {
             // Rounded square inset one pixel so the accent selection ring
@@ -377,7 +377,7 @@ fn paint_node(
             let swatch_path = |ctx: &cairo::Context| {
                 draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0)
             };
-            crate::ui::checkerboard_behind(ctx, color.3, swatch_path);
+            ui::checkerboard_behind(ctx, color.3, swatch_path);
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);
             swatch_path(ctx);
             let _ = ctx.fill();
@@ -477,13 +477,13 @@ fn paint_node(
             ring_color,
             ring_width,
         } => {
-            crate::toolbar_icons::draw_micro_chip(
+            toolbar_icons::draw_micro_chip(
                 ctx,
                 x,
                 y,
                 w.min(h),
                 glyph.0,
-                &crate::toolbar_icons::MicroChipStyle {
+                &MicroChipStyle {
                     ring_color: *ring_color,
                     ring_width: *ring_width,
                     icon_color: if is_hover {
@@ -522,12 +522,12 @@ fn paint_node(
         }
         WidgetKind::VScrollbar { t, thumb } => {
             // A soft track with the theme's proportional slider thumb.
-            set_color(ctx, crate::ui::theme::toolbar::COLOR_SCROLLBAR_TRACK);
+            set_color(ctx, toolbar::COLOR_SCROLLBAR_TRACK);
             draw_round_rect(ctx, x, y, w, h, w / 2.0);
             let _ = ctx.fill();
             let thumb_h = (h * thumb.clamp(0.0, 1.0)).max(w * 2.0).min(h);
             let thumb_y = y + (h - thumb_h) * t.clamp(0.0, 1.0);
-            set_color(ctx, crate::ui::theme::toolbar::COLOR_SCROLLBAR_SLIDER);
+            set_color(ctx, toolbar::COLOR_SCROLLBAR_SLIDER);
             draw_round_rect(ctx, x, thumb_y, w, thumb_h, w / 2.0);
             let _ = ctx.fill();
         }
@@ -537,6 +537,11 @@ fn paint_node(
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::toolbar::view::node::{IconFn, Interaction};
+    use crate::domain::color;
+    use crate::ui::toolbar::ToolbarEvent;
+    use crate::ui::toolbar::model::{SemanticToolIcon, TopToolbarIcon};
+
     use super::*;
     use crate::backend::wayland::toolbar::view::node::LabelSpec;
     use cairo::{Context, Format, ImageSurface};
@@ -677,7 +682,7 @@ mod tests {
 
     #[test]
     fn a_dark_swatch_gets_a_light_ring_against_the_dark_bar() {
-        let black = crate::domain::color::PALETTE_BLACK;
+        let black = color::PALETTE_BLACK;
         let (r, g, b) = swatch_edge_on_panel((black.r, black.g, black.b, black.a));
         let edge = (u32::from(r) + u32::from(g) + u32::from(b)) / 3;
         assert!(
@@ -686,7 +691,7 @@ mod tests {
         );
 
         // A swatch that already stands out keeps the quiet hairline.
-        let red = crate::domain::color::PALETTE_RED;
+        let red = color::PALETTE_RED;
         let (r, g, b) = swatch_edge_on_panel((red.r, red.g, red.b, red.a));
         assert!(
             r > 200 && g < 120 && b < 120,
@@ -703,13 +708,9 @@ mod tests {
             ctx.set_source_rgb(0.0, 0.0, 0.0);
             let _ = ctx.paint();
             let glyph = filled.then(|| {
-                crate::backend::wayland::toolbar::view::node::IconFn(
-                    crate::toolbar_icons::top_toolbar_icon_painter(
-                        crate::ui::toolbar::model::TopToolbarIcon::Tool(
-                            crate::ui::toolbar::model::SemanticToolIcon::Pen,
-                        ),
-                    ),
-                )
+                IconFn(toolbar_icons::top_toolbar_icon_painter(
+                    TopToolbarIcon::Tool(SemanticToolIcon::Pen),
+                ))
             });
             let node = WidgetNode::new(
                 "test.preset",
@@ -720,12 +721,7 @@ mod tests {
                     label: label.to_string(),
                     active: false,
                 },
-                Some(
-                    crate::backend::wayland::toolbar::view::node::Interaction::click(
-                        crate::ui::toolbar::ToolbarEvent::SavePreset(1),
-                        None,
-                    ),
-                ),
+                Some(Interaction::click(ToolbarEvent::SavePreset(1), None)),
             );
             paint_node(&UiTextEngine::default(), &ctx, &node, hover);
         }

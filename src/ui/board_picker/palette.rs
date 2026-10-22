@@ -1,3 +1,4 @@
+use crate::input::state::BoardPickerLayout;
 use crate::input::{BoardBackground, InputState};
 use crate::ui::primitives::draw_rounded_rect;
 
@@ -10,7 +11,7 @@ pub(super) const PALETTE_SWATCH_GAP: f64 = 6.0;
 pub(super) fn render_board_palette(
     ctx: &cairo::Context,
     input_state: &InputState,
-    layout: &crate::input::state::BoardPickerLayout,
+    layout: &BoardPickerLayout,
 ) {
     if layout.palette_rows == 0 || layout.palette_cols == 0 {
         return;

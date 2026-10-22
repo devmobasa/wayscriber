@@ -1,5 +1,16 @@
 //! GTK scenario semantics, islands, widths, and preset assertions.
 
+use std::collections::BTreeMap;
+use std::sync::mpsc;
+
+use gtk4::gdk::Display;
+
+use crate::config::{TopDisplayMode, toolbar_item_ids};
+use crate::draw::{Color, FontDescriptor};
+use crate::toolbar_gtk::css;
+use crate::ui::toolbar::PresetSlotSnapshot;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     FeedbackSender, Tool, ToolbarLayoutMode, ToolbarSnapshot, TopBar, TopStripPlan, model,
     plan_top_strip,
@@ -140,7 +151,7 @@ pub(super) fn assert_gtk_control_widget(widget: &gtk4::Widget, expected: &Semant
     if expected.role == model::TopToolbarControlRole::Destructive {
         assert!(surface.has_css_class("destructive"), "{}", expected.id);
     }
-    if expected.id == crate::config::toolbar_item_ids::TOP_CHROME_PIN.as_str() {
+    if expected.id == toolbar_item_ids::TOP_CHROME_PIN.as_str() {
         assert_eq!(
             surface.has_css_class("pinned"),
             expected.active,
@@ -158,7 +169,7 @@ pub(super) fn assert_gtk_control_widget(widget: &gtk4::Widget, expected: &Semant
         );
     }
 
-    if let Ok(button) = surface.clone().downcast::<gtk4::Button>()
+    if let Ok(button) = surface.downcast::<gtk4::Button>()
         && let Some(label) = button.label()
     {
         assert_eq!(label, expected.label, "{} text label", expected.id);
@@ -187,8 +198,8 @@ fn font_button_natural_width(
 
 pub(super) fn install_gtk_contract_metrics() {
     let css_provider = gtk4::CssProvider::new();
-    css_provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(1.0));
-    if let Some(display) = gtk4::gdk::Display::default() {
+    css_provider.load_from_string(&css::stylesheet(1.0));
+    if let Some(display) = Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,
             &css_provider,
@@ -216,7 +227,7 @@ pub(super) fn gtk_widget_contract_scenarios() -> (
     let mut minimized = regular.clone();
     minimized.top_minimized = true;
     let mut micro = regular.clone();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
     let mut text = regular.clone();
     text.use_icons = false;
     let mut highlighted = regular.clone();
@@ -248,7 +259,7 @@ pub(super) fn gtk_widget_contract_scenarios() -> (
     text_mode.text_active = true;
     scenarios.push(("text-mode", text_mode.clone()));
     let mut long_font = text_mode;
-    long_font.font = crate::draw::FontDescriptor::new(
+    long_font.font = FontDescriptor::new(
         "Noto Sans Mono CJK JP ExtraCondensed Black".to_string(),
         "normal".to_string(),
         "normal".to_string(),
@@ -261,8 +272,8 @@ pub(super) fn gtk_widget_contract_scenarios() -> (
 
 pub(super) fn assert_gtk_widget_scenarios(
     scenarios: Vec<(&'static str, ToolbarSnapshot)>,
-) -> std::collections::BTreeMap<&'static str, i32> {
-    let mut widths = std::collections::BTreeMap::new();
+) -> BTreeMap<&'static str, i32> {
+    let mut widths = BTreeMap::new();
     for (name, snapshot) in scenarios {
         assert_gtk_widget_scenario(name, &snapshot, &mut widths);
     }
@@ -270,7 +281,7 @@ pub(super) fn assert_gtk_widget_scenarios(
 }
 
 fn build_contract_top(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> TopBar {
-    let (tx, _rx) = std::sync::mpsc::channel();
+    let (tx, _rx) = mpsc::channel();
     let mut top = TopBar::new_for_test(FeedbackSender::new(tx));
     if snapshot.top_minimized {
         top.build_minimized(snapshot, plan);
@@ -288,9 +299,9 @@ fn build_contract_top(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> TopBar
 fn assert_gtk_widget_scenario(
     name: &'static str,
     snapshot: &ToolbarSnapshot,
-    widths: &mut std::collections::BTreeMap<&'static str, i32>,
+    widths: &mut BTreeMap<&'static str, i32>,
 ) {
-    let plan = plan_top_strip(&crate::ui_text::UiTextEngine::default(), snapshot);
+    let plan = plan_top_strip(&UiTextEngine::default(), snapshot);
     let spec = super::super::strip::top_toolbar_spec(snapshot, &plan);
     let expected = expected_semantic_records(snapshot, &spec, &plan);
     let style_controls = style_pill_controls(snapshot, &plan);
@@ -336,7 +347,7 @@ fn assert_scenario_widget_semantics(
     expected: &[SemanticAdapterRecord],
     style_controls: &[(String, model::StylePillControl)],
     widgets: Vec<gtk4::Widget>,
-    widths: &mut std::collections::BTreeMap<&'static str, i32>,
+    widths: &mut BTreeMap<&'static str, i32>,
 ) {
     for widget in widgets {
         let id = widget.widget_name();
@@ -366,7 +377,7 @@ fn assert_scenario_widget_semantics(
     }
 }
 
-pub(super) fn assert_font_button_width_stable(widths: &std::collections::BTreeMap<&str, i32>) {
+pub(super) fn assert_font_button_width_stable(widths: &BTreeMap<&str, i32>) {
     let short = widths
         .get("text-mode")
         .copied()
@@ -386,10 +397,10 @@ pub(super) fn assert_font_button_width_stable(widths: &std::collections::BTreeMa
 pub(super) fn assert_preset_slot_faces(regular: &ToolbarSnapshot) {
     let mut snapshot = regular.clone();
     snapshot.presets = vec![None; 5];
-    snapshot.presets[0] = Some(crate::ui::toolbar::PresetSlotSnapshot {
+    snapshot.presets[0] = Some(PresetSlotSnapshot {
         name: None,
         tool: Tool::Pen,
-        color: crate::draw::Color::new(1.0, 0.0, 0.0, 1.0),
+        color: Color::new(1.0, 0.0, 0.0, 1.0),
         size: 4.0,
         eraser_kind: None,
         eraser_mode: None,
@@ -437,7 +448,7 @@ pub(super) fn assert_preset_slot_faces(regular: &ToolbarSnapshot) {
 pub(super) fn assert_compact_gtk_widget_contract(regular: &ToolbarSnapshot) {
     let mut compact_plan = TopStripPlan::unconstrained();
     compact_plan.compact = true;
-    let (tx, _rx) = std::sync::mpsc::channel();
+    let (tx, _rx) = mpsc::channel();
     let mut compact_top = TopBar::new_for_test(FeedbackSender::new(tx));
     compact_top.build_strip(regular, &compact_plan);
     let compact_ids = collect_semantic_widgets(compact_top.root.upcast_ref())

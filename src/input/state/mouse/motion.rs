@@ -1,6 +1,10 @@
-use super::super::{
-    InputState,
-    interaction::{CanvasPoint, PointerMotion, PointerPoints, ScreenPoint, route_pointer_motion},
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
+use crate::ui_text::UiTextEngine;
+
+use super::super::InputState;
+use super::super::interaction::{
+    CanvasPoint, PointerMotion, PointerPoints, ScreenPoint, route_pointer_motion,
 };
 
 impl InputState {
@@ -26,8 +30,8 @@ impl InputState {
         canvas_x: impl Into<f64>,
         canvas_y: impl Into<f64>,
     ) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.on_mouse_motion_with_canvas_and_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -42,7 +46,7 @@ impl InputState {
 
     pub(crate) fn on_mouse_motion_with_canvas_and_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         screen_x: i32,
         screen_y: i32,
         canvas_x: impl Into<f64>,

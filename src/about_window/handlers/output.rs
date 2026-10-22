@@ -1,5 +1,6 @@
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
-use wayland_client::{Connection, QueueHandle, protocol::wl_output};
+use wayland_client::protocol::wl_output;
+use wayland_client::{Connection, QueueHandle};
 
 use super::super::AboutWindowState;
 

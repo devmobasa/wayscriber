@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::draw;
 use crate::draw::{Color, DirtyTracker};
 use crate::util::Rect;
 
@@ -192,7 +193,7 @@ impl ClickHighlightState {
             let progress = (elapsed.as_secs_f64() / total).clamp(0.0, 1.0);
             let fade = (1.0 - progress).clamp(0.0, 1.0);
 
-            crate::draw::render_click_highlight(
+            draw::render_click_highlight(
                 ctx,
                 highlight.x as f64,
                 highlight.y as f64,
@@ -210,7 +211,7 @@ impl ClickHighlightState {
             return;
         }
 
-        crate::draw::render_click_highlight(
+        draw::render_click_highlight(
             ctx,
             x as f64,
             y as f64,

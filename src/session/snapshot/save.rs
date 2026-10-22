@@ -1,19 +1,23 @@
-use super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, compress_bytes, temp_path};
+use std::io;
+use std::io::ErrorKind;
+
+use crate::session::{catalog, primary};
+use crate::{durable_io, session};
+
+use super::compression::{DEFAULT_MAX_EXPANDED_SESSION_BYTES, temp_path};
 use super::generation::{ArtifactSetView, UnreadablePolicy};
-use super::types::{
-    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
-};
+use super::types::SessionSnapshot;
 use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
-use crate::session::options::{CompressionMode, SessionOptions};
+use crate::session::options::SessionOptions;
 use crate::time_utils::now_rfc3339;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use log::{debug, info, warn};
 use payload::PayloadStamp;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 const AUTOSAVE_HISTORY_FALLBACK_DEPTH: usize = 1;
 
@@ -27,8 +31,9 @@ mod tests;
 pub(crate) use estimate::{
     estimate_snapshot_payload, estimate_snapshot_save, estimate_snapshot_without_history_payload,
 };
+#[cfg(test)]
 pub(super) use payload::snapshot_without_history;
-use payload::{PayloadCandidate, estimate_from_candidate, payload_candidate, payload_within_limit};
+use payload::{PayloadCandidate, payload_within_limit};
 use recovery::{
     preserve_oversized_recovery, remove_backup_file, remove_backup_recovery_marker_file,
     remove_clear_marker_file, remove_recoverable_artifacts_suppressed_by_clear_marker,
@@ -180,7 +185,7 @@ fn save_snapshot_with_expanded_limit_and_strategy(
     }
 
     if matches!(&result, Ok(Some(_))) {
-        crate::session::catalog::record_named_session_saved(options);
+        catalog::record_named_session_saved(options);
     }
 
     result
@@ -194,7 +199,7 @@ fn save_snapshot_with_expanded_limit_and_strategy(
 /// reported for a replacement that power loss can still undo. Autosave retries
 /// make the failure recoverable.
 pub(super) fn sync_session_parent_dir(path: &Path, label: &str) -> Result<()> {
-    crate::durable_io::sync_parent_dir(path).with_context(|| {
+    durable_io::sync_parent_dir(path).with_context(|| {
         format!(
             "failed to sync session directory after replacing {} {}",
             label,
@@ -205,7 +210,7 @@ pub(super) fn sync_session_parent_dir(path: &Path, label: &str) -> Result<()> {
 
 fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
     if options.is_named_file() {
-        crate::session::validate_named_session_file_for_foreground(&options.session_file_path())?;
+        session::validate_named_session_file_for_foreground(&options.session_file_path())?;
         return Ok(());
     }
 
@@ -223,7 +228,7 @@ fn prepare_session_parent_for_save(options: &SessionOptions) -> Result<()> {
 /// Keeping replacement as one rename is especially important when backups are
 /// disabled: unlinking the primary first would create a crash window with no
 /// recoverable session file at either path.
-fn replace_session_file(replacement: &Path, primary: &Path) -> std::io::Result<()> {
+fn replace_session_file(replacement: &Path, primary: &Path) -> io::Result<()> {
     fs::rename(replacement, primary)
 }
 
@@ -254,7 +259,7 @@ impl Drop for TempFileGuard {
     fn drop(&mut self) {
         if let Some(path) = self.path.take()
             && let Err(err) = fs::remove_file(&path)
-            && err.kind() != std::io::ErrorKind::NotFound
+            && err.kind() != ErrorKind::NotFound
         {
             warn!(
                 "Failed to remove temporary session file {}: {}",
@@ -409,7 +414,7 @@ fn save_snapshot_inner(
             // it before rotation so the backup does not preserve that legacy
             // exposure. Opening through the session-artifact helper also
             // refuses a symlink instead of chmodding its target.
-            crate::session::primary::make_session_artifact_private(&session_path)?;
+            primary::make_session_artifact_private(&session_path)?;
             // rename replaces an existing backup atomically; removing it first
             // would only open a window in which no backup exists at all.
             fs::rename(&session_path, &backup_path).with_context(|| {
@@ -473,21 +478,36 @@ fn save_snapshot_inner(
     log_near_limit(&report);
     cleanup_snapshot_artifacts_after_save(
         options,
-        snapshot_has_board_data,
-        contentless_clear_boundary,
-        had_session_file,
-        preserves_recoverable_recovery,
+        SavedSnapshotState {
+            snapshot_has_board_data,
+            contentless_clear_boundary,
+            had_session_file,
+            preserves_recoverable_recovery,
+        },
     );
     Ok(Some(report))
 }
 
-fn cleanup_snapshot_artifacts_after_save(
-    options: &SessionOptions,
+/// What a completed save wrote, which decides the artifacts it leaves behind.
+#[derive(Debug, Clone, Copy)]
+struct SavedSnapshotState {
     snapshot_has_board_data: bool,
+    /// A contentless save that records a clear boundary.
     contentless_clear_boundary: bool,
+    /// A primary session file existed before this save.
     had_session_file: bool,
+    /// The recovery copy still holds the only recoverable drawings.
     preserves_recoverable_recovery: bool,
-) {
+}
+
+fn cleanup_snapshot_artifacts_after_save(options: &SessionOptions, saved: SavedSnapshotState) {
+    let SavedSnapshotState {
+        snapshot_has_board_data,
+        contentless_clear_boundary,
+        had_session_file,
+        preserves_recoverable_recovery,
+    } = saved;
+
     if snapshot_has_board_data {
         if remove_recoverable_artifacts_suppressed_by_clear_marker(options) {
             remove_clear_marker_file(options);

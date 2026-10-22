@@ -1,4 +1,10 @@
-use super::*;
+use super::WaylandState;
+use super::buffer_damage::FullDamageReason;
+use super::perf::{PerfRenderBreakdown, PerfRenderSkipReason};
+use anyhow::Result;
+use log::debug;
+use std::time::{Duration, Instant};
+use wayland_client::QueueHandle;
 
 macro_rules! record_stage {
     ($breakdown:expr, $field:ident, $body:expr) => {{
@@ -29,7 +35,7 @@ mod ui_effect_damage;
 use crate::backend::wayland::state::buffer_damage::BufferDamageTracker;
 use plan::{FrameGeometry, FrameVisibility, plan_frame};
 pub(in crate::backend::wayland) use runtime::RenderRuntime;
-use runtime::{UiEffect, UiEffectFlags};
+use runtime::UiEffect;
 
 /// What a render pass actually did.
 ///

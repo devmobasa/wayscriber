@@ -51,19 +51,6 @@
 //! that got neither edit, or over one that was never written because it already
 //! said this, sends the user looking for something that is not there.
 
-use super::super::config_edits::{
-    ConfigEdit, ConfigEditWorker, KeybindingEditWrite, ProjectedShortcut,
-};
-use super::WaylandState;
-use crate::config::{
-    Action, ConfigEditNotReadBack, ConfigEditOutcome, ConfigEditWrite, KeybindingsConfig, Shortcut,
-    ShortcutClaimedOnDisk, action_label,
-};
-use crate::input::state::{
-    InputState, KeybindingEditOperation, KeybindingEditRequest, Toast, ToastPriority,
-};
-use std::collections::HashMap;
-
 mod implementation;
 
 pub(in crate::backend::wayland) use implementation::queue_keybinding_edit;

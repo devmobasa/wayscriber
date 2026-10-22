@@ -208,12 +208,12 @@ fn item_card(
 
         let clear_was_armed = confirm.get_visible();
         let answer_has_focus = confirm_button.has_focus() || cancel_button.has_focus();
-        let focus_after_refresh = clear_focus_after_refresh(
-            clear_was_armed,
-            values.clear_armed,
-            values.clear_enabled,
+        let focus_after_refresh = clear_focus_after_refresh(ClearConfirmTransition {
+            was_armed: clear_was_armed,
+            is_armed: values.clear_armed,
+            clear_enabled: values.clear_enabled,
             answer_has_focus,
-        );
+        });
         if focus_after_refresh == ClearFocusTarget::Catalog {
             // Confirm enters the busy state and disables the row's actions.
             // Temporarily make the stable page target focusable and move there
@@ -242,10 +242,10 @@ fn item_card(
     CatalogRow { card, refresh }
 }
 
-struct InputRow<'a> {
-    id: &'a str,
-    placeholder: &'a str,
-    button_label: &'a str,
+struct InputRow<'text> {
+    id: &'text str,
+    placeholder: &'text str,
+    button_label: &'text str,
     on_input: fn(String, String) -> Message,
     request: Message,
 }
@@ -293,12 +293,27 @@ enum ClearFocusTarget {
     Catalog,
 }
 
-fn clear_focus_after_refresh(
+/// The clear confirmation's state across one refresh.
+#[derive(Debug, Clone, Copy, Default)]
+struct ClearConfirmTransition {
+    /// The confirmation was showing before this refresh.
     was_armed: bool,
+    /// The confirmation shows after this refresh.
     is_armed: bool,
+    /// The clear action stays enabled after this refresh.
     clear_enabled: bool,
+    /// Keyboard focus is on the confirm or cancel answer.
     answer_has_focus: bool,
-) -> ClearFocusTarget {
+}
+
+fn clear_focus_after_refresh(transition: ClearConfirmTransition) -> ClearFocusTarget {
+    let ClearConfirmTransition {
+        was_armed,
+        is_armed,
+        clear_enabled,
+        answer_has_focus,
+    } = transition;
+
     if is_armed && !was_armed {
         return ClearFocusTarget::Confirm;
     }
@@ -319,22 +334,38 @@ mod tests {
     #[test]
     fn clear_confirmation_focus_has_enabled_targets_for_every_transition() {
         assert_eq!(
-            clear_focus_after_refresh(false, true, true, false),
+            clear_focus_after_refresh(ClearConfirmTransition {
+                is_armed: true,
+                clear_enabled: true,
+                ..ClearConfirmTransition::default()
+            }),
             ClearFocusTarget::Confirm,
             "arming focuses the newly revealed confirmation"
         );
         assert_eq!(
-            clear_focus_after_refresh(true, false, true, true),
+            clear_focus_after_refresh(ClearConfirmTransition {
+                was_armed: true,
+                clear_enabled: true,
+                answer_has_focus: true,
+                ..ClearConfirmTransition::default()
+            }),
             ClearFocusTarget::ClearAction,
             "cancel returns to the restored clear action"
         );
         assert_eq!(
-            clear_focus_after_refresh(true, false, false, true),
+            clear_focus_after_refresh(ClearConfirmTransition {
+                was_armed: true,
+                answer_has_focus: true,
+                ..ClearConfirmTransition::default()
+            }),
             ClearFocusTarget::Catalog,
             "confirm moves away from the row actions disabled by busy state"
         );
         assert_eq!(
-            clear_focus_after_refresh(true, false, false, false),
+            clear_focus_after_refresh(ClearConfirmTransition {
+                was_armed: true,
+                ..ClearConfirmTransition::default()
+            }),
             ClearFocusTarget::Unchanged,
             "a pointer-triggered transition does not steal keyboard focus"
         );

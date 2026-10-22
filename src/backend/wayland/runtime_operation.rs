@@ -1,9 +1,11 @@
 //! Identified capacity-one completion transport for event-loop runtime operations.
 
-use std::fmt;
+use std::any::Any;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread::Builder;
+use std::{fmt, io};
 
 use crate::backend::wayland::RuntimeWakeHandle;
 
@@ -157,18 +159,22 @@ where
         operation: impl FnOnce() -> T + Send + 'static,
     ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
         self.try_submit_with_spawner(context, operation, |job| {
-            std::thread::Builder::new()
+            Builder::new()
                 .name(thread_name.to_string())
                 .spawn(job)
                 .map(drop)
         })
     }
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "a panicking operation must still publish a terminal failure carrying its panic message; the exit guard only reports a bare disconnect"
+    )]
     fn try_submit_with_spawner(
         &mut self,
         context: C,
         operation: impl FnOnce() -> T + Send + 'static,
-        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
     ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
         if !self.healthy {
             return Err(RuntimeOperationSubmitFailure {
@@ -193,7 +199,7 @@ where
                 return Err(RuntimeOperationSubmitFailure { error, context });
             }
         };
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         let runtime_wake = self.runtime_wake.clone();
         let job = Box::new(move || {
             let guard = RuntimeOperationExitGuard::new(id, sender, runtime_wake);
@@ -201,7 +207,7 @@ where
                 Ok(outcome) => ProducerMessage::Ready { id, outcome },
                 Err(payload) => ProducerMessage::Failed {
                     id,
-                    reason: panic_reason(payload),
+                    reason: panic_reason(&*payload),
                 },
             };
             guard.publish(message);
@@ -227,7 +233,7 @@ where
         &mut self,
         context: C,
         operation: impl FnOnce() -> T + Send + 'static,
-        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
     ) -> Result<RuntimeOperationId, RuntimeOperationSubmitFailure<C>> {
         self.try_submit_with_spawner(context, operation, spawn)
     }
@@ -299,7 +305,7 @@ where
     }
 }
 
-fn panic_reason(payload: Box<dyn std::any::Any + Send>) -> String {
+fn panic_reason(payload: &(dyn Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&'static str>() {
         (*message).to_string()
     } else if let Some(message) = payload.downcast_ref::<String>() {
@@ -377,12 +383,13 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
+    use std::{fs, thread};
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
 
     fn controller<C, T: Send + 'static>() -> (RuntimeWakeSource, RuntimeOperationController<C, T>) {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let controller =
             RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle());
         (wake, controller)
@@ -403,7 +410,7 @@ mod tests {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
-            let state = std::fs::read_to_string(&stat_path).ok().and_then(|stat| {
+            let state = fs::read_to_string(&stat_path).ok().and_then(|stat| {
                 stat.rsplit_once(") ")
                     .and_then(|(_, suffix)| suffix.chars().next())
             });
@@ -411,13 +418,13 @@ mod tests {
                 return;
             }
             assert!(Instant::now() < deadline, "poller did not block: {state:?}");
-            std::thread::yield_now();
+            thread::yield_now();
         }
     }
 
     #[test]
     fn shared_source_allocates_distinct_ids_across_controllers() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let ids = RuntimeOperationIdSource::new();
         let mut publish = RuntimeOperationController::new(ids.clone(), wake.handle());
         let mut paste = RuntimeOperationController::new(ids, wake.handle());
@@ -508,7 +515,7 @@ mod tests {
             })
             .unwrap();
         let (tid_tx, tid_rx) = mpsc::channel();
-        let poller = std::thread::spawn(move || {
+        let poller = thread::spawn(move || {
             // SAFETY: gettid has no preconditions and is used only to observe this test thread.
             let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
             tid_tx.send(tid).unwrap();
@@ -547,11 +554,11 @@ mod tests {
 
     #[test]
     fn exit_guard_disconnects_before_waking() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let ids = RuntimeOperationIdSource::new();
         let mut controller = RuntimeOperationController::<u64, u64>::new(ids, wake.handle());
         let id = RuntimeOperationId(9);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         controller.active = Some(ActiveOperation {
             id,
             context: 31,
@@ -572,7 +579,7 @@ mod tests {
             .try_submit_with_spawner(
                 41,
                 || 1,
-                |_job| Err(std::io::Error::other("injected spawn failure")),
+                |_job| Err(io::Error::other("injected spawn failure")),
             )
             .unwrap_err();
         assert_eq!(
@@ -604,7 +611,7 @@ mod tests {
     fn identity_mismatch_restores_active_context_and_disables_controller() {
         let (_wake, mut controller) = controller::<u64, u64>();
         let active_id = RuntimeOperationId(3);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         controller.active = Some(ActiveOperation {
             id: active_id,
             context: 43,

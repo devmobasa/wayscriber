@@ -1,5 +1,8 @@
 //! Procedural board paper shared by canvas paint, eraser replay, and exports.
 
+use std::f64::consts;
+use std::ops::RangeInclusive;
+
 use cairo::{Context, RecordingSurface, Rectangle, SurfacePattern};
 
 use crate::domain::{BoardGrid, BoardGridKind, Color};
@@ -80,12 +83,14 @@ impl BoardPaper {
         })
     }
 
+    #[must_use]
     pub fn pattern(&self) -> &cairo::Pattern {
         self.pattern.as_ref()
     }
 }
 
 /// Smallest target-axis scale, including Cairo surface device scaling.
+#[must_use]
 pub fn board_paper_device_scale(ctx: &Context) -> f64 {
     let matrix = ctx.matrix();
     let (dx, dy) = ctx.target().device_scale();
@@ -156,7 +161,7 @@ fn paint_geometry(
     result
 }
 
-fn indices(min: f64, max: f64, spacing: f64) -> std::ops::RangeInclusive<i64> {
+fn indices(min: f64, max: f64, spacing: f64) -> RangeInclusive<i64> {
     (min / spacing).floor() as i64..=(max / spacing).ceil() as i64
 }
 
@@ -200,7 +205,7 @@ fn isometric_dots(ctx: &Context, s: f64, b: Rectangle) {
         let shift = i.rem_euclid(2) as f64 * s / 2.0;
         for j in indices(b.y() - shift - 1.25, b.y() + b.height() - shift + 1.25, s) {
             ctx.new_sub_path();
-            ctx.arc(x, j as f64 * s + shift, 1.25, 0.0, std::f64::consts::TAU);
+            ctx.arc(x, j as f64 * s + shift, 1.25, 0.0, consts::TAU);
         }
     }
 }

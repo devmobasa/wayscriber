@@ -1,59 +1,45 @@
 // Holds the live Wayland protocol state shared by the backend loop and the handler
 // submodules; provides rendering, capture routing, and overlay helpers used across them.
-use anyhow::{Context, Result};
-use log::{debug, info, warn};
-use smithay_client_toolkit::{
-    activation::{ActivationHandler, RequestData},
-    globals::ProvidesBoundGlobal,
-    shell::wlr_layer::KeyboardInteractivity,
-};
-use std::time::{Duration, Instant};
-use wayland_client::{QueueHandle, protocol::wl_output};
+use anyhow::Result;
+use std::time::Instant;
 #[cfg(feature = "tablet-input")]
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
-use wayland_protocols::wp::{
-    pointer_constraints::zv1::client::zwp_pointer_constraints_v1,
-    text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3,
-};
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 
+use crate::backend::ExitAfterCaptureMode;
+use crate::backend::wayland::RuntimeWakeHandle;
+use crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState;
+use crate::backend::wayland::session::{
+    PersistenceController, SessionCommandTransaction, SessionHome,
+};
+use crate::capture::CaptureManager;
+use crate::config::Config;
+use crate::daemon::protocol_v2::ClaimedAction;
+use crate::desktop_open::DesktopOpenRequest;
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
 #[cfg(feature = "tablet-input")]
 use crate::input::tablet::TabletSettings;
-use crate::{
-    backend::ExitAfterCaptureMode,
-    canvas_export::{
-        BoardExportSnapshot, BoardPdfExportSnapshot, CanvasExportBackdropSnapshot,
-        CanvasExportSnapshot, CanvasExportViewport, render_board_pdf, render_canvas_png,
-    },
-    capture::{
-        CaptureDestination, CaptureManager, DesktopBackdropCaptureRequest,
-        DesktopBackdropCaptureResult, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
-        ImageFormatMetadata, ImageOperationKind, RenderedDocument,
-        file::{FileSaveConfig, expand_tilde},
-        types::CaptureType,
-    },
-    config::{Action, Config},
-    desktop_open::DesktopOpenRequest,
-    input::{DrawingState, EraserMode, InputState, Tool, ZoomAction},
-    session::SessionOptions,
-    ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot},
-};
+use crate::ocr::OcrController;
+use crate::onboarding::OnboardingStore;
+use crate::palette_recents::PaletteRecentsWriter;
+use crate::session::SessionOptions;
+use crate::toolbar_gtk::GtkToolbarBridge;
+use crate::ui::toolbar::RuntimeUiPersistenceSnapshot;
+use crate::ui_text::UiTextEngine;
 
-pub(in crate::backend::wayland) use self::core::overlay::{
-    OverlaySuppression, OverlaySuppressionKeyboardPolicy,
-};
+pub(in crate::backend::wayland) use self::core::overlay::OverlaySuppression;
+#[cfg(test)]
+pub(in crate::backend::wayland) use self::core::overlay::OverlaySuppressionKeyboardPolicy;
 pub(in crate::backend::wayland) use self::region_capture::WindowSnapDirection;
 pub(in crate::backend::wayland) use self::toolbar::{MoveDragKind, ToolbarChrome, ToolbarDrag};
-use super::{
-    RuntimeOperationController, RuntimeOperationIdSource,
-    capture::{CapturePreflightRequest, CaptureState, PendingPdfExport},
-    frozen::{ExtImageCopyManagers, FrozenState},
-    overlay_passthrough::set_surface_clickthrough,
-    session::SessionState,
-    surface::{SurfacePlacement, SurfaceState},
-    toolbar::{ToolbarSurfaceManager, layout::top_size, render::render_top_strip},
-    toolbar_intent::intent_to_event,
-    zoom::ZoomState,
-};
+use super::RuntimeOperationController;
+use super::capture::CaptureState;
+use super::frozen::{ExtImageCopyManagers, FrozenState};
+use super::session::SessionState;
+use super::surface::SurfaceState;
+use super::toolbar::ToolbarSurfaceManager;
+use super::zoom::ZoomState;
 
 mod acquisition;
 mod activation;
@@ -96,10 +82,9 @@ mod protocol_globals;
 mod seat_devices;
 pub(in crate::backend::wayland) use protocol_globals::{ProtocolGlobals, ProtocolGlobalsSeed};
 mod region_capture;
-pub(in crate::backend::wayland) use region_capture::RegionCaptureIntent;
 #[cfg(test)]
 pub(in crate::backend::wayland) use region_capture::RegionPickerOptions;
-pub(in crate::backend::wayland) use region_capture::RegionReviewPress;
+pub(in crate::backend::wayland) use region_capture::{RegionCaptureIntent, RegionReviewPress};
 mod render;
 mod screen_image;
 mod spotlight_runtime;
@@ -119,38 +104,40 @@ mod zoom;
 #[cfg(test)]
 mod tests;
 
-type ScreencopyManager = wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+type ScreencopyManager = ZwlrScreencopyManagerV1;
 
 pub(in crate::backend::wayland) use self::buffer_damage::FullDamageReason;
 pub(in crate::backend::wayland) use self::perf::{
-    PerfDamageDiagnostics, PerfFrameDamageContext, PerfInputSource, PerfRenderBreakdown,
-    PerfRenderProfileKind, PerfRenderSkipReason, damage_covers_logical_surface,
+    PerfDamageDiagnostics, PerfInputSource, PerfRenderSkipReason,
 };
 pub(in crate::backend::wayland) use self::render::RenderOutcome;
+#[cfg(test)]
+pub(super) use helpers::damage_summary;
 pub(super) use helpers::{
-    damage_summary, debug_damage_logging_enabled, debug_toolbar_drag_logging_enabled, drag_log,
-    force_inline_toolbars_requested, scale_damage_regions, surface_id,
-    toolbar_drag_preview_enabled, toolbar_drag_throttle_interval, toolbar_pointer_lock_enabled,
+    debug_toolbar_drag_logging_enabled, drag_log, force_inline_toolbars_requested,
+    scale_damage_regions, surface_id,
 };
+use tokio::runtime::Handle;
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 pub(in crate::backend::wayland) struct WaylandStateInit {
-    pub ui_text: crate::ui_text::UiTextEngine,
-    pub text_measurer: crate::draw::TextMeasurer,
+    pub ui_text: UiTextEngine,
+    pub text_measurer: TextMeasurer,
     pub globals: ProtocolGlobals,
     pub config: Config,
     pub input_state: InputState,
     pub startup_activation_token: Option<String>,
-    pub onboarding: crate::onboarding::OnboardingStore,
-    pub palette_recents: crate::palette_recents::PaletteRecentsWriter,
+    pub onboarding: OnboardingStore,
+    pub palette_recents: PaletteRecentsWriter,
     pub capture_manager: CaptureManager,
     pub session_options: Option<SessionOptions>,
-    pub session_home: crate::backend::wayland::session::SessionHome,
+    pub session_home: SessionHome,
     pub session_config_failed: bool,
-    pub persistence: crate::backend::wayland::session::PersistenceController,
-    pub runtime_ui: Option<crate::backend::wayland::runtime_ui_state::ToolbarRuntimeState>,
-    pub runtime_ui_unavailable: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
-    pub runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
-    pub tokio_handle: tokio::runtime::Handle,
+    pub persistence: PersistenceController,
+    pub runtime_ui: Option<ToolbarRuntimeState>,
+    pub runtime_ui_unavailable: Option<RuntimeUiPersistenceSnapshot>,
+    pub runtime_wake: RuntimeWakeHandle,
+    pub tokio_handle: Handle,
     pub exit_after_capture_mode: ExitAfterCaptureMode,
     pub frozen_enabled: bool,
     pub preferred_output_identity: Option<String>,
@@ -212,9 +199,9 @@ pub(super) struct WaylandState {
     pub(super) acquisition: acquisition::AcquisitionRuntime,
     /// Capacity-one screen text recognition. A busy controller reports
     /// busy rather than queuing a region the user has moved on from.
-    pub(super) ocr: crate::ocr::OcrController,
+    pub(super) ocr: OcrController,
     /// GTK toolbar frontend; `None` means the built-in bars are in charge.
-    pub(super) gtk_toolbar: Option<crate::toolbar_gtk::GtkToolbarBridge>,
+    pub(super) gtk_toolbar: Option<GtkToolbarBridge>,
     /// Tick scheduling for toasts, highlights, and preset feedback.
     pub(super) ui_animation: ui_animation::UiAnimationClock,
 
@@ -242,16 +229,15 @@ pub(super) struct WaylandState {
 
     // Session persistence
     pub(super) session: SessionState,
-    pub(super) session_home: crate::backend::wayland::session::SessionHome,
-    pub(super) persistence: crate::backend::wayland::session::PersistenceController,
-    pub(super) session_transaction:
-        Option<crate::backend::wayland::session::SessionCommandTransaction>,
+    pub(super) session_home: SessionHome,
+    pub(super) persistence: PersistenceController,
+    pub(super) session_transaction: Option<SessionCommandTransaction>,
     session_dialog: self::toolbar::SessionFileDialogController,
-    pub(super) durable_action_finish: Option<crate::daemon::protocol_v2::ClaimedAction>,
+    pub(super) durable_action_finish: Option<ClaimedAction>,
     pub(super) durable_action_retry_at: Option<Instant>,
 
     // Tokio runtime handle for async operations
-    pub(super) tokio_handle: tokio::runtime::Handle,
+    pub(super) tokio_handle: Handle,
 }
 
 #[cfg(feature = "tablet-input")]

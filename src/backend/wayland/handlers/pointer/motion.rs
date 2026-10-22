@@ -4,9 +4,11 @@ use wayland_client::Connection;
 
 use crate::backend::wayland::state::{PerfInputSource, drag_log};
 use crate::backend::wayland::toolbar_intent::intent_to_event;
+use crate::input::DrawingState;
 
-use super::*;
-use crate::backend::wayland::state::ContactMotion;
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::{ContactMotion, WaylandState};
+use crate::input::state::RegionInputSource;
 
 impl WaylandState {
     pub(super) fn handle_pointer_motion(
@@ -251,7 +253,7 @@ impl WaylandState {
             return;
         }
         let (wx, wy) = self.zoomed_world_coords(sx, sy);
-        let idle = matches!(self.input_state.state, crate::input::DrawingState::Idle);
+        let idle = matches!(self.input_state.state, DrawingState::Idle);
         self.update_onboarding_card_hover(idle.then_some((sx, sy)));
         // Hovering the onboarding card is chrome motion, not canvas motion. A
         // stroke already in progress keeps its motion as it crosses the card.

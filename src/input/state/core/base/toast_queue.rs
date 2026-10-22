@@ -76,11 +76,13 @@ impl Toast {
         Self::new(UiToastKind::Error, message)
     }
 
+    #[must_use]
     pub fn duration_ms(mut self, duration_ms: u64) -> Self {
         self.duration_ms = duration_ms;
         self
     }
 
+    #[must_use]
     pub fn action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.action = Some(ToastAction {
             label: label.into(),
@@ -89,6 +91,7 @@ impl Toast {
         self
     }
 
+    #[must_use]
     pub(crate) fn command(mut self, label: impl Into<String>, command: ToastCommand) -> Self {
         self.action = Some(ToastAction {
             label: label.into(),
@@ -99,6 +102,7 @@ impl Toast {
 
     /// Add a second explicit action chip. Two-action toasts dispatch only from
     /// their chips; the remaining toast body becomes dismiss-only.
+    #[must_use]
     pub fn secondary_action(mut self, label: impl Into<String>, action: Action) -> Self {
         self.secondary_action = Some(ToastAction {
             label: label.into(),
@@ -121,6 +125,7 @@ impl Toast {
 
     /// Rate-limit this key: suppress the push when the same key already
     /// showed the same message this session. Content changes show again.
+    #[must_use]
     pub fn once_per_content(mut self) -> Self {
         self.once_per_content = true;
         self
@@ -146,11 +151,13 @@ pub enum ToastPushOutcome {
 
 impl ToastPushOutcome {
     /// Whether the push will (eventually) be visible.
+    #[must_use]
     pub fn accepted(self) -> bool {
         !matches!(self, Self::RateLimited | Self::HintYielded)
     }
 
     /// Whether the push changed the currently visible toast.
+    #[must_use]
     pub fn changed_active(self) -> bool {
         matches!(self, Self::Displayed | Self::UpdatedActive)
     }
@@ -235,7 +242,10 @@ impl ToastQueue {
             if let Some(current) = active.take_if(|current| priority > current.priority) {
                 self.requeue_preempted(current, now);
                 self.activate_next(active, now);
-                debug_assert!(active.as_ref().is_some_and(|current| current.key == key));
+                debug_assert!(
+                    active.as_ref().is_some_and(|current| current.key == key),
+                    "the promoted toast {key:?} must preempt the active toast"
+                );
                 return ToastPushOutcome::Displayed;
             }
             return ToastPushOutcome::UpdatedQueued;
@@ -262,7 +272,10 @@ impl ToastQueue {
             self.requeue_preempted(current, now);
             self.enqueue_fifo(priority, key, toast);
             self.activate_next(active, now);
-            debug_assert!(active.as_ref().is_some_and(|current| current.key == key));
+            debug_assert!(
+                active.as_ref().is_some_and(|current| current.key == key),
+                "the preempting toast {key:?} must become the active toast"
+            );
             return ToastPushOutcome::Displayed;
         }
 
@@ -375,7 +388,10 @@ impl ToastQueue {
     }
 
     fn activate_next(&mut self, active: &mut Option<UiToastState>, now: Instant) {
-        debug_assert!(active.is_none());
+        debug_assert!(
+            active.is_none(),
+            "retire or requeue the active toast before activating the next one"
+        );
         if self.pending.is_empty() {
             return;
         }
@@ -490,8 +506,8 @@ mod tests {
 
     const T0_DURATION: u64 = UI_TOAST_DURATION_MS;
 
-    fn active_key(active: &Option<UiToastState>) -> Option<&'static str> {
-        active.as_ref().map(|toast| toast.key)
+    fn active_key(active: Option<&UiToastState>) -> Option<&'static str> {
+        active.map(|toast| toast.key)
     }
 
     #[test]
@@ -510,7 +526,7 @@ mod tests {
 
         assert_eq!(outcome, ToastPushOutcome::Displayed);
         assert!(outcome.accepted());
-        assert_eq!(active_key(&active), Some("a"));
+        assert_eq!(active_key(active.as_ref()), Some("a"));
         assert!(queue.is_empty());
     }
 
@@ -533,10 +549,10 @@ mod tests {
         // Expire "a" -> "b" activates, then "c".
         let later = now + Duration::from_millis(T0_DURATION);
         assert_eq!(queue.advance(&mut active, later), (true, true));
-        assert_eq!(active_key(&active), Some("b"));
+        assert_eq!(active_key(active.as_ref()), Some("b"));
         let later = later + Duration::from_millis(T0_DURATION);
         assert_eq!(queue.advance(&mut active, later), (true, true));
-        assert_eq!(active_key(&active), Some("c"));
+        assert_eq!(active_key(active.as_ref()), Some("c"));
         let later = later + Duration::from_millis(T0_DURATION);
         assert_eq!(queue.advance(&mut active, later), (false, false));
         assert!(active.is_none());
@@ -564,13 +580,13 @@ mod tests {
         );
 
         assert_eq!(outcome, ToastPushOutcome::Displayed);
-        assert_eq!(active_key(&active), Some("crit"));
+        assert_eq!(active_key(active.as_ref()), Some("crit"));
         assert_eq!(queue.pending_len(), 1, "preempted info toast re-queued");
 
         // When the critical toast expires the info toast resumes.
         let later = now + Duration::from_millis(T0_DURATION);
         assert_eq!(queue.advance(&mut active, later), (true, true));
-        assert_eq!(active_key(&active), Some("info"));
+        assert_eq!(active_key(active.as_ref()), Some("info"));
     }
 
     #[test]
@@ -670,7 +686,7 @@ mod tests {
             preempt_at,
         );
 
-        assert_eq!(active_key(&active), Some("crit"));
+        assert_eq!(active_key(active.as_ref()), Some("crit"));
         assert!(queue.is_empty(), "stale info toast dropped, not re-queued");
     }
 
@@ -705,7 +721,7 @@ mod tests {
         let later = now + Duration::from_millis(T0_DURATION);
         queue.advance(&mut active, later);
         assert_eq!(
-            active_key(&active),
+            active_key(active.as_ref()),
             Some("showing"),
             "preempted toast keeps seniority over queued peers"
         );
@@ -744,7 +760,7 @@ mod tests {
         while active.is_some() {
             later += Duration::from_millis(T0_DURATION);
             queue.advance(&mut active, later);
-            shown.extend(active_key(&active));
+            shown.extend(active_key(active.as_ref()));
         }
         assert_eq!(shown, ["d", "a", "b"]);
     }
@@ -776,7 +792,7 @@ mod tests {
             queue.push(&mut active, ToastPriority::Info, "c", Toast::info("c"), now),
             ToastPushOutcome::Queued
         );
-        assert_eq!(active_key(&active), Some("action"));
+        assert_eq!(active_key(active.as_ref()), Some("action"));
     }
 
     #[test]
@@ -868,7 +884,7 @@ mod tests {
         );
 
         assert_eq!(outcome, ToastPushOutcome::Displayed);
-        assert_eq!(active_key(&active), Some("capture"));
+        assert_eq!(active_key(active.as_ref()), Some("capture"));
         assert_eq!(
             active.as_ref().map(|toast| toast.priority),
             Some(ToastPriority::Critical)
@@ -877,7 +893,7 @@ mod tests {
         let later = now + Duration::from_millis(T0_DURATION);
         queue.advance(&mut active, later);
         assert_eq!(
-            active_key(&active),
+            active_key(active.as_ref()),
             Some("action"),
             "the preempted action toast keeps its remaining display time"
         );
@@ -962,7 +978,7 @@ mod tests {
         );
         assert_eq!(outcome, ToastPushOutcome::HintYielded);
         assert!(queue.is_empty());
-        assert_eq!(active_key(&active), Some("busy"));
+        assert_eq!(active_key(active.as_ref()), Some("busy"));
     }
 
     #[test]
@@ -999,7 +1015,7 @@ mod tests {
             Toast::info("hint"),
             now,
         );
-        assert_eq!(active_key(&active), Some("hint"));
+        assert_eq!(active_key(active.as_ref()), Some("hint"));
 
         queue.push(
             &mut active,
@@ -1008,7 +1024,7 @@ mod tests {
             Toast::info("i"),
             now,
         );
-        assert_eq!(active_key(&active), Some("info"));
+        assert_eq!(active_key(active.as_ref()), Some("info"));
         assert!(queue.is_empty(), "hint dropped, never re-queued");
     }
 
@@ -1022,7 +1038,7 @@ mod tests {
         queue.push(&mut active, ToastPriority::Info, "b", Toast::info("b"), now);
 
         assert!(queue.on_dismissed(&mut active, now));
-        assert_eq!(active_key(&active), Some("b"));
+        assert_eq!(active_key(active.as_ref()), Some("b"));
         assert!(!queue.on_dismissed(&mut active, now));
         assert!(active.is_none());
     }
@@ -1056,7 +1072,7 @@ mod tests {
         // The action toast survived; the oldest info entries were dropped.
         let later = now + Duration::from_millis(T0_DURATION);
         queue.advance(&mut active, later);
-        assert_eq!(active_key(&active), Some("act"));
+        assert_eq!(active_key(active.as_ref()), Some("act"));
     }
 
     #[test]
@@ -1077,7 +1093,7 @@ mod tests {
         for key in keys {
             queue.push(&mut active, ToastPriority::Info, key, Toast::info(key), now);
         }
-        assert_eq!(active_key(&active), Some("i0"));
+        assert_eq!(active_key(active.as_ref()), Some("i0"));
         assert_eq!(queue.pending_len(), MAX_PENDING);
 
         // A critical push preempts the fresh active i0. i0 is re-queued with
@@ -1090,13 +1106,13 @@ mod tests {
             Toast::error("e"),
             now,
         );
-        assert_eq!(active_key(&active), Some("crit"));
+        assert_eq!(active_key(active.as_ref()), Some("crit"));
 
         // When the critical toast expires the preempted i0 resumes first.
         let later = now + Duration::from_millis(T0_DURATION);
         queue.advance(&mut active, later);
         assert_eq!(
-            active_key(&active),
+            active_key(active.as_ref()),
             Some("i0"),
             "the freshly preempted senior toast survives capacity eviction"
         );
@@ -1123,7 +1139,7 @@ mod tests {
             Toast::info("Board deleted").action("Undo", Action::BoardRestoreDeleted),
             now,
         );
-        assert_eq!(active_key(&active), Some("crit"));
+        assert_eq!(active_key(active.as_ref()), Some("crit"));
         assert_eq!(
             queue.pending_len(),
             1,
@@ -1135,7 +1151,7 @@ mod tests {
             key == "board.delete" && matches!(action, Some(Action::BoardRestoreDeleted))
         });
         assert!(!changed, "active slot did not change");
-        assert_eq!(active_key(&active), Some("crit"));
+        assert_eq!(active_key(active.as_ref()), Some("crit"));
         assert!(queue.is_empty(), "stale queued action removed");
 
         // When the critical toast expires nothing stale surfaces.
@@ -1165,7 +1181,7 @@ mod tests {
             Toast::info("i"),
             now,
         );
-        assert_eq!(active_key(&active), Some("board.delete"));
+        assert_eq!(active_key(active.as_ref()), Some("board.delete"));
 
         // Removing the active toast vacates the slot but does NOT eagerly
         // surface the unrelated survivor — that would pop an unrelated toast a
@@ -1177,7 +1193,7 @@ mod tests {
 
         // The normal advance cycle then promotes the surviving valid entry.
         assert_eq!(queue.advance(&mut active, now), (true, true));
-        assert_eq!(active_key(&active), Some("info"));
+        assert_eq!(active_key(active.as_ref()), Some("info"));
     }
 
     #[test]

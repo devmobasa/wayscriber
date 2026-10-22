@@ -1,3 +1,4 @@
+use std::mem;
 use std::time::{Duration, Instant};
 
 use crate::toolbar_gtk::{GtkToolbarFeedback, GtkToolbarKind};
@@ -111,7 +112,7 @@ impl ToolbarDrag {
     }
 
     pub(in crate::backend::wayland) fn take_flush_requested(&mut self) -> bool {
-        std::mem::take(&mut self.flush_requested)
+        mem::take(&mut self.flush_requested)
     }
 
     pub(in crate::backend::wayland) fn begin_move(
@@ -183,7 +184,7 @@ impl ToolbarDrag {
         if *active_kind != kind {
             return None;
         }
-        Some(std::mem::replace(previous, sample))
+        Some(mem::replace(previous, sample))
     }
 
     /// Compare screen samples across surfaces, except that a suppressed toolbar's

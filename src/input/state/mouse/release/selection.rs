@@ -1,8 +1,9 @@
 use std::time::Instant;
 
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
-use crate::draw::{Shape, ShapeId};
-use crate::input::{InputState, state::SelectionGrab};
+use crate::draw::{Shape, ShapeId, TextMeasurer};
+use crate::input::InputState;
+use crate::input::state::SelectionGrab;
 
 use super::super::{SELECTION_DRAG_THRESHOLD, TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 
@@ -13,7 +14,7 @@ use super::super::{SELECTION_DRAG_THRESHOLD, TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DO
 /// (`release` is `None`) records its move but is never a click.
 pub(super) fn finish_moving_selection(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     mut grab: SelectionGrab,
     release: Option<(i32, i32)>,
     snapshots: Vec<(ShapeId, ShapeSnapshot)>,
@@ -44,11 +45,7 @@ pub(super) fn finish_moving_selection(
 
 /// Shift keeps the rest of the selection, so its shared properties open
 /// together; otherwise the double-click narrows the selection to the shape.
-fn open_double_clicked_shape(
-    state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
-    shape_id: ShapeId,
-) {
+fn open_double_clicked_shape(state: &mut InputState, measurer: &TextMeasurer, shape_id: ShapeId) {
     if !state.modifiers.shift {
         state.set_selection_with(measurer, vec![shape_id]);
     }
@@ -59,7 +56,7 @@ fn open_double_clicked_shape(
 
 pub(super) fn finish_selection_drag(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     start_x: i32,
     start_y: i32,
     end_x: i32,
@@ -158,7 +155,7 @@ pub(super) fn finish_text_resize(
 
 pub(super) fn finish_selection_resize(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     snapshots: &[(ShapeId, ShapeSnapshot)],
 ) {
     let effects =
@@ -172,12 +169,16 @@ pub(super) fn finish_selection_resize(
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+    use crate::input::state::SelectionHandle;
+    use crate::input::state::test_support::TestInputStateBuilder;
+
     use super::*;
 
     #[test]
     fn multi_shape_resize_undo_and_redo_are_one_gesture() {
-        let mut state = crate::input::state::test_support::TestInputStateBuilder::default().build();
-        let measurer = crate::draw::TextMeasurer::default();
+        let mut state = TestInputStateBuilder::default().build();
+        let measurer = TextMeasurer::default();
         let ids: Vec<_> = [10, 50]
             .into_iter()
             .map(|x| {
@@ -188,7 +189,7 @@ mod tests {
                     h: 20,
                     fill: false,
                     fill_color: None,
-                    color: crate::draw::WHITE,
+                    color: draw::WHITE,
                     thick: 2.0,
                 })
             })
@@ -202,7 +203,7 @@ mod tests {
             .collect();
         state.apply_selection_resize_with(
             &measurer,
-            crate::input::state::SelectionHandle::BottomRight,
+            SelectionHandle::BottomRight,
             &bounds,
             bounds.width,
             bounds.height,

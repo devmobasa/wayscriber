@@ -1,3 +1,6 @@
+use crate::capture;
+use crate::input::InputState;
+
 use super::super::cut_review::{CutPreviewKey, RegionReviewEdits, native_extent_display};
 use super::apply::{CutPreviewVisibleEffect, visible_effect_for_cut_preview};
 use super::job::{CutPreviewInput, CutPreviewJob, CutPreviewOutcome, run_cut_preview};
@@ -49,10 +52,7 @@ pub(super) fn cut_preview_from_poll(
     }
 }
 
-pub(super) fn present_cut_preview_effect(
-    input: &mut crate::input::InputState,
-    effect: CutPreviewVisibleEffect,
-) {
+pub(super) fn present_cut_preview_effect(input: &mut InputState, effect: CutPreviewVisibleEffect) {
     if effect.toast_current_failure {
         input.push_toast(
             ToastPriority::Info,
@@ -164,7 +164,7 @@ impl WaylandState {
                 native_extent_display(
                     &edits.correlation.source,
                     edits.source_rect,
-                    crate::capture::output_size(
+                    capture::output_size(
                         (edits.source_rect.width(), edits.source_rect.height()),
                         cuts,
                     )

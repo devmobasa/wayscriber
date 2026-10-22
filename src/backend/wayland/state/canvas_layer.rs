@@ -12,7 +12,13 @@
 
 use log::debug;
 
-use crate::draw::{Color, ShapeId};
+use crate::domain::{BoardGrid, BoardGridKind};
+use crate::draw;
+use crate::draw::{
+    BlurRectParams, BoardPaper, Color, DrawnShape, EraserReplayContext, RenderCaches, RenderCtx,
+    Shape, ShapeId, TextMeasurer,
+};
+use crate::input::BoardBackground;
 use crate::util::Rect;
 
 use super::WaylandState;
@@ -36,7 +42,7 @@ pub(in crate::backend::wayland) struct CanvasLayerCache {
     shapes_len: usize,
     last_shape_id: Option<ShapeId>,
     background: Option<Color>,
-    grid: crate::domain::BoardGrid,
+    grid: BoardGrid,
     text_halo_enabled: bool,
     board_key: (usize, usize),
     valid: bool,
@@ -94,17 +100,17 @@ impl CanvasLayerCache {
 /// Renders one committed shape with the standard eraser/blur replay handling.
 /// Shared between the direct canvas render path and the layer-cache bake.
 pub(in crate::backend::wayland) fn render_committed_shape(
-    measurer: &crate::draw::TextMeasurer,
-    render: &mut crate::draw::RenderCtx<'_, '_>,
-    drawn_shape: &crate::draw::DrawnShape,
-    replay_ctx: &crate::draw::EraserReplayContext<'_>,
+    measurer: &TextMeasurer,
+    render: &mut RenderCtx<'_, '_>,
+    drawn_shape: &DrawnShape,
+    replay_ctx: &EraserReplayContext<'_>,
     text_halo_enabled: bool,
 ) {
     match &drawn_shape.shape {
-        crate::draw::Shape::EraserStroke { points, brush } => {
-            crate::draw::render_eraser_stroke(render.cairo, points, brush, replay_ctx);
+        Shape::EraserStroke { points, brush } => {
+            draw::render_eraser_stroke(render.cairo, points, brush, replay_ctx);
         }
-        crate::draw::Shape::BlurRect {
+        Shape::BlurRect {
             x,
             y,
             w,
@@ -113,7 +119,7 @@ pub(in crate::backend::wayland) fn render_committed_shape(
             style,
         } => {
             render.render_blur_rect(
-                crate::draw::BlurRectParams {
+                BlurRectParams {
                     x: *x,
                     y: *y,
                     w: *w,
@@ -161,8 +167,8 @@ impl WaylandState {
             return false;
         }
         let background = match self.input_state.boards.active_background() {
-            crate::input::BoardBackground::Solid(color) => Some(*color),
-            crate::input::BoardBackground::Transparent => None,
+            BoardBackground::Solid(color) => Some(*color),
+            BoardBackground::Transparent => None,
         };
         let text_halo_enabled = self.config.drawing.text_halo_enabled;
         let board_key = (
@@ -198,7 +204,7 @@ pub(super) struct CanvasLayerInputs {
     pub(super) scale: i32,
     pub(super) origin: (f64, f64),
     pub(super) background: Option<Color>,
-    pub(super) grid: crate::domain::BoardGrid,
+    pub(super) grid: BoardGrid,
     pub(super) text_halo_enabled: bool,
     pub(super) board_key: (usize, usize),
     pub(super) generation: u64,
@@ -207,9 +213,9 @@ pub(super) struct CanvasLayerInputs {
 impl CanvasLayerCache {
     pub(super) fn ensure(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        draw_caches: &mut crate::draw::RenderCaches,
-        shapes: &[crate::draw::DrawnShape],
+        measurer: &TextMeasurer,
+        draw_caches: &mut RenderCaches,
+        shapes: &[DrawnShape],
         inputs: CanvasLayerInputs,
     ) -> bool {
         let CanvasLayerInputs {
@@ -303,9 +309,8 @@ impl CanvasLayerCache {
             bake_ctx.scale(scale as f64, scale as f64);
             bake_ctx.translate(-(world_x as f64), -(world_y as f64));
 
-            let paper = match background.filter(|_| grid.kind != crate::domain::BoardGridKind::None)
-            {
-                Some(color) => match crate::draw::BoardPaper::for_context(color, grid, &bake_ctx) {
+            let paper = match background.filter(|_| grid.kind != BoardGridKind::None) {
+                Some(color) => match BoardPaper::for_context(color, grid, &bake_ctx) {
                     Ok(paper) => {
                         if paper.paint(&bake_ctx).is_err() {
                             cache.clear();
@@ -324,7 +329,7 @@ impl CanvasLayerCache {
             // Erasers clear down to the baked board paper; blur rects have
             // no backdrop image in this mode (same as the direct render path).
             let replay_ctx = crate::draw::EraserReplayContext {
-                pattern: paper.as_ref().map(crate::draw::BoardPaper::pattern),
+                pattern: paper.as_ref().map(BoardPaper::pattern),
                 surface: None,
                 backdrop_cache_key: None,
                 bg_color: background,

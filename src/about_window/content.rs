@@ -8,6 +8,7 @@ use crate::i18n::{tr, trf};
 use crate::update_check::{
     AvailableUpdate, CachedStatus, DEFAULT_NOTES_URL, Freshness, update_instructions_url,
 };
+use crate::{build_info, update_check};
 
 /// wayscriber.com is the only outbound link: the site carries the docs,
 /// release notes, and per-distro update instructions, so the dialog does not
@@ -97,7 +98,7 @@ pub(super) enum UpdateState {
 impl UpdateState {
     /// Seed the row from the cache so opening About costs no network.
     pub(super) fn from_cache(status: CachedStatus) -> Self {
-        if crate::update_check::compiled_out() {
+        if update_check::compiled_out() {
             return Self::Unavailable;
         }
         Self::from_status(status)
@@ -191,10 +192,10 @@ pub(super) struct AboutContent {
 impl AboutContent {
     pub(super) fn build() -> Self {
         Self::from_parts(
-            crate::build_info::version(),
-            crate::build_info::commit_hash(),
-            crate::build_info::build_date(),
-            crate::build_info::install_source(),
+            build_info::version(),
+            build_info::commit_hash(),
+            build_info::build_date(),
+            build_info::install_source(),
         )
     }
 
@@ -281,7 +282,7 @@ impl AboutContent {
 fn capitalize(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
         None => String::new(),
     }
 }
@@ -311,6 +312,8 @@ fn plural(count: u64, unit: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::base64;
+
     use super::*;
     use crate::update_check::DEFAULT_UPDATE_URL;
 
@@ -358,7 +361,7 @@ mod tests {
         let fragment = url
             .strip_prefix(&format!("{REPORT_URL}#d="))
             .expect("the report row opens the stable page with a diagnostics fragment");
-        let decoded = crate::base64::decode_standard(fragment).expect("fragment is valid base64");
+        let decoded = base64::decode_standard(fragment).expect("fragment is valid base64");
 
         assert_eq!(
             String::from_utf8(decoded).unwrap(),
@@ -408,7 +411,7 @@ mod tests {
             notes_url: DEFAULT_NOTES_URL.to_string(),
         };
         let available = UpdateState::from_status(CachedStatus::Update {
-            update: update.clone(),
+            update,
             freshness: Freshness {
                 checked_seconds_ago: Some(60),
                 last_attempt_failed: false,
@@ -487,7 +490,7 @@ mod tests {
     fn a_compiled_out_build_shows_an_inert_card() {
         let seeded = UpdateState::from_cache(CachedStatus::Never(Freshness::default()));
 
-        if crate::update_check::compiled_out() {
+        if update_check::compiled_out() {
             assert_eq!(seeded, UpdateState::Unavailable);
             assert_eq!(seeded.action(), None);
             assert!(seeded.headline().contains("off in this build"));

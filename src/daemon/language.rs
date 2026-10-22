@@ -8,12 +8,13 @@ use log::warn;
 
 use crate::config::Config;
 use crate::domain::Language;
+use crate::i18n;
 
 /// Selects the saved `[ui] language`, once, before the tray, shortcut and
 /// update-notice workers start, whichever of them are enabled. A change takes
 /// effect when the daemon restarts.
 pub(super) fn initialize_ui_language() {
-    crate::i18n::initialize(configured_language());
+    i18n::initialize(configured_language());
 }
 
 /// The saved language, or the default (`auto`) when the config cannot be
@@ -31,13 +32,15 @@ fn configured_language() -> Language {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env, fs};
+
+    use crate::{env_vars, test_env};
 
     use super::*;
     use crate::config::test_helpers::with_temp_config_home;
 
     fn write_config(contents: &str) {
-        let path = Config::get_config_path().expect("config path");
+        let path = Config::config_path().expect("config path");
         fs::create_dir_all(path.parent().expect("config dir")).expect("create config dir");
         fs::write(path, contents).expect("write config");
     }
@@ -70,7 +73,7 @@ mod tests {
 
     #[test]
     fn startup_selects_and_prepares_the_saved_language() {
-        crate::test_env::in_language_isolated_child(
+        test_env::in_language_isolated_child(
             concat!(
                 module_path!(),
                 "::startup_selects_and_prepares_the_saved_language"
@@ -81,9 +84,9 @@ mod tests {
 
                     initialize_ui_language();
 
-                    assert_eq!(crate::i18n::language(), Language::SimplifiedChinese);
-                    assert!(crate::i18n::catalog_len() > 0);
-                    assert_eq!(crate::i18n::tr("Boards"), "画板");
+                    assert_eq!(i18n::language(), Language::SimplifiedChinese);
+                    assert!(i18n::catalog_len() > 0);
+                    assert_eq!(i18n::tr("Boards"), "画板");
                 });
             },
         );
@@ -91,7 +94,7 @@ mod tests {
 
     #[test]
     fn the_override_variable_still_beats_the_saved_language() {
-        crate::test_env::in_language_isolated_child(
+        test_env::in_language_isolated_child(
             concat!(
                 module_path!(),
                 "::the_override_variable_still_beats_the_saved_language"
@@ -101,12 +104,12 @@ mod tests {
                     write_config("[ui]\nlanguage = \"en\"\n");
                     // SAFETY: this child process runs only this test.
                     unsafe {
-                        std::env::set_var(crate::env_vars::LANGUAGE_OVERRIDE_ENV, "zh-CN");
+                        env::set_var(env_vars::LANGUAGE_OVERRIDE_ENV, "zh-CN");
                     }
 
                     initialize_ui_language();
 
-                    assert_eq!(crate::i18n::language(), Language::SimplifiedChinese);
+                    assert_eq!(i18n::language(), Language::SimplifiedChinese);
                 });
             },
         );

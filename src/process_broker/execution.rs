@@ -1,12 +1,17 @@
+use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
-use std::os::fd::AsRawFd;
+use std::mem::MaybeUninit;
+use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use std::{mem, thread};
 
 use anyhow::{Context, Result, anyhow};
+
+use crate::daemon::protocol_v2::{BootClock, BootDeadline};
 
 use super::transport::shutdown_requested;
 use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode, STDOUT_CAP_EXCEEDED};
@@ -50,16 +55,14 @@ pub(super) fn supports_retained_publication(kind: HelperKind) -> bool {
     false
 }
 
-pub(super) fn terminate_owned_children(
-    children: &mut std::collections::BTreeMap<String, std::process::Child>,
-) {
-    for (_, mut child) in std::mem::take(children) {
+pub(super) fn terminate_owned_children(children: &mut BTreeMap<String, Child>) {
+    for (_, mut child) in mem::take(children) {
         kill_child_process_group(&mut child);
         let _ = child.wait();
     }
 }
 
-pub(super) fn kill_child_process_group(child: &mut std::process::Child) {
+pub(super) fn kill_child_process_group(child: &mut Child) {
     let pid = child.id();
     if let Ok(group) = i32::try_from(pid) {
         // SAFETY: broker children use a fresh process group equal to their PID.
@@ -141,8 +144,8 @@ impl Drop for OwnedProcess {
     }
 }
 
-fn child_status_unreaped(child: &std::process::Child) -> io::Result<Option<i32>> {
-    let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+fn child_status_unreaped(child: &Child) -> io::Result<Option<i32>> {
+    let mut info = MaybeUninit::<libc::siginfo_t>::zeroed();
     // WNOWAIT pins the zombie leader and therefore its process-group identity.
     // SAFETY: info is writable and child is owned by this broker.
     if unsafe {
@@ -158,6 +161,9 @@ fn child_status_unreaped(child: &std::process::Child) -> io::Result<Option<i32>>
     }
     // SAFETY: waitid initialized info after success.
     let info = unsafe { info.assume_init() };
+    // SAFETY: info was zeroed before the call and waitid only writes a SIGCHLD
+    // record into it, so the pid field it reads is initialized; it stays zero
+    // when WNOHANG found no waitable child.
     if unsafe { info.si_pid() } == 0 {
         return Ok(None);
     }
@@ -180,13 +186,12 @@ pub(super) fn publish_bounded(
     mut command: Command,
     input: Vec<u8>,
     timeout: Duration,
-    shutdown_fd: std::os::fd::RawFd,
+    shutdown_fd: RawFd,
 ) -> Result<PublishOutput> {
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker publication cancelled during shutdown"));
     }
-    let deadline = crate::daemon::protocol_v2::BootClock::now()?
-        .checked_add(timeout.max(Duration::from_millis(1)))?;
+    let deadline = BootClock::now()?.checked_add(timeout.max(Duration::from_millis(1)))?;
     command
         .process_group(0)
         .stdin(Stdio::piped())
@@ -199,7 +204,7 @@ pub(super) fn publish_bounded(
             .context("broker publication helper spawn failed")?,
     );
     let stdin = child.child_mut().stdin.take();
-    let stdin_writer = std::thread::spawn(move || match stdin {
+    let stdin_writer = thread::spawn(move || match stdin {
         Some(stdin) => write_input_until(stdin, &input, deadline, shutdown_fd),
         None => Ok(()),
     });
@@ -225,7 +230,7 @@ pub(super) fn publish_bounded(
                 retained: Some(child.into_child()),
             });
         }
-        if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
+        if BootClock::now()? >= deadline {
             child.terminate();
             let status = status_code(child.wait()?);
             let _ = stdin_writer.join();
@@ -241,19 +246,21 @@ pub(super) fn publish_bounded(
             let _ = stdin_writer.join();
             return Err(anyhow!("broker publication cancelled during shutdown"));
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 fn write_input_until(
-    mut stdin: std::process::ChildStdin,
+    mut stdin: ChildStdin,
     input: &[u8],
-    deadline: crate::daemon::protocol_v2::BootDeadline,
-    shutdown_fd: std::os::fd::RawFd,
+    deadline: BootDeadline,
+    shutdown_fd: RawFd,
 ) -> io::Result<()> {
     let descriptor = stdin.as_raw_fd();
     // SAFETY: fcntl reads and updates descriptor-local flags.
     let flags = unsafe { libc::fcntl(descriptor, libc::F_GETFL) };
+    // SAFETY: `stdin` keeps the descriptor open, and F_SETFL only adds
+    // O_NONBLOCK to the flags just read from it.
     if flags < 0 || unsafe { libc::fcntl(descriptor, libc::F_SETFL, flags | libc::O_NONBLOCK) } != 0
     {
         return Err(io::Error::last_os_error());
@@ -271,15 +278,13 @@ fn write_input_until(
             Ok(written) => offset += written,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                if crate::daemon::protocol_v2::BootClock::now().map_err(io::Error::other)?
-                    >= deadline
-                {
+                if BootClock::now().map_err(io::Error::other)? >= deadline {
                     return Err(io::Error::new(
                         io::ErrorKind::TimedOut,
                         "publication input deadline expired",
                     ));
                 }
-                std::thread::sleep(Duration::from_millis(5));
+                thread::sleep(Duration::from_millis(5));
             }
             Err(error) => return Err(error),
         }
@@ -293,13 +298,12 @@ pub(super) fn run_bounded(
     timeout: Duration,
     output_cap: usize,
     output_mode: OutputMode,
-    shutdown_fd: std::os::fd::RawFd,
+    shutdown_fd: RawFd,
 ) -> Result<BoundedOutput> {
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker helper cancelled during shutdown"));
     }
-    let deadline = crate::daemon::protocol_v2::BootClock::now()?
-        .checked_add(timeout.max(Duration::from_millis(1)))?;
+    let deadline = BootClock::now()?.checked_add(timeout.max(Duration::from_millis(1)))?;
     command.process_group(0);
     command
         .stdin(Stdio::piped())
@@ -324,7 +328,7 @@ pub(super) fn run_bounded(
     let stdout_reader = {
         let limit_reached = Arc::clone(&stdout_limit_reached);
         let stdout = AbandonablePipe::new(stdout, &abandon_pipes);
-        std::thread::spawn(move || match output_mode {
+        thread::spawn(move || match output_mode {
             OutputMode::Complete => read_capped(stdout, output_cap, &limit_reached),
             OutputMode::Prefix => read_prefix(stdout, output_cap, &limit_reached),
         })
@@ -332,13 +336,13 @@ pub(super) fn run_bounded(
     let stderr_reader = {
         let overflow = Arc::clone(&stderr_overflow);
         let stderr = AbandonablePipe::new(stderr, &abandon_pipes);
-        std::thread::spawn(move || read_capped(stderr, output_cap.min(MAX_STDERR_BYTES), &overflow))
+        thread::spawn(move || read_capped(stderr, output_cap.min(MAX_STDERR_BYTES), &overflow))
     };
     let stdin_writer = {
         let stdin = stdin
             .take()
             .map(|stdin| AbandonablePipe::new(stdin, &abandon_pipes));
-        std::thread::spawn(move || {
+        thread::spawn(move || {
             stdin.and_then(|mut stdin| {
                 stdin
                     .write_all(&input)
@@ -352,7 +356,7 @@ pub(super) fn run_bounded(
             child.terminate();
             break (child.wait()?, false, false);
         }
-        if crate::daemon::protocol_v2::BootClock::now()? >= deadline {
+        if BootClock::now()? >= deadline {
             child.terminate();
             break (child.wait()?, true, false);
         }
@@ -364,20 +368,19 @@ pub(super) fn run_bounded(
             child.terminate();
             break (child.wait()?, false, cancelled);
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     };
 
-    let drain_deadline =
-        crate::daemon::protocol_v2::BootClock::now()?.checked_add(PIPE_DRAIN_GRACE)?;
+    let drain_deadline = BootClock::now()?.checked_add(PIPE_DRAIN_GRACE)?;
     while !(stdout_reader.is_finished()
         && stderr_reader.is_finished()
         && stdin_writer.is_finished())
     {
-        if crate::daemon::protocol_v2::BootClock::now()? >= drain_deadline {
+        if BootClock::now()? >= drain_deadline {
             abandon_pipes.store(true, Ordering::Release);
             break;
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 
     let stdout = stdout_reader

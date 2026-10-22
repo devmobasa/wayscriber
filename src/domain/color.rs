@@ -31,6 +31,7 @@ impl Color {
     /// All values should be in the range 0.0 to 1.0.
     /// This method is kept for future extensibility (custom colors in config file).
     #[allow(dead_code)]
+    #[must_use]
     pub fn new(r: f64, g: f64, b: f64, a: f64) -> Self {
         Self { r, g, b, a }
     }
@@ -127,30 +128,31 @@ const fn rgb8(r: u8, g: u8, b: u8) -> Color {
 // keeps exact color equality intact, which swatch selection relies on.
 
 /// Tuned palette red `#F5333F` (named color "red", quick color slot 0)
-pub const PALETTE_RED: Color = rgb8(0xF5, 0x33, 0x3F);
+pub const PALETTE_RED: Color = rgb8(0xf5, 0x33, 0x3f);
 
 /// Tuned palette green `#2EC27E` (named color "green", quick color slot 1)
-pub const PALETTE_GREEN: Color = rgb8(0x2E, 0xC2, 0x7E);
+pub const PALETTE_GREEN: Color = rgb8(0x2e, 0xc2, 0x7e);
 
 /// Tuned palette blue `#3584E4` (named color "blue", quick color slot 2)
-pub const PALETTE_BLUE: Color = rgb8(0x35, 0x84, 0xE4);
+pub const PALETTE_BLUE: Color = rgb8(0x35, 0x84, 0xe4);
 
 /// Tuned palette yellow `#F6D32D` (named color "yellow", quick color slot 3)
-pub const PALETTE_YELLOW: Color = rgb8(0xF6, 0xD3, 0x2D);
+pub const PALETTE_YELLOW: Color = rgb8(0xf6, 0xd3, 0x2d);
 
 /// Tuned palette orange `#FF7800` (named color "orange", quick color slot 4)
-pub const PALETTE_ORANGE: Color = rgb8(0xFF, 0x78, 0x00);
+pub const PALETTE_ORANGE: Color = rgb8(0xff, 0x78, 0x00);
 
 /// Tuned palette pink `#C061CB` (named color "pink", quick color slot 5)
-pub const PALETTE_PINK: Color = rgb8(0xC0, 0x61, 0xCB);
+pub const PALETTE_PINK: Color = rgb8(0xc0, 0x61, 0xcb);
 
 /// Tuned palette white `#FFFFFF` (named color "white", quick color slot 6)
 pub const PALETTE_WHITE: Color = WHITE;
 
 /// Tuned palette black `#241F31` (named color "black", quick color slot 7)
-pub const PALETTE_BLACK: Color = rgb8(0x24, 0x1F, 0x31);
+pub const PALETTE_BLACK: Color = rgb8(0x24, 0x1f, 0x31);
 
 /// Convert an HSV triple (all components in 0.0–1.0) to an opaque RGB color.
+#[must_use]
 pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
     let h = (h - h.floor()).clamp(0.0, 1.0) * 6.0;
     let i = h.floor();
@@ -172,6 +174,7 @@ pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> Color {
 /// Convert RGB components (0.0–1.0) to an HSV triple in 0.0–1.0.
 /// Hue is 0.0 for grays (delta = 0); callers that need hue continuity
 /// across gray colors must remember the last meaningful hue themselves.
+#[must_use]
 pub fn rgb_to_hsv(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);

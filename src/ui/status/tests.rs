@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::test_support;
+
 use super::*;
 use crate::config::{StatusBarStyle, StatusPosition};
 use crate::input::InputState;
@@ -5,13 +8,13 @@ use crate::ui::theme::Theme;
 use crate::ui_text::UiTextEngine;
 
 fn state() -> InputState {
-    crate::input::state::test_support::make_test_input_state()
+    test_support::make_test_input_state()
 }
 
 fn update(engine: &UiTextEngine, state: &mut InputState, style: &StatusBarStyle, focused: bool) {
     state.update_status_hud_layout_for_pointer_with_resources(
         crate::input::state::InputTextResources {
-            measurer: &crate::draw::TextMeasurer::default(),
+            measurer: &TextMeasurer::default(),
             ui_engine: engine,
         },
         StatusPosition::BottomLeft,

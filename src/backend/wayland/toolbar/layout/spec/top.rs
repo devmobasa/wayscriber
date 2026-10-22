@@ -1,4 +1,6 @@
-use crate::ui::toolbar::ToolbarSnapshot;
+use crate::backend::wayland::toolbar::view::top;
+use crate::ui::theme::toolbar;
+use crate::ui::toolbar::{ToolbarSnapshot, model};
 use crate::ui_text::UiTextEngine;
 
 use super::ToolbarLayoutSpec;
@@ -7,8 +9,8 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_SIZE_ICONS: (u32, u32) = (735, 58);
     /// Minimized top strip: the edge restore tab (`model::RESTORE_TAB_SIZE`).
     pub(in crate::backend::wayland::toolbar) const TOP_MINIMIZED_SIZE: (u32, u32) = (
-        crate::ui::toolbar::model::RESTORE_TAB_SIZE.0 as u32,
-        crate::ui::toolbar::model::RESTORE_TAB_SIZE.1 as u32,
+        model::RESTORE_TAB_SIZE.0 as u32,
+        model::RESTORE_TAB_SIZE.1 as u32,
     );
     /// Micro-mode top strip: one round tool/color chip.
     pub(in crate::backend::wayland::toolbar) const TOP_MICRO_SIZE: (u32, u32) = (44, 44);
@@ -21,8 +23,7 @@ impl ToolbarLayoutSpec {
     /// The number lives in `theme::toolbar::ISLAND_PAD` so the GTK
     /// stylesheet interpolates the same island padding — one source for
     /// both frontends (theme must not depend on this backend module).
-    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_PAD: f64 =
-        crate::ui::theme::toolbar::ISLAND_PAD;
+    pub(in crate::backend::wayland::toolbar) const TOP_ISLAND_PAD: f64 = toolbar::ISLAND_PAD;
     pub(in crate::backend::wayland::toolbar) const TOP_START_X: f64 = 19.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_SIZE: f64 = 18.0;
     pub(in crate::backend::wayland::toolbar) const TOP_HANDLE_Y: f64 = 20.0;
@@ -73,7 +74,7 @@ impl ToolbarLayoutSpec {
     /// standard control gap, so the segment does not crowd the numeral to its
     /// left (M7-C3). Shares `theme::toolbar::SEGMENT_LEADING_GAP`.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEGMENT_LEAD: f64 =
-        crate::ui::theme::toolbar::SEGMENT_LEADING_GAP;
+        toolbar::SEGMENT_LEADING_GAP;
     /// Docked selection-property value button width (cycle buttons and
     /// the readout between stepper halves).
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_SEL_VALUE_W: f64 = 64.0;
@@ -85,7 +86,7 @@ impl ToolbarLayoutSpec {
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_CAPTION_W: f64 = 56.0;
     /// Zero dot plus the original 84px bar row, shared by both level meters.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_METER_W: f64 =
-        84.0 + crate::ui::toolbar::model::METER_ZERO_SLOT_W;
+        84.0 + model::METER_ZERO_SLOT_W;
     /// The Pen feel chip ("Pen feel ▾"): a fixed slot like the font button's,
     /// so the planner budgets it whatever the levels behind it.
     pub(in crate::backend::wayland::toolbar) const TOP_STYLE_PEN_FEEL_W: f64 = 92.0;
@@ -109,13 +110,11 @@ impl ToolbarLayoutSpec {
         let mut height = base_height as f64;
         // Popovers (shapes grid + options, overflow) and the contextual
         // highlight-ring row grow the surface below the bar.
-        height += crate::backend::wayland::toolbar::view::top::top_extra_height(engine, snapshot);
+        height += top::top_extra_height(engine, snapshot);
 
         // Width comes from the same tree walk the builder performs, so the
         // size math and the builder cannot drift apart.
-        let width = crate::backend::wayland::toolbar::view::top::top_natural_width(
-            engine, snapshot, height,
-        );
+        let width = top::top_natural_width(engine, snapshot, height);
 
         (width.ceil() as u32, height.ceil() as u32)
     }

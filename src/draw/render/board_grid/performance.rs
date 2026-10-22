@@ -1,4 +1,8 @@
 //! Opt-in source comparison; no compositor, font stack, or desktop windows.
+use std::env;
+
+use crate::draw;
+
 use super::*;
 use crate::draw::{EraserBrush, EraserKind, EraserReplayContext};
 use std::time::Instant;
@@ -36,7 +40,7 @@ fn render_case(
     let pattern = match source {
         Source::Solid => None,
         Source::Tile => Some(
-            BoardPaper::for_context(crate::draw::WHITE, grid, &ctx)
+            BoardPaper::for_context(draw::WHITE, grid, &ctx)
                 .unwrap()
                 .pattern,
         ),
@@ -46,7 +50,7 @@ fn render_case(
                 RecordingSurface::create(cairo::Content::ColorAlpha, Some(bounds)).unwrap();
             paint_geometry(
                 &Context::new(&record).unwrap(),
-                crate::draw::WHITE,
+                draw::WHITE,
                 grid,
                 1.0,
                 bounds,
@@ -74,7 +78,7 @@ fn render_case(
         pattern: pattern.as_ref().map(|p| p.as_ref()),
         surface: None,
         backdrop_cache_key: None,
-        bg_color: Some(crate::draw::WHITE),
+        bg_color: Some(draw::WHITE),
         logical_to_image_scale_x: 1.0,
         logical_to_image_scale_y: 1.0,
         logical_image_origin_x: 0.0,
@@ -117,7 +121,7 @@ fn render_case(
 #[test]
 #[ignore = "opt-in board-paper CPU/PDF comparison; run with --nocapture --test-threads=1"]
 fn board_grid_backdrop_performance() {
-    let sources: &[Source] = if std::env::var_os("WAYSCRIBER_GRID_COMPARE_VIEWPORT").is_some() {
+    let sources: &[Source] = if env::var_os("WAYSCRIBER_GRID_COMPARE_VIEWPORT").is_some() {
         &[Source::Solid, Source::Viewport, Source::Tile]
     } else {
         &[Source::Solid, Source::Tile]

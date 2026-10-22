@@ -1,4 +1,8 @@
-use super::*;
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::toolbar::hit;
+use crate::backend::wayland::toolbar::layout::top_size;
+use crate::backend::wayland::toolbar::render::render_top_strip;
+use crate::ui::toolbar::ToolbarSnapshot;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn render_inline_toolbars(
@@ -67,7 +71,7 @@ impl WaylandState {
             top_size.0 as f64,
             top_size.1 as f64,
         );
-        crate::backend::wayland::toolbar::hit::clip_hit_regions_to_bounds(&mut hits, 0, top_rect);
+        hit::clip_hit_regions_to_bounds(&mut hits, 0, top_rect);
         self.toolbar_chrome.set_inline_rendered(hits, top_rect);
     }
 }

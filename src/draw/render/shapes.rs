@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::blur::{render_black_out_rect, render_blur_placeholder};
 use super::highlight::render_click_highlight;
 use super::image::render_image_shape;
@@ -17,7 +19,7 @@ struct ShapeTextOptions {
     halo_enabled: bool,
 }
 
-struct ArrowRenderSpec<'a> {
+struct ArrowRenderSpec<'label> {
     start: (i32, i32),
     end: (i32, i32),
     color: Color,
@@ -27,13 +29,13 @@ struct ArrowRenderSpec<'a> {
     head_at_end: bool,
     style: ArrowStyle,
     bend: f64,
-    label: Option<&'a ArrowLabel>,
+    label: Option<&'label ArrowLabel>,
 }
 
-struct StepMarkerRenderSpec<'a> {
+struct StepMarkerRenderSpec<'label> {
     center: (i32, i32),
     color: Color,
-    label: &'a StepMarkerLabel,
+    label: &'label StepMarkerLabel,
 }
 
 /// Renders a single shape to a Cairo context.
@@ -83,7 +85,7 @@ pub fn render_shape_over_with_halo(
 }
 
 pub(super) fn render_shape_with_cache(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     images: &mut super::image::ImageSurfaceCache,
     ctx: &cairo::Context,
     shape: &Shape,
@@ -169,7 +171,7 @@ pub(super) fn render_shape_with_cache(
             render_arrow_shape(
                 measurer,
                 ctx,
-                ArrowRenderSpec {
+                &ArrowRenderSpec {
                     start: (*x1, *y1),
                     end: (*x2, *y2),
                     color: *color,
@@ -233,7 +235,7 @@ pub(super) fn render_shape_with_cache(
             render_step_marker_shape(
                 measurer,
                 ctx,
-                StepMarkerRenderSpec {
+                &StepMarkerRenderSpec {
                     center: (*x, *y),
                     color: *color,
                     label,
@@ -279,9 +281,9 @@ pub(super) fn render_shape_with_cache(
 }
 
 fn render_arrow_shape(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
-    arrow: ArrowRenderSpec<'_>,
+    arrow: &ArrowRenderSpec<'_>,
     text: ShapeTextOptions,
 ) {
     // Only the label needs these: `render_arrow` reads `head_at_end` itself.
@@ -344,9 +346,9 @@ fn render_arrow_shape(
 }
 
 fn render_step_marker_shape(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     ctx: &cairo::Context,
-    marker: StepMarkerRenderSpec<'_>,
+    marker: &StepMarkerRenderSpec<'_>,
     text: ShapeTextOptions,
 ) {
     let label_text = marker.label.value.to_string();

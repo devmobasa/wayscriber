@@ -1,7 +1,7 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
+use std::{env, fs, thread};
 
 const FROZEN_V1_SOURCE: &str = include_str!("fixtures/frozen_daemon_v1.rs");
 use tempfile::TempDir;
@@ -24,8 +24,8 @@ impl Drop for ChildGuard {
 fn compile_fixture(root: &Path) -> PathBuf {
     let source = root.join("frozen_daemon_v1.rs");
     let binary = root.join("frozen-daemon-v1");
-    fs::write(&source, FROZEN_V1_SOURCE).unwrap();
-    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    fs::write(&source, FROZEN_V1_SOURCE).expect("write frozen v1 fixture source");
+    let rustc = env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let output = Command::new(rustc)
         .arg("--edition=2024")
         .arg("-C")
@@ -51,20 +51,20 @@ fn wait_for(path: &Path) {
             "timed out waiting for {}",
             path.display()
         );
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     }
 }
 
 fn read_report(root: &Path) -> (usize, usize) {
     wait_for(&root.join("fixture-report"));
-    let report = fs::read_to_string(root.join("fixture-report")).unwrap();
+    let report = fs::read_to_string(root.join("fixture-report")).expect("read fixture report");
     let value = |name: &str| {
         report
             .lines()
             .find_map(|line| line.strip_prefix(&format!("{name}=")))
-            .unwrap()
+            .expect("fixture report lists every counter")
             .parse::<usize>()
-            .unwrap()
+            .expect("fixture report counters are integers")
     };
     (value("signals"), value("typed"))
 }
@@ -79,7 +79,7 @@ fn wait_for_report(root: &Path, expected_signals: usize, expected_typed: usize) 
             Instant::now() < deadline,
             "fixture report did not reach expected counts"
         );
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     }
 }
 
@@ -92,8 +92,8 @@ fn run_client(binary: &Path, mode: &str, root: &Path) -> Output {
 }
 
 fn stop_daemon(daemon: &mut Child) {
-    daemon.kill().unwrap();
-    daemon.wait().unwrap();
+    daemon.kill().expect("kill fixture daemon");
+    daemon.wait().expect("reap fixture daemon");
 }
 
 #[test]

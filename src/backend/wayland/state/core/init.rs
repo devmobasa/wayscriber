@@ -1,6 +1,21 @@
+use crate::backend::wayland::runtime_ui_state::ToolbarPositionSnapshot;
+use crate::ocr::OcrController;
+use crate::ui::theme::Theme;
+
+#[cfg(feature = "tablet-input")]
+use super::super::TabletSettings;
 use super::super::buffer_damage::BufferDamageTracker;
-use super::super::*;
+use super::super::helpers::{drag_log, force_inline_toolbars_requested};
+use super::super::{WaylandState, WaylandStateInit, perf};
+use crate::backend::wayland::capture::CaptureState;
+use crate::backend::wayland::frozen::FrozenState;
+use crate::backend::wayland::session::SessionState;
+use crate::backend::wayland::surface::{SurfacePlacement, SurfaceState};
+use crate::backend::wayland::toolbar::ToolbarSurfaceManager;
+use crate::backend::wayland::zoom::ZoomState;
+use crate::backend::wayland::{RuntimeOperationController, RuntimeOperationIdSource};
 use crate::env_vars::FORCE_INLINE_TOOLBARS_ENV;
+use log::info;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn new(init: WaylandStateInit) -> Self {
@@ -68,7 +83,7 @@ impl WaylandState {
         // committed drag is layered on top. Clamping happens on the first
         // apply against real output geometry, not here, so an override from a
         // now-disconnected monitor degrades instead of being lost.
-        let mut positions = crate::backend::wayland::runtime_ui_state::ToolbarPositionSnapshot {
+        let mut positions = ToolbarPositionSnapshot {
             top: (config.ui.toolbar.top_offset, config.ui.toolbar.top_offset_y),
         };
         if let Some(runtime_ui) = runtime_ui.as_ref() {
@@ -103,7 +118,7 @@ impl WaylandState {
             runtime_operation_ids,
             runtime_wake.clone(),
         );
-        let ocr = crate::ocr::OcrController::new(runtime_wake.clone());
+        let ocr = OcrController::new(runtime_wake.clone());
         let preferences = super::super::preference_stores::PreferenceStores::new(
             onboarding,
             palette_recents,
@@ -119,7 +134,7 @@ impl WaylandState {
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),
             render: super::super::render::RenderRuntime::new(
-                crate::ui::theme::Theme::resolve(config.ui.theme.to_theme_mode()),
+                Theme::resolve(config.ui.theme.to_theme_mode()),
                 ui_text,
                 text_measurer,
             ),

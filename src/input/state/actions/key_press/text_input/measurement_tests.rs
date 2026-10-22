@@ -1,7 +1,9 @@
+use crate::input::state::test_support;
+
 use super::*;
 
 fn text_state(buffer: &str) -> InputState {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.state = DrawingState::text_input(0, 0, buffer.to_string());
     state
 }

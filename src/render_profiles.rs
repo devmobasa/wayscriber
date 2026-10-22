@@ -1,6 +1,7 @@
 //! Runtime support for final-render color profile remapping.
 
 use std::collections::HashMap;
+use std::ops::Range;
 
 use crate::config::{RenderProfileConfig, RenderProfileExportMode, RenderProfilesConfig};
 use crate::util::Rect;
@@ -27,14 +28,17 @@ pub struct RenderColorProfile {
 
 impl RenderColorProfile {
     #[allow(dead_code)] // Used by tests and consumers of the library API.
+    #[must_use]
     pub fn id(&self) -> &str {
         &self.id
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.mappings.is_empty()
     }
@@ -225,7 +229,7 @@ fn for_each_disjoint_span(
     stride: i32,
     data_len: usize,
     regions: &[Rect],
-    mut visit: impl FnMut(std::ops::Range<usize>),
+    mut visit: impl FnMut(Range<usize>),
 ) {
     let stride = stride as usize;
     for band in disjoint_bands(width, height, regions) {
@@ -291,10 +295,12 @@ impl RenderProfileSet {
         }
     }
 
+    #[must_use]
     pub fn active(&self) -> Option<&RenderColorProfile> {
         self.active_index.and_then(|index| self.profiles.get(index))
     }
 
+    #[must_use]
     pub fn export_profile(&self) -> Option<RenderColorProfile> {
         match self.export_mode {
             RenderProfileExportMode::Off => None,
@@ -306,18 +312,22 @@ impl RenderProfileSet {
         }
     }
 
+    #[must_use]
     pub fn generation(&self) -> u64 {
         self.generation
     }
 
+    #[must_use]
     pub fn applies_to_canvas(&self) -> bool {
         self.apply_to_canvas
     }
 
+    #[must_use]
     pub fn applies_to_ui(&self) -> bool {
         self.apply_to_ui
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.profiles.is_empty()
     }
@@ -360,10 +370,12 @@ impl RenderProfileSet {
     }
 }
 
+#[must_use]
 pub fn normalize_profile_id(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
 
+#[must_use]
 pub fn parse_hex_rgb(value: &str) -> Option<Rgb8> {
     let trimmed = value.trim();
     let hex = trimmed
@@ -381,6 +393,7 @@ pub fn parse_hex_rgb(value: &str) -> Option<Rgb8> {
     Some(Rgb8 { r, g, b })
 }
 
+#[must_use]
 pub fn format_hex_rgb(color: Rgb8) -> String {
     format!("#{:02X}{:02X}{:02X}", color.r, color.g, color.b)
 }

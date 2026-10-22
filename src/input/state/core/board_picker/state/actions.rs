@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::super::super::base::InputState;
 use super::super::BoardPickerEditMode;
 use crate::draw::PageDeleteOutcome;
@@ -20,7 +22,7 @@ impl InputState {
 
     pub(crate) fn board_picker_activate_row_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         index: usize,
     ) {
         let board_count = self.boards.board_count();
@@ -36,7 +38,7 @@ impl InputState {
 
     pub(crate) fn board_picker_activate_page_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         page_index: usize,
     ) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
@@ -57,10 +59,7 @@ impl InputState {
         self.close_board_picker();
     }
 
-    pub(crate) fn board_picker_add_page_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn board_picker_add_page_with_measurer(&mut self, measurer: &TextMeasurer) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
             return;
         };
@@ -79,7 +78,7 @@ impl InputState {
 
     pub(crate) fn board_picker_delete_page_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         page_index: usize,
     ) -> PageDeleteOutcome {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
@@ -94,7 +93,7 @@ impl InputState {
 
     pub(crate) fn board_picker_duplicate_page_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         page_index: usize,
     ) {
         let Some(board_index) = self.board_picker_page_panel_board_index() else {
@@ -113,10 +112,7 @@ impl InputState {
         }
     }
 
-    pub(crate) fn board_picker_create_new_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn board_picker_create_new_with_measurer(&mut self, measurer: &TextMeasurer) {
         if self.board_picker_is_quick() {
             self.board_picker_promote_to_full();
         }
@@ -137,10 +133,7 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn board_picker_delete_selected_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn board_picker_delete_selected_with_measurer(&mut self, measurer: &TextMeasurer) {
         let Some(index) = self.board_picker_selected_index() else {
             return;
         };

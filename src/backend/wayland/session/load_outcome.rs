@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use log::{debug, warn};
 
+use crate::draw::TextMeasurer;
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::{Toast, ToastPriority};
@@ -23,7 +24,7 @@ pub(in crate::backend::wayland) struct ExpandedTooLarge {
 /// Publish one loaded output through the same canvas and write-protection rules.
 pub(in crate::backend::wayland) fn commit_output_load(
     input: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     session: &mut super::SessionState,
     options: SessionOptions,
     outcome: LoadSnapshotOutcome,
@@ -54,7 +55,7 @@ pub(in crate::backend::wayland) fn commit_output_load(
 /// report.
 pub(in crate::backend::wayland) fn apply_load_outcome(
     input_state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     outcome: LoadSnapshotOutcome,
     options: &SessionOptions,
     context: &str,
@@ -173,7 +174,7 @@ fn notify_unreadable_session(
 /// Replaces every board with `snapshot`, or with empty boards without one.
 pub(in crate::backend::wayland) fn replace_output_session_snapshot(
     input_state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     snapshot: Option<SessionSnapshot>,
     options: &SessionOptions,
 ) -> Result<()> {

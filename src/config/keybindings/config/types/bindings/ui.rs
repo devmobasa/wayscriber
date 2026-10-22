@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_cycle_toolbar_display, default_open_about, default_open_configurator,
+    default_open_context_menu, default_render_profile_next, default_render_profile_off,
+    default_render_profile_previous, default_toggle_click_highlight,
+    default_toggle_command_palette, default_toggle_fill, default_toggle_floating_badge,
+    default_toggle_focus_mode, default_toggle_help, default_toggle_input_hud,
+    default_toggle_light_mode, default_toggle_light_mode_drawing, default_toggle_presenter_mode,
+    default_toggle_quick_help, default_toggle_radial_menu, default_toggle_selection_properties,
+    default_toggle_status_bar, default_toggle_toolbar, default_toggle_zoom_chip,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

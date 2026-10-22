@@ -41,7 +41,7 @@ fn supported_reset_rejects_a_nonmissing_acknowledgement_without_partial_publish(
 fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
     let mut controller = controller();
     let old_permit = controller
-        .begin_mutation(RuntimeUiMutationScope::one(
+        .begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned,
         ))
         .unwrap();
@@ -59,7 +59,7 @@ fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
     };
     assert_eq!(controller.authority_epoch(), old_epoch);
     assert!(matches!(
-        controller.begin_mutation(RuntimeUiMutationScope::one(
+        controller.begin_mutation(&RuntimeUiMutationScope::one(
             InteractionSeedTarget::TopPinned
         )),
         Err(BeginMutationError::ControllerBusy(id)) if id == barrier
@@ -103,7 +103,7 @@ fn supported_reset_waits_for_in_flight_write_and_publishes_epoch_on_ack() {
     assert!(matches!(
         controller.commit(
             old_permit,
-            RuntimeUiMutationValues::one(
+            &RuntimeUiMutationValues::one(
                 InteractionSeedTarget::TopPinned,
                 InteractionSeedValue::Bool(true)
             )
@@ -228,7 +228,7 @@ fn cancelled_unsupported_reset_confirmation_is_single_use_and_has_no_side_effect
     let replay = confirmation.clone();
 
     assert_eq!(
-        controller.cancel_unsupported_reset_confirmation(confirmation),
+        controller.cancel_unsupported_reset_confirmation(&confirmation),
         CancelUnsupportedResetConfirmationResult::Cancelled
     );
     assert_eq!(
@@ -277,7 +277,7 @@ fn confirmed_unsupported_reset_uses_the_exact_source_and_publishes_only_after_ac
     let reset = controller
         .take_source_mutation()
         .expect("unsupported reset");
-    assert_eq!(reset.expected_source, source.clone());
+    assert_eq!(reset.expected_source, source);
     assert!(matches!(
         reset.kind,
         SourceMutationKind::ResetUnsupportedIfUnchanged {
@@ -454,7 +454,7 @@ fn shutdown_rejects_seed_updates_and_preexisting_preview_commits() {
         PreviewFinishResult::RejectedStaleAuthority { .. }
     ));
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, true)),
+        controller.update_seeds(&test_seeds(true, true)),
         UpdateSeedsResult::RejectedShuttingDown
     ));
     assert_eq!(
@@ -488,7 +488,7 @@ fn stale_runtime_and_position_preview_cancellations_do_not_restore_rollbacks() {
         )
         .unwrap();
     assert!(matches!(
-        controller.update_seeds(changed),
+        controller.update_seeds(&changed),
         UpdateSeedsResult::Applied { .. }
     ));
 
@@ -627,7 +627,7 @@ fn retained_authority_failure_resolves_previews_before_a_later_staged_reload() {
         resolution.reason == AbandonedPreviewResolutionReason::CancelledUnderRetainedAuthority
     }));
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let (client, inspection) = begin_recovery(

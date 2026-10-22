@@ -1,3 +1,4 @@
+use crate::backend::wayland::toolbar;
 use crate::ui_text::UiTextEngine;
 use smithay_client_toolkit::shm::Shm;
 
@@ -29,9 +30,7 @@ impl ToolbarSurfaceManager {
             top_hover_start,
             render_profile,
             |ctx, w, h, snap, hits, hov, hov_start| {
-                crate::backend::wayland::toolbar::render_top_strip(
-                    engine, ctx, w, h, snap, hits, hov, hov_start,
-                )
+                toolbar::render_top_strip(engine, ctx, w, h, snap, hits, hov, hov_start)
             },
         ) {
             self.top.report_render_failure(&err);

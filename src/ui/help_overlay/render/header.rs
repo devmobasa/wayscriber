@@ -3,6 +3,8 @@
 //! The hint line mirrors the keycap styling used throughout the grid rows so the
 //! header reads as part of the same visual system instead of flat plain text.
 
+use crate::ui_text::UiTextEngine;
+
 use super::super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::super::keycaps::{KeyComboStyle, draw_key_combo, measure_key_combo};
 use crate::ui_text::UiTextStyle;
@@ -25,18 +27,18 @@ pub(super) const PILL_RADIUS: f64 = 6.0;
 const TITLE_PILL_GAP: f64 = 12.0;
 
 /// A single "keys → action" hint shown in the header.
-pub(super) struct HeaderHint<'a> {
-    pub(super) keys: &'a str,
-    pub(super) label: &'a str,
+pub(super) struct HeaderHint<'text> {
+    pub(super) keys: &'text str,
+    pub(super) label: &'text str,
 }
 
 /// Everything the header needs beyond the title itself.
-pub(super) struct HeaderContent<'a> {
+pub(super) struct HeaderContent<'text> {
     /// Short version badge text, e.g. `v0.9.21`.
-    pub(super) version: &'a str,
+    pub(super) version: &'text str,
     /// Optional leading phrase drawn before the hints (quick-reference mode).
-    pub(super) intro: Option<&'a str>,
-    pub(super) hints: &'a [HeaderHint<'a>],
+    pub(super) intro: Option<&'text str>,
+    pub(super) hints: &'text [HeaderHint<'text>],
 }
 
 fn normal_style(font_family: &str, font_size: f64) -> UiTextStyle<'_> {
@@ -50,7 +52,7 @@ fn normal_style(font_family: &str, font_size: f64) -> UiTextStyle<'_> {
 
 /// Measure the total width the hint line occupies (intro + hints + separators).
 pub(super) fn measure_hints(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
@@ -92,7 +94,7 @@ pub(super) fn measure_hints(
 /// Draw the hint line starting at `x`, on `baseline`. Returns the width drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_hints(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -157,7 +159,7 @@ pub(super) fn draw_hints(
 
 /// Width of the version pill (rounded chip) for the given text.
 pub(super) fn measure_version_pill(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     font_size: f64,
@@ -178,7 +180,7 @@ pub(super) fn measure_version_pill(
 
 /// Extra width the title row needs so the title and version pill never overlap.
 pub(super) fn title_row_width(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     font_family: &str,
     title_font_size: f64,
@@ -204,7 +206,7 @@ pub(super) fn title_row_width(
 /// centred against a title whose baseline is `title_baseline`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn draw_version_pill(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     right_edge: f64,
     title_baseline: f64,

@@ -6,6 +6,9 @@ use std::io::ErrorKind;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
+use crate::session;
+use crate::session::snapshot::SessionSnapshot;
+
 use super::types::{FrameCounts, HistoryCounts, HistoryDepth, SessionInspection};
 use crate::session::lock::{lock_shared, unlock};
 use crate::session::options::SessionOptions;
@@ -21,7 +24,7 @@ pub fn inspect_session(options: &SessionOptions) -> Result<SessionInspection> {
     let mut session_path = options.session_file_path();
     let mut session_identity = options.output_identity().map(|s| s.to_string());
     if options.is_named_file() {
-        crate::session::validate_named_session_file_for_info(&session_path)?;
+        session::validate_named_session_file_for_info(&session_path)?;
     }
     let mut metadata = primary_metadata_for_inspection(&session_path, options)?;
 
@@ -214,10 +217,7 @@ fn load_snapshot_with_shared_lock(
     loaded
 }
 
-fn board_pages<'a>(
-    snapshot: &'a crate::session::snapshot::SessionSnapshot,
-    id: &str,
-) -> Option<&'a BoardPagesSnapshot> {
+fn board_pages<'a>(snapshot: &'a SessionSnapshot, id: &str) -> Option<&'a BoardPagesSnapshot> {
     snapshot
         .boards
         .iter()

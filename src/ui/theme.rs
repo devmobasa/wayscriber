@@ -28,6 +28,9 @@ pub mod swatch;
 
 use std::sync::OnceLock;
 
+use crate::config::UiTheme;
+use crate::ui::theme;
+
 /// RGB color tuple (0.0–1.0 channels).
 pub type Rgb = (f64, f64, f64);
 
@@ -35,6 +38,7 @@ pub type Rgb = (f64, f64, f64);
 pub type Rgba = (f64, f64, f64, f64);
 
 /// Attach an alpha channel to an RGB root in const context.
+#[must_use]
 pub const fn rgba(rgb: Rgb, alpha: f64) -> Rgba {
     (rgb.0, rgb.1, rgb.2, alpha)
 }
@@ -330,36 +334,44 @@ pub mod overlay {
     // rather than constants: the translation guard reads plain string literals
     // and cannot see through a constant.
     /// Context menu navigation hint
+    #[must_use]
     pub fn nav_hint_menu() -> &'static str {
         tr("↑↓ to navigate • Enter to select • Esc to close")
     }
     /// Context menu navigation hint when a row opens a submenu
+    #[must_use]
     pub fn nav_hint_menu_submenus() -> &'static str {
         tr("↑↓ navigate • → open • Enter select • Esc close")
     }
     /// Context menu navigation hint while a submenu holds the selection
+    #[must_use]
     pub fn nav_hint_submenu() -> &'static str {
         tr("↑↓ navigate • ← back • Enter select • Esc close")
     }
     /// Board picker navigation hint
+    #[must_use]
     pub fn nav_hint_board_picker() -> &'static str {
         tr("↑↓ Navigate • Type to search")
     }
     /// Modal close hint
+    #[must_use]
     pub fn hint_press_esc() -> &'static str {
         tr("Press Escape to close")
     }
 
     // ---- Empty state messages ----
     /// Properties panel empty state
+    #[must_use]
     pub fn empty_properties() -> &'static str {
         tr("Select a shape to view properties")
     }
     /// Command palette no results - main message
+    #[must_use]
     pub fn empty_command_palette() -> &'static str {
         tr("No matching commands")
     }
     /// Command palette no results - suggestions
+    #[must_use]
     pub fn empty_command_suggestions() -> &'static str {
         tr("Try: pen, color, undo, help")
     }
@@ -756,6 +768,7 @@ pub struct Theme {
 
 impl Theme {
     /// Resolve a startup preference without reading or installing global state.
+    #[must_use]
     pub fn resolve(mode: ThemeMode) -> Self {
         match mode {
             ThemeMode::Light => Self::light(),
@@ -765,6 +778,7 @@ impl Theme {
 
     /// The default OSD-dark chrome (canonical values, matching the const
     /// tokens above).
+    #[must_use]
     pub fn dark() -> Self {
         Self {
             surface_pill: toolbar::COLOR_PANEL_BACKGROUND,
@@ -787,6 +801,7 @@ impl Theme {
     /// chrome. Board adaptivity is orthogonal to the installed variant
     /// (`ThemeMode::Auto` still resolves the overall theme to dark), so this
     /// is an associated helper rather than a method on the active theme.
+    #[must_use]
     pub fn status_palette_for_background(r: f64, g: f64, b: f64) -> ([f64; 4], [f64; 4]) {
         if relative_luminance(r, g, b) > STATUS_PALETTE_LUMINANCE_THRESHOLD {
             ([0.15, 0.15, 0.15, 0.85], [1.0, 1.0, 1.0, 1.0])
@@ -797,6 +812,7 @@ impl Theme {
 
     /// Light chrome variant (for light solid boards once surfaces consume
     /// the runtime theme). Accent/radii/spacing match dark.
+    #[must_use]
     pub fn light() -> Self {
         Self {
             surface_pill: (0.980, 0.980, 0.988, 1.0),
@@ -858,46 +874,57 @@ pub fn current() -> &'static Theme {
 pub mod popup {
     use super::{Rgba, overlay};
 
+    #[must_use]
     pub fn bg_context_menu() -> Rgba {
         overlay::PANEL_BG_CONTEXT_MENU
     }
 
+    #[must_use]
     pub fn bg_context_submenu() -> Rgba {
         overlay::PANEL_BG_CONTEXT_SUBMENU
     }
 
+    #[must_use]
     pub fn bg_board_picker() -> Rgba {
         overlay::PANEL_BG_BOARD_PICKER
     }
 
+    #[must_use]
     pub fn bg_properties() -> Rgba {
         overlay::PANEL_BG_PROPERTIES
     }
 
+    #[must_use]
     pub fn bg_command_palette() -> Rgba {
         overlay::PANEL_BG_COMMAND_PALETTE
     }
 
+    #[must_use]
     pub fn bg_modal() -> Rgba {
         overlay::PANEL_BG_MODAL
     }
 
+    #[must_use]
     pub fn border_context_menu() -> Rgba {
         overlay::BORDER_CONTEXT_MENU
     }
 
+    #[must_use]
     pub fn border_board_picker() -> Rgba {
         overlay::BORDER_BOARD_PICKER
     }
 
+    #[must_use]
     pub fn border_properties() -> Rgba {
         overlay::BORDER_PROPERTIES
     }
 
+    #[must_use]
     pub fn border_command_palette() -> Rgba {
         overlay::BORDER_COMMAND_PALETTE
     }
 
+    #[must_use]
     pub fn border_modal() -> Rgba {
         overlay::BORDER_MODAL
     }
@@ -921,6 +948,7 @@ const CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD: f64 = 0.6;
 /// instead, as [`crate::draw::perceived_luminance`]. Two names because they are
 /// two metrics; they disagree most on green.
 #[inline]
+#[must_use]
 pub fn relative_luminance(r: f64, g: f64, b: f64) -> f64 {
     0.2126 * r + 0.7152 * g + 0.0722 * b
 }
@@ -928,6 +956,7 @@ pub fn relative_luminance(r: f64, g: f64, b: f64) -> f64 {
 /// Auto-contrast outline for the tool-preview width dot: a dark ring on light
 /// dot colors, a light ring on dark ones (by Rec. 709 luminance).
 #[inline]
+#[must_use]
 pub fn cursor_preview_outline(r: f64, g: f64, b: f64) -> Rgba {
     if relative_luminance(r, g, b) > CURSOR_PREVIEW_OUTLINE_LUMINANCE_THRESHOLD {
         overlay::CURSOR_PREVIEW_OUTLINE_DARK
@@ -950,12 +979,14 @@ pub fn set_color_alpha(ctx: &cairo::Context, color: Rgb, alpha: f64) {
 
 /// Apply an RGBA color with modified alpha
 #[inline]
+#[must_use]
 pub fn with_alpha(color: Rgba, alpha: f64) -> Rgba {
     (color.0, color.1, color.2, alpha)
 }
 
 /// Linear interpolation between two colors
 #[inline]
+#[must_use]
 pub fn lerp_color(from: Rgba, to: Rgba, t: f64) -> Rgba {
     let t = t.clamp(0.0, 1.0);
     (
@@ -966,13 +997,14 @@ pub fn lerp_color(from: Rgba, to: Rgba, t: f64) -> Rgba {
     )
 }
 
-impl crate::config::UiTheme {
+impl UiTheme {
     /// Maps the config value onto the runtime theme mode.
-    pub fn to_theme_mode(self) -> crate::ui::theme::ThemeMode {
+    #[must_use]
+    pub fn to_theme_mode(self) -> theme::ThemeMode {
         match self {
-            crate::config::UiTheme::Auto => crate::ui::theme::ThemeMode::Auto,
-            crate::config::UiTheme::Dark => crate::ui::theme::ThemeMode::Dark,
-            crate::config::UiTheme::Light => crate::ui::theme::ThemeMode::Light,
+            UiTheme::Auto => theme::ThemeMode::Auto,
+            UiTheme::Dark => theme::ThemeMode::Dark,
+            UiTheme::Light => theme::ThemeMode::Light,
         }
     }
 }

@@ -1,18 +1,25 @@
 use std::collections::HashMap;
+use std::mem;
 
-use wayland_client::{backend::ObjectId, protocol::wl_surface};
-use wayland_protocols::wp::tablet::zv2::client::{
-    zwp_tablet_manager_v2::ZwpTabletManagerV2, zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2,
-    zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2, zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2,
-    zwp_tablet_pad_v2::ZwpTabletPadV2, zwp_tablet_seat_v2::ZwpTabletSeatV2,
-    zwp_tablet_tool_v2::ZwpTabletToolV2, zwp_tablet_v2::ZwpTabletV2,
-};
+use wayland_client::backend::ObjectId;
+use wayland_client::protocol::wl_surface;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2::ZwpTabletPadGroupV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_ring_v2::ZwpTabletPadRingV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_strip_v2::ZwpTabletPadStripV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::ZwpTabletPadV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_seat_v2::ZwpTabletSeatV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_v2::ZwpTabletV2;
+
+use crate::input::state::ToastPress;
 
 use super::PendingStylusFrame;
 
 use super::contact_owner::{ContactMotion, ContactOwner, ReleaseRoute, held_motion, release_route};
 use crate::backend::wayland::TabletToolType;
-use crate::input::{Tool, tablet::TabletSettings};
+use crate::input::Tool;
+use crate::input::tablet::TabletSettings;
 
 mod pressure;
 pub(in crate::backend::wayland) use pressure::StylusDownAdmission;
@@ -45,7 +52,7 @@ pub(in crate::backend::wayland) struct TabletState {
     pub(in crate::backend::wayland) pending_frame: PendingStylusFrame,
     pub(in crate::backend::wayland) contact_retired: bool,
     /// A tip-down on a toast, resolved when the tip lifts.
-    pub(in crate::backend::wayland) toast_press: Option<crate::input::state::ToastPress>,
+    pub(in crate::backend::wayland) toast_press: Option<ToastPress>,
     pub(in crate::backend::wayland) tool_types: HashMap<ObjectId, TabletToolType>,
     pub(in crate::backend::wayland) auto_switched_to_eraser: bool,
     pub(in crate::backend::wayland) pre_eraser_tool_override: Option<Tool>,
@@ -193,7 +200,7 @@ impl TabletState {
     }
 
     pub(in crate::backend::wayland) fn take_retired_contact(&mut self) -> bool {
-        std::mem::take(&mut self.contact_retired)
+        mem::take(&mut self.contact_retired)
     }
 
     pub(super) fn new(manager: Option<ZwpTabletManagerV2>, settings: TabletSettings) -> Self {

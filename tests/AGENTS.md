@@ -6,7 +6,7 @@
 ## Architecture
 - `tests/cli.rs` covers CLI behavior.
 - `tests/ui.rs` covers UI smoke/integration behavior that can run without an ungated visible overlay.
-- `tests/repository_guards/` holds the source guards (process sites, config writers, shared dependencies, no Python). They read the checkout, not compiled items, and each guard keeps regression cases showing its forbidden escapes fail: most edit a copy of the checked-out `source::Tree`, the shared-dependency corpus builds small trees from `shared_dependency_fixtures.json`, and `no_python.rs` audits small in-memory file sets.
+- `tests/repository_guards/` holds the source guards (process sites, config writers, shared dependencies, use statements, no Python). They read the checkout, not compiled items, and each guard keeps regression cases showing its forbidden escapes fail: most edit a copy of the checked-out `source::Tree`, the shared-dependency corpus builds small trees from `shared_dependency_fixtures.json`, and `no_python.rs` audits small in-memory file sets.
 
 ## Invariants
 - Tests should not launch visible Wayland overlays, steal focus, or interact with foreground/fullscreen apps by default.

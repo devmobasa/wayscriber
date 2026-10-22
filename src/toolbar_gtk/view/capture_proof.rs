@@ -1,10 +1,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use gtk4::gdk;
-use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::subclass::prelude::*;
+use gtk4::{gdk, glib};
 
 #[derive(Clone, Copy)]
 pub(super) struct ProofRender {
@@ -15,7 +14,12 @@ pub(super) struct ProofRender {
 pub(super) type ProofObservation = Rc<Cell<Option<ProofRender>>>;
 
 mod imp {
-    use super::*;
+    use gdk::subclass::prelude::PaintableImpl;
+
+    use super::{
+        Cell, ObjectImpl, ObjectSubclass, PaintableExt, ProofObservation, ProofRender, RefCell,
+        WidgetExt, gdk, glib,
+    };
 
     #[derive(Default)]
     pub struct CaptureProof {
@@ -34,7 +38,7 @@ mod imp {
 
     impl ObjectImpl for CaptureProof {}
 
-    impl gdk::subclass::prelude::PaintableImpl for CaptureProof {
+    impl PaintableImpl for CaptureProof {
         fn snapshot(&self, snapshot: &gdk::Snapshot, width: f64, height: f64) {
             let texture = self.texture.borrow();
             let Some(texture) = texture.as_ref() else {

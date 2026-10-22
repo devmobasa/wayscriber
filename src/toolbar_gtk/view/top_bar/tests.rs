@@ -1,5 +1,8 @@
 //! GTK top-strip unit tests.
 
+use std::env;
+use std::process::Command;
+
 mod builtin_contract;
 mod builtin_style_nodes;
 mod capture_render;
@@ -20,8 +23,8 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
     const CHILD_ENV: &str = "WAYSCRIBER_GTK_WIDGET_CONTRACT_CHILD";
     const TEST_NAME: &str = "toolbar_gtk::view::top_bar::tests::actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window";
 
-    if std::env::var_os(CHILD_ENV).is_none() {
-        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+    if env::var_os(CHILD_ENV).is_none() {
+        let status = Command::new(env::current_exe().expect("test binary"))
             .arg(TEST_NAME)
             .arg("--exact")
             .arg("--test-threads=1")
@@ -35,7 +38,7 @@ fn actual_gtk_widgets_match_the_shared_contract_without_presenting_a_window() {
 
     if let Err(error) = gtk4::init() {
         assert!(
-            std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
+            env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
             "Required GTK widget coverage could not initialize: {error}"
         );
         eprintln!("skipping GTK widget contract test: {error}");

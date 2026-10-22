@@ -8,6 +8,7 @@ use wayland_client::{Connection, QueueHandle};
 
 use super::super::super::state::{KeyboardId, WaylandState};
 use super::{is_repeatable_key, key_for_log, keysym_to_key, should_try_toolbar_key};
+use crate::config::ChordModifiers;
 use crate::input::Key;
 
 /// Where a key press came from.
@@ -42,6 +43,16 @@ pub(in crate::backend::wayland) struct ForwardedKey {
 }
 
 impl ForwardedKey {
+    /// The modifier state GTK reported with this press.
+    pub(in crate::backend::wayland) fn modifiers(self) -> ChordModifiers {
+        ChordModifiers {
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            logo: self.logo,
+        }
+    }
+
     /// The overlay key this press stands for, or `None` for a bare modifier:
     /// its state already rides on the next forwarded key, and forwarding the
     /// press itself would latch a modifier whose release never arrives.
@@ -74,17 +85,11 @@ impl WaylandState {
         };
 
         let saved = self.input_state.modifiers;
-        self.input_state.sync_modifiers(
-            forwarded.shift,
-            forwarded.ctrl,
-            forwarded.alt,
-            forwarded.logo,
-        );
+        self.input_state.sync_modifiers(forwarded.modifiers());
         self.dispatch_key_press(key, KeyPressSource::GtkToolbar, conn, qh);
 
         self.input_state.modifiers.tab = saved.tab;
-        self.input_state
-            .sync_modifiers(saved.shift, saved.ctrl, saved.alt, saved.logo);
+        self.input_state.sync_modifiers(saved.chord_modifiers());
     }
 
     /// Route one key press through the overlay's shortcut handling.

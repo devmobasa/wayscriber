@@ -11,6 +11,7 @@ use crate::draw::shape::{
     step_marker_radius_with,
 };
 use crate::draw::{DrawnShape, Shape, TextMeasurer};
+use crate::util;
 use crate::util::Rect;
 
 const MAX_HIT_TEST_TOLERANCE: f64 = i32::MAX as f64;
@@ -160,7 +161,7 @@ pub(crate) fn hit_test_with_tolerance(
             // Shaft and heads both come from the shared skeleton, so a curved
             // arrow is grabbed along its arc and a double-ended one is grabbed
             // by either head.
-            let skeleton = crate::util::calculate_arrow_skeleton(
+            let skeleton = util::calculate_arrow_skeleton(
                 tip_x,
                 tip_y,
                 tail_x,

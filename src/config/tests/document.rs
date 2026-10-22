@@ -1,3 +1,11 @@
+use crate::config::{
+    BoardGridKindConfig, ConfigSourceChanged, ResolvedToolbarItems, ToolbarItemOrderGroup, io,
+};
+
+use std::collections::HashSet;
+use std::time::SystemTime;
+use std::{env, process};
+
 use super::super::*;
 use std::fs;
 use std::path::PathBuf;
@@ -23,7 +31,7 @@ fn board_grid_guarded_save_preserves_inline_and_nested_unknown_settings() {
             .iter_mut()
             .find(|b| b.id == "paper")
             .unwrap();
-        board.grid.kind = crate::config::BoardGridKindConfig::IsometricDots;
+        board.grid.kind = BoardGridKindConfig::IsometricDots;
         board.grid.spacing = 40;
         document.save_with_backup(config).unwrap();
         let saved = fs::read_to_string(&temp.path).unwrap();
@@ -48,9 +56,9 @@ struct TempConfig {
 impl TempConfig {
     fn new(name: &str) -> Self {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = env::temp_dir().join(format!(
             "wayscriber-config-document-{}-{sequence}-{name}",
-            std::process::id()
+            process::id()
         ));
         fs::create_dir_all(&root).expect("create temporary config directory");
         let path = root.join("config.toml");
@@ -79,7 +87,7 @@ fn diagnostic_paths(document: &ConfigDocument) -> Vec<&str> {
 #[test]
 fn load_from_path_rejects_oversized_config_file() {
     let temp = TempConfig::new("oversized");
-    let oversized = vec![b'x'; (crate::config::io::MAX_CONFIG_FILE_BYTES as usize) + 1];
+    let oversized = vec![b'x'; (io::MAX_CONFIG_FILE_BYTES as usize) + 1];
     fs::write(&temp.path, oversized).expect("write oversized config");
 
     let err = ConfigDocument::load_from_path(&temp.path).expect_err("oversized config");
@@ -1758,11 +1766,7 @@ fn exact_revision_detects_same_timestamp_content_replacement() {
     let error = document
         .save_with_backup(document.config().clone())
         .expect_err("same-time content replacement must conflict");
-    assert!(
-        error
-            .downcast_ref::<crate::config::ConfigSourceChanged>()
-            .is_some()
-    );
+    assert!(error.downcast_ref::<ConfigSourceChanged>().is_some());
     assert!(fs::read_to_string(&temp.path).unwrap().contains("144"));
 }
 
@@ -1773,16 +1777,14 @@ fn exact_revision_detects_content_replacement_with_rolled_back_timestamp() {
     let document = ConfigDocument::load_from_path(&temp.path).expect("load document");
     temp.write("[performance]\nmax_fps_no_vsync = 165\n");
     fs::File::open(&temp.path)
-        .and_then(|file| {
-            file.set_times(fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
-        })
+        .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH)))
         .expect("roll back replacement timestamp");
 
     assert!(
         document
             .save_with_backup(document.config().clone())
             .expect_err("older timestamp must not hide changed content")
-            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .downcast_ref::<ConfigSourceChanged>()
             .is_some()
     );
 }
@@ -1793,9 +1795,7 @@ fn exact_revision_allows_timestamp_only_change() {
     temp.write("[performance]\nmax_fps_no_vsync = 120\n");
     let document = ConfigDocument::load_from_path(&temp.path).expect("load document");
     fs::File::open(&temp.path)
-        .and_then(|file| {
-            file.set_times(fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
-        })
+        .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH)))
         .expect("roll back timestamp without changing content");
 
     document
@@ -1814,7 +1814,7 @@ fn exact_revision_detects_deletion_creation_and_unsupported_replacement() {
         deleted_document
             .save_with_backup(deleted_document.config().clone())
             .expect_err("deletion must conflict")
-            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .downcast_ref::<ConfigSourceChanged>()
             .is_some()
     );
 
@@ -1826,7 +1826,7 @@ fn exact_revision_detects_deletion_creation_and_unsupported_replacement() {
         created_document
             .save_with_backup(created_document.config().clone())
             .expect_err("creation must conflict")
-            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .downcast_ref::<ConfigSourceChanged>()
             .is_some()
     );
 
@@ -1864,7 +1864,7 @@ fn exact_revision_detects_changed_symlink_target_with_identical_content() {
         document
             .save_with_backup(document.config().clone())
             .expect_err("symlink target replacement must conflict")
-            .downcast_ref::<crate::config::ConfigSourceChanged>()
+            .downcast_ref::<ConfigSourceChanged>()
             .is_some()
     );
 }
@@ -2084,8 +2084,8 @@ fn explicit_legacy_stylus_unbind_rewrites_only_that_action_node() {
 
 #[test]
 fn performance_metadata_is_unique_and_matches_example_and_docs() {
-    let mut ids = std::collections::HashSet::new();
-    let mut paths = std::collections::HashSet::new();
+    let mut ids = HashSet::new();
+    let mut paths = HashSet::new();
     let example = include_str!("../../../config.example.toml");
     let example_value: toml::Value = toml::from_str(example).expect("parse config example");
     let docs = include_str!("../../../docs/CONFIG.md");
@@ -2365,7 +2365,7 @@ enabled = true
     );
 
     assert!(document.config().ui.toolbar.top_pinned);
-    let assert_active_item_contract = |items: &crate::config::ResolvedToolbarItems| {
+    let assert_active_item_contract = |items: &ResolvedToolbarItems| {
         use crate::config::toolbar_item_ids as ids;
 
         for id in [
@@ -2391,15 +2391,13 @@ enabled = true
         assert_eq!(
             items
                 .order
-                .ordered_ids(crate::config::ToolbarItemOrderGroup::TopTools)
+                .ordered_ids(ToolbarItemOrderGroup::TopTools)
                 .first(),
             Some(&ids::TOP_TOOL_PEN),
             "active top_tools order must remain effective"
         );
         assert_eq!(
-            &items
-                .order
-                .ordered_ids(crate::config::ToolbarItemOrderGroup::TopControls)[..2],
+            &items.order.ordered_ids(ToolbarItemOrderGroup::TopControls)[..2],
             &[ids::TOP_UTILITY_CLEAR_CANVAS, ids::TOP_UTILITY_TEXT],
             "active top_controls order must remain effective"
         );

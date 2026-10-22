@@ -1,9 +1,16 @@
+use std::env;
+use std::fs::File;
+use std::path::Path;
+
+use crate::input::events::Key;
+use crate::input::state::test_support;
+
 use super::*;
 
 fn pixels(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
-    caches: &mut crate::draw::RenderCaches,
+    measurer: &TextMeasurer,
+    caches: &mut RenderCaches,
     state: &InputState,
     size: (i32, i32),
     density: i32,
@@ -36,10 +43,10 @@ fn pixels(
 fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layouts() {
     check_appearance_sheet_fits_each_surface();
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
-    let mut caches = crate::draw::RenderCaches::default();
-    let mut state = crate::input::state::test_support::make_test_input_state();
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    let measurer = TextMeasurer::default();
+    let mut caches = RenderCaches::default();
+    let mut state = test_support::make_test_input_state();
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     for (width, height, density) in [(900, 700, 1), (420, 300, 2), (900, 700, 1)] {
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
@@ -71,8 +78,8 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
         );
         let expected = pixels(
             &UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
-            &mut crate::draw::RenderCaches::default(),
+            &TextMeasurer::default(),
+            &mut RenderCaches::default(),
             &state,
             (width, height),
             density,
@@ -99,14 +106,14 @@ fn retained_board_text_owner_matches_fresh_during_unicode_rename_and_small_layou
 
 fn check_appearance_sheet_fits_each_surface() {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let measurer = TextMeasurer::default();
+    let mut state = test_support::make_test_input_state();
     state.switch_board_force("whiteboard");
     state.open_board_picker_with_measurer(&measurer);
     state.board_picker_edit_color_selected_with_measurer(&measurer);
-    state.board_appearance_key(crate::input::events::Key::Tab);
-    state.board_appearance_key(crate::input::events::Key::Right);
-    state.board_appearance_key(crate::input::events::Key::Right);
+    state.board_appearance_key(Key::Tab);
+    state.board_appearance_key(Key::Right);
+    state.board_appearance_key(Key::Right);
     for (width, height) in [(1920, 1080), (1280, 720), (900, 700), (420, 300)] {
         let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
@@ -117,12 +124,12 @@ fn check_appearance_sheet_fits_each_surface() {
         let data = pixels(
             &engine,
             &measurer,
-            &mut crate::draw::RenderCaches::default(),
+            &mut RenderCaches::default(),
             &state,
             (width, height),
             1,
         );
-        if let Ok(folder) = std::env::var("WAYSCRIBER_GRID_UI_ARTIFACTS") {
+        if let Ok(folder) = env::var("WAYSCRIBER_GRID_UI_ARTIFACTS") {
             let surface = cairo::ImageSurface::create_for_data(
                 data,
                 cairo::Format::ARgb32,
@@ -131,10 +138,9 @@ fn check_appearance_sheet_fits_each_surface() {
                 width * 4,
             )
             .unwrap();
-            let mut file = std::fs::File::create(
-                std::path::Path::new(&folder).join(format!("paper-editor-{width}x{height}.png")),
-            )
-            .unwrap();
+            let mut file =
+                File::create(Path::new(&folder).join(format!("paper-editor-{width}x{height}.png")))
+                    .unwrap();
             surface.write_to_png(&mut file).unwrap();
         }
     }

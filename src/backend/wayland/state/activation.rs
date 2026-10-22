@@ -2,7 +2,9 @@ use log::info;
 
 use crate::app_id::runtime_app_id;
 
-use super::*;
+use super::WaylandState;
+use smithay_client_toolkit::activation::{ActivationHandler, RequestData};
+use wayland_client::QueueHandle;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn activate_xdg_window_with_startup_token_if_present(

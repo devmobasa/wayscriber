@@ -1,3 +1,9 @@
+use crate::config::KeybindingsConfig;
+use crate::draw::TextMeasurer;
+use crate::input::BOARD_ID_WHITEBOARD;
+use crate::ui::anim;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use std::time::{Duration, Instant};
 
@@ -56,8 +62,8 @@ fn chip_label(state: &InputState) -> Option<String> {
 }
 
 fn run_action(state: &mut InputState, action: Action) {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     state.handle_action_with_resources(
         crate::input::state::InputTextResources {
             measurer: &measurer,
@@ -69,7 +75,7 @@ fn run_action(state: &mut InputState, action: Action) {
 
 #[test]
 fn a_recognized_stroke_names_the_shape_and_the_undo_that_keeps_its_ink() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = shape_pen_state(create_test_input_state());
     state.needs_redraw = false;
 
@@ -156,9 +162,9 @@ fn any_edit_that_changes_the_next_undo_retires_the_chip() {
 
 #[test]
 fn the_chip_names_the_configured_undo_shortcut() {
-    let mut keybindings = crate::config::KeybindingsConfig::default();
+    let mut keybindings = KeybindingsConfig::default();
     keybindings.core.undo = vec!["Ctrl+Alt+U".to_string()];
-    let mut state = shape_pen_state(create_test_input_state_with_keybindings(keybindings));
+    let mut state = shape_pen_state(create_test_input_state_with_keybindings(&keybindings));
 
     draw(&mut state, &RECTANGLE);
 
@@ -170,9 +176,9 @@ fn the_chip_names_the_configured_undo_shortcut() {
 
 #[test]
 fn an_unbound_undo_is_named_in_words() {
-    let mut keybindings = crate::config::KeybindingsConfig::default();
+    let mut keybindings = KeybindingsConfig::default();
     keybindings.core.undo = Vec::new();
-    let mut state = shape_pen_state(create_test_input_state_with_keybindings(keybindings));
+    let mut state = shape_pen_state(create_test_input_state_with_keybindings(&keybindings));
 
     draw(&mut state, &RECTANGLE);
 
@@ -198,7 +204,7 @@ fn turning_recognition_feedback_off_shows_no_chip() {
 
 #[test]
 fn the_chip_fades_and_then_expires() {
-    let _motion = crate::ui::anim::override_motion_for_test(true);
+    let _motion = anim::override_motion_for_test(true);
     let mut state = shape_pen_state(create_test_input_state());
     draw(&mut state, &RECTANGLE);
     let shown = Instant::now();
@@ -215,7 +221,7 @@ fn the_chip_fades_and_then_expires() {
 
 #[test]
 fn reduced_motion_keeps_the_chip_opaque_for_its_lifetime() {
-    let _motion = crate::ui::anim::override_motion_for_test(false);
+    let _motion = anim::override_motion_for_test(false);
     let mut state = shape_pen_state(create_test_input_state());
     draw(&mut state, &RECTANGLE);
     let shown = Instant::now();
@@ -231,7 +237,7 @@ fn switching_boards_takes_the_chip_away() {
     draw(&mut state, &RECTANGLE);
     assert!(state.recognition_chip().is_some());
 
-    state.switch_board(crate::input::BOARD_ID_WHITEBOARD);
+    state.switch_board(BOARD_ID_WHITEBOARD);
 
     assert_eq!(chip_label(&state), None);
 }

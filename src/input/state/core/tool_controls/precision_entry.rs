@@ -6,6 +6,10 @@
 //! toolbar apply arm clamps to the slider range), Esc cancels. Any other
 //! toolbar interaction dismisses it (see the backend dismissal rules).
 
+use crate::input::state::InputTextResources;
+use crate::input::state::core::modal::ModalSurface;
+use crate::ui::toolbar::ToolbarEvent;
+
 use super::super::base::InputState;
 use crate::input::events::Key;
 use crate::ui::toolbar::PrecisionEntryTarget;
@@ -33,7 +37,7 @@ impl InputState {
     /// Open the precise-entry popup prefilled with the target's current
     /// value (selected, so the first keystroke replaces it).
     pub fn open_precision_entry(&mut self, target: PrecisionEntryTarget) {
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::PrecisionEntry);
+        self.close_modals_for_open(ModalSurface::PrecisionEntry);
         let value = match target {
             PrecisionEntryTarget::Thickness => {
                 if self.active_tool().uses_eraser_size()
@@ -111,7 +115,7 @@ impl InputState {
     /// `handle_color_picker_popup_key`): every key is consumed.
     pub(in crate::input::state) fn handle_precision_entry_key_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) -> bool {
         if !self.is_precision_entry_open() {
@@ -123,8 +127,7 @@ impl InputState {
             }
             Key::Return => {
                 if let Some((target, value)) = self.take_precision_entry_commit() {
-                    let event =
-                        crate::ui::toolbar::ToolbarEvent::CommitPrecisionEntry { target, value };
+                    let event = ToolbarEvent::CommitPrecisionEntry { target, value };
                     let _ = self.apply_toolbar_event_with_resources(resources, event);
                 }
             }
@@ -138,14 +141,19 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
+    use crate::input::MouseButton;
+    use crate::ui::toolbar::model::ToolbarSliderSpec;
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
     use crate::ui::toolbar::ToolbarEvent;
 
     #[test]
     fn open_prefills_the_selected_current_value_and_typing_replaces_it() {
-        let route_measurer = crate::draw::TextMeasurer::default();
-        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_measurer = TextMeasurer::default();
+        let route_ui_engine = UiTextEngine::default();
         let route_resources = crate::input::state::InputTextResources {
             measurer: &route_measurer,
             ui_engine: &route_ui_engine,
@@ -178,8 +186,8 @@ mod tests {
 
     #[test]
     fn enter_commits_the_clamped_value_and_esc_cancels() {
-        let route_measurer = crate::draw::TextMeasurer::default();
-        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_measurer = TextMeasurer::default();
+        let route_ui_engine = UiTextEngine::default();
         let route_resources = crate::input::state::InputTextResources {
             measurer: &route_measurer,
             ui_engine: &route_ui_engine,
@@ -195,7 +203,7 @@ mod tests {
         // Clamped to the shared thickness slider range.
         assert_eq!(
             state.style.current_thickness,
-            crate::ui::toolbar::model::ToolbarSliderSpec::THICKNESS.max
+            ToolbarSliderSpec::THICKNESS.max
         );
 
         // Esc restores nothing and applies nothing.
@@ -212,8 +220,8 @@ mod tests {
 
     #[test]
     fn font_size_target_commits_through_the_font_apply_arm() {
-        let route_measurer = crate::draw::TextMeasurer::default();
-        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_measurer = TextMeasurer::default();
+        let route_ui_engine = UiTextEngine::default();
         let route_resources = crate::input::state::InputTextResources {
             measurer: &route_measurer,
             ui_engine: &route_ui_engine,
@@ -233,7 +241,7 @@ mod tests {
         assert!(!state.is_precision_entry_open());
         assert_eq!(
             state.style.current_font_size,
-            crate::ui::toolbar::model::ToolbarSliderSpec::FONT_SIZE.max
+            ToolbarSliderSpec::FONT_SIZE.max
         );
 
         // An unparseable buffer commits nothing.
@@ -246,7 +254,7 @@ mod tests {
     fn overlay_pointer_press_cancels_the_popup() {
         let mut state = make_test_input_state();
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
-        state.on_mouse_press(crate::input::MouseButton::Left, 100, 100);
+        state.on_mouse_press(MouseButton::Left, 100, 100);
         assert!(!state.is_precision_entry_open());
     }
 

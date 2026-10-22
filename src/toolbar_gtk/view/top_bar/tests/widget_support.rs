@@ -1,9 +1,11 @@
 //! GTK widget traversal, accessibility, and lifecycle helpers.
 
+use gtk4::ffi;
+use gtk4::glib::ffi as glib_ffi;
+
 use super::super::TopBar;
 use gtk4::prelude::*;
-use std::ffi::CStr;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
 pub(super) fn collect_semantic_widgets(root: &gtk4::Widget) -> Vec<gtk4::Widget> {
     fn visit(widget: &gtk4::Widget, widgets: &mut Vec<gtk4::Widget>) {
@@ -55,20 +57,27 @@ pub(super) fn assert_accessible_label(widget: &gtk4::Widget, expected: &str, id:
     let expected = CString::new(expected).expect("accessible label contains no NUL");
     // GTK returns a newly allocated diagnostic string on mismatch and null
     // when the live accessible property has the requested value.
+    // SAFETY: every GtkWidget implements GtkAccessible, so the borrowed
+    // widget pointer is a valid accessible for the call. The LABEL property
+    // takes one NUL-terminated string vararg, and `expected` outlives the call.
     let mismatch = unsafe {
-        gtk4::ffi::gtk_test_accessible_check_property(
+        ffi::gtk_test_accessible_check_property(
             widget.as_ptr().cast(),
-            gtk4::ffi::GTK_ACCESSIBLE_PROPERTY_LABEL,
+            ffi::GTK_ACCESSIBLE_PROPERTY_LABEL,
             expected.as_ptr(),
         )
     };
     if mismatch.is_null() {
         return;
     }
+    // SAFETY: `mismatch` is the non-null, NUL-terminated string GTK just
+    // allocated; it is freed only after `message` copies it.
     let message = unsafe { CStr::from_ptr(mismatch) }
         .to_string_lossy()
         .into_owned();
-    unsafe { gtk4::glib::ffi::g_free(mismatch.cast()) };
+    // SAFETY: GTK transferred ownership of the string, which is freed once
+    // here and not used afterwards.
+    unsafe { glib_ffi::g_free(mismatch.cast()) };
     panic!("{id} accessible label: {message}");
 }
 

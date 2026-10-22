@@ -1,3 +1,9 @@
+use crate::config::{KeybindingsConfig, RadialMenuMouseBinding};
+use crate::draw::TextMeasurer;
+use crate::input::boards::PendingBoardRuntimeUiAction;
+use crate::input::state;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::{BoardPages, Frame};
 use crate::input::state::core::board_picker::{BoardPickerFocus, BoardPickerPageNavMode};
@@ -326,9 +332,9 @@ fn context_menu_radial_entry_shows_default_mouse_shortcut() {
 
 #[test]
 fn context_menu_radial_entry_shows_mouse_and_keyboard_shortcut() {
-    let mut keybindings = crate::config::KeybindingsConfig::default();
+    let mut keybindings = KeybindingsConfig::default();
     keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
-    let mut state = create_test_input_state_with_keybindings(keybindings);
+    let mut state = create_test_input_state_with_keybindings(&keybindings);
     state.toggle_context_menu_via_keyboard();
 
     let entries = state.context_menu_entries();
@@ -345,7 +351,7 @@ fn context_menu_radial_entry_shows_mouse_and_keyboard_shortcut() {
 #[test]
 fn context_menu_radial_entry_shows_right_click_shortcut_when_configured() {
     let mut state = create_test_input_state();
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Right;
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Right;
     state.toggle_context_menu_via_keyboard();
 
     let entries = state.context_menu_entries();
@@ -358,10 +364,10 @@ fn context_menu_radial_entry_shows_right_click_shortcut_when_configured() {
 
 #[test]
 fn context_menu_radial_entry_shows_keyboard_shortcut_when_mouse_binding_disabled() {
-    let mut keybindings = crate::config::KeybindingsConfig::default();
+    let mut keybindings = KeybindingsConfig::default();
     keybindings.ui.toggle_radial_menu = vec!["Ctrl+R".to_string()];
-    let mut state = create_test_input_state_with_keybindings(keybindings);
-    state.radial_menu.mouse_binding = crate::config::RadialMenuMouseBinding::Disabled;
+    let mut state = create_test_input_state_with_keybindings(&keybindings);
+    state.radial_menu.mouse_binding = RadialMenuMouseBinding::Disabled;
     state.toggle_context_menu_via_keyboard();
 
     let entries = state.context_menu_entries();
@@ -443,9 +449,9 @@ fn context_menu_zoom_centres_on_the_right_click_origin() {
 
     assert_eq!(
         state.take_pending_zoom_request(),
-        Some(crate::input::ZoomRequest {
+        Some(ZoomRequest {
             action: ZoomAction::In,
-            anchor: crate::input::ZoomAnchor::At(12, 34),
+            anchor: ZoomAnchor::At(12, 34),
         })
     );
 }
@@ -464,7 +470,7 @@ fn keyboard_opened_canvas_menu_zooms_the_screen_centre() {
         state
             .take_pending_zoom_request()
             .map(|request| request.anchor),
-        Some(crate::input::ZoomAnchor::ScreenCenter)
+        Some(ZoomAnchor::ScreenCenter)
     );
 }
 
@@ -660,11 +666,11 @@ fn boards_menu_disables_delete_for_transparent_board_and_shows_overflow_entry() 
     assert!(delete_entry.disabled);
 }
 
-fn menu_entry(state: &InputState, command: MenuCommand) -> ContextMenuEntry {
+fn menu_entry(state: &InputState, command: &MenuCommand) -> ContextMenuEntry {
     state
         .context_menu_entries()
         .into_iter()
-        .find(|entry| entry.command == Some(command.clone()))
+        .find(|entry| entry.command.as_ref() == Some(command))
         .unwrap_or_else(|| panic!("missing {command:?} entry"))
 }
 
@@ -674,7 +680,7 @@ fn boards_menu_edits_active_board_paper_and_skips_the_overlay() {
     state.switch_board(BOARD_ID_WHITEBOARD);
 
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
-    assert!(!menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+    assert!(!menu_entry(&state, &MenuCommand::BoardEditPaper).disabled);
     state.execute_menu_command(MenuCommand::BoardEditPaper);
 
     assert!(!state.is_context_menu_open());
@@ -687,7 +693,7 @@ fn boards_menu_edits_active_board_paper_and_skips_the_overlay() {
     state.close_board_picker();
     state.switch_board(BOARD_ID_TRANSPARENT);
     state.open_context_menu((0, 0), Vec::new(), ContextMenuKind::Boards, None);
-    assert!(menu_entry(&state, MenuCommand::BoardEditPaper).disabled);
+    assert!(menu_entry(&state, &MenuCommand::BoardEditPaper).disabled);
 }
 
 #[test]
@@ -695,11 +701,11 @@ fn board_row_menu_edits_renames_and_pins_its_own_board() {
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     let overlay = board_index(&state, BOARD_ID_TRANSPARENT);
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
 
     state.open_board_context_menu((5, 5), overlay);
     assert_eq!(state.context_menu_entries()[0].label, "Overlay");
-    assert!(menu_entry(&state, MenuCommand::BoardEditPaperFromContext).disabled);
+    assert!(menu_entry(&state, &MenuCommand::BoardEditPaperFromContext).disabled);
 
     state.open_board_context_menu((5, 5), blackboard);
     assert!(
@@ -722,7 +728,7 @@ fn board_row_menu_edits_renames_and_pins_its_own_board() {
         state
             .board_picker_edit_state()
             .map(|(mode, index, _)| (mode, index)),
-        Some((crate::input::state::BoardPickerEditMode::Name, row))
+        Some((state::BoardPickerEditMode::Name, row))
     );
 
     state.board_picker_cancel_edit();
@@ -731,7 +737,7 @@ fn board_row_menu_edits_renames_and_pins_its_own_board() {
     state.execute_menu_command(MenuCommand::BoardTogglePinFromContext);
     assert!(matches!(
         state.take_pending_board_runtime_ui_actions().as_slice(),
-        [crate::input::boards::PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
+        [PendingBoardRuntimeUiAction::TogglePin { board_id, .. }]
             if board_id == BOARD_ID_BLACKBOARD
     ));
 }
@@ -740,7 +746,7 @@ fn board_row_menu_edits_renames_and_pins_its_own_board() {
 fn right_clicking_a_board_row_selects_it_and_opens_its_menu() {
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     state.update_board_picker_layout(&ctx, 1280, 720);
@@ -752,7 +758,7 @@ fn right_clicking_a_board_row_selects_it_and_opens_its_menu() {
         + layout.header_height
         + layout.row_height * (row as f64 + 0.5)) as i32;
 
-    assert!(state.handle_board_picker_press(crate::input::MouseButton::Right, x, y));
+    assert!(state.handle_board_picker_press(MouseButton::Right, x, y));
 
     assert!(state.is_board_picker_open());
     assert_eq!(state.board_picker_selected_index(), Some(row));
@@ -834,7 +840,7 @@ fn page_duplicate_from_context_duplicates_target_page_and_closes_menu() {
 
 #[test]
 fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -844,7 +850,7 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
     state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
@@ -888,7 +894,7 @@ fn page_delete_from_context_reconciles_board_picker_page_search_cursor() {
 
 #[test]
 fn page_search_active_match_clamps_stale_cursor_after_external_page_delete() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let blackboard = board_index(&state, BOARD_ID_BLACKBOARD);
     state.switch_board(BOARD_ID_BLACKBOARD);
@@ -898,7 +904,7 @@ fn page_search_active_match_clamps_stale_cursor_after_external_page_delete() {
         &[Some("Match one"), Some("Match two"), Some("Other")],
         0,
     );
-    state.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    state.open_board_picker_with_measurer(&TextMeasurer::default());
     state.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
     state.handle_board_picker_key_with_measurer(&route_measurer, Key::Char('/'));
@@ -999,7 +1005,7 @@ fn highlight_row_uses_the_action_short_label() {
     let mut state = create_test_input_state();
     state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
 
-    let highlight = menu_entry(&state, MenuCommand::ToggleHighlightTool);
+    let highlight = menu_entry(&state, &MenuCommand::ToggleHighlightTool);
 
     assert_eq!(highlight.label, "Highlight");
     assert!(!highlight.label.contains("(tool + click)"));
@@ -1026,16 +1032,16 @@ fn undo_and_redo_rows_follow_history_and_run_it() {
         16,
     );
     state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
-    assert!(!menu_entry(&state, MenuCommand::Undo).disabled);
-    assert!(menu_entry(&state, MenuCommand::Redo).disabled);
+    assert!(!menu_entry(&state, &MenuCommand::Undo).disabled);
+    assert!(menu_entry(&state, &MenuCommand::Redo).disabled);
 
     state.execute_menu_command(MenuCommand::Undo);
 
     assert!(!state.is_context_menu_open());
     assert!(state.boards.active_frame().shapes.is_empty());
     state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
-    assert!(menu_entry(&state, MenuCommand::Undo).disabled);
-    assert!(!menu_entry(&state, MenuCommand::Redo).disabled);
+    assert!(menu_entry(&state, &MenuCommand::Undo).disabled);
+    assert!(!menu_entry(&state, &MenuCommand::Redo).disabled);
 }
 
 #[test]
@@ -1051,7 +1057,7 @@ fn exit_row_exits_or_hides_a_daemon_overlay() {
     let mut state = create_test_input_state();
     state.set_context_menu_exit_hides_overlay(true);
     state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
-    assert_eq!(menu_entry(&state, MenuCommand::Exit).label, "Hide Overlay");
+    assert_eq!(menu_entry(&state, &MenuCommand::Exit).label, "Hide Overlay");
 }
 
 #[test]
@@ -1064,7 +1070,7 @@ fn capture_region_row_hands_the_capture_to_the_backend() {
     assert!(!state.is_context_menu_open());
     assert!(matches!(
         state.take_pending_backend_action(),
-        Some(crate::input::state::PendingBackendAction::Screenshot(
+        Some(state::PendingBackendAction::Screenshot(
             Action::CaptureRegionInteractive
         ))
     ));
@@ -1103,7 +1109,7 @@ fn shape_menu_also_ends_with_exit() {
 
 #[test]
 fn the_footer_lives_inside_the_menu_and_leaves_row_hits_alone() {
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let mut state = create_test_input_state();
     state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
     state.update_context_menu_layout_with_engine(&engine, 1280, 900);

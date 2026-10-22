@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::enums::RegionPicker;
+use crate::paths;
 
 /// Region screenshot picker configuration.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
@@ -104,6 +105,7 @@ impl Default for CaptureConfig {
 impl CaptureConfig {
     /// The configured OCR languages, or the default when the authored value is
     /// unusable. Recognition never passes an unvalidated string to the engine.
+    #[must_use]
     pub fn resolved_ocr_languages(&self) -> String {
         match validate_ocr_languages(&self.ocr_languages) {
             Ok(languages) => languages,
@@ -159,7 +161,7 @@ pub fn validate_filename_template(template: &str) -> Result<(), String> {
     if trimmed.is_empty() {
         return Err("value is empty".to_string());
     }
-    if !crate::paths::is_single_path_component(trimmed) {
+    if !paths::is_single_path_component(trimmed) {
         return Err("must be a single file name, not a path".to_string());
     }
     Ok(())

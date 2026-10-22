@@ -1,5 +1,13 @@
 //! Size estimates for a save that has not happened yet.
-use super::*;
+use super::super::compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
+use super::super::types::SessionSnapshot;
+use super::model::{SnapshotPayloadEstimate, SnapshotSaveEstimate};
+use super::payload::{
+    PayloadStamp, estimate_from_candidate, payload_candidate, snapshot_without_history,
+};
+use crate::session::options::SessionOptions;
+use crate::time_utils::now_rfc3339;
+use anyhow::Result;
 
 pub(crate) fn estimate_snapshot_save(
     snapshot: &SessionSnapshot,

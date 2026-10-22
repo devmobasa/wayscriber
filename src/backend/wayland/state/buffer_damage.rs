@@ -13,7 +13,7 @@
 //! previous canvas pointers become invalid.
 
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, mem};
 
 use crate::util::Rect;
 
@@ -277,7 +277,7 @@ impl BufferDamageTracker {
                 (true, full_reason, Vec::new())
             } else {
                 // Take and deduplicate regions
-                let mut regions = std::mem::take(&mut damage.regions);
+                let mut regions = mem::take(&mut damage.regions);
                 regions.retain(Rect::is_valid);
                 (false, None, regions)
             }
@@ -605,9 +605,9 @@ mod tests {
         assert_eq!(tracker.buffers.len(), MAX_TRACKED_BUFFERS);
 
         // Adding a new slot should evict the oldest
-        let _ = tracker.take_buffer_damage(0xF000, 100, 100, TEST_GEN, TEST_SIZE);
+        let _ = tracker.take_buffer_damage(0xf000, 100, 100, TEST_GEN, TEST_SIZE);
         assert_eq!(tracker.buffers.len(), MAX_TRACKED_BUFFERS);
-        assert!(tracker.buffers.contains_key(&0xF000));
+        assert!(tracker.buffers.contains_key(&0xf000));
     }
 
     #[test]

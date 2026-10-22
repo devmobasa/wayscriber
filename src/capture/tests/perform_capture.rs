@@ -1,17 +1,13 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::io;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
-use crate::capture::{
-    dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver},
-    file::FileSaveConfig,
-    pipeline::{CaptureRequest, deliver_document, deliver_image, perform_capture},
-    types::{
-        CaptureDestination, CaptureError, CaptureResult, CaptureType, DocumentDeliveryRequest,
-        ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument,
-        RenderedImage,
-    },
+use crate::capture::dependencies::{CaptureClipboard, CaptureDependencies, CaptureFileSaver};
+use crate::capture::file::FileSaveConfig;
+use crate::capture::pipeline::{CaptureRequest, deliver_document, deliver_image, perform_capture};
+use crate::capture::types::{
+    CaptureDestination, CaptureError, CaptureResult, CaptureType, DocumentDeliveryRequest,
+    ImageDeliveryRequest, ImageFormatMetadata, ImageOperationKind, RenderedDocument, RenderedImage,
 };
 
 use super::fixtures::{MockClipboard, MockSaver, MockSource};
@@ -29,9 +25,7 @@ impl CaptureFileSaver for RecordingSaver {
         *self.calls.lock().unwrap() += 1;
         self.configs.lock().unwrap().push(config.clone());
         if self.should_fail {
-            Err(CaptureError::SaveError(std::io::Error::other(
-                "save failed",
-            )))
+            Err(CaptureError::SaveError(io::Error::other("save failed")))
         } else {
             Ok(self.path.clone())
         }

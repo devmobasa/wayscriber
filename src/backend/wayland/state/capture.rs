@@ -1,8 +1,27 @@
-use super::*;
+use crate::canvas_export::SpotlightPassSnapshot;
+use crate::capture::{CaptureError, ImageRenderJob, RenderedImageDeliveryRequest};
+use crate::input::BoardBackground;
+
+use super::super::capture::CapturePreflightRequest;
+use super::WaylandState;
+use super::core::overlay::OverlaySuppression;
+use crate::backend::ExitAfterCaptureMode;
 use crate::backend::wayland::frozen::FrozenCaptureBackend;
-use crate::capture::{CaptureRequest, CaptureRequestId, CaptureSubmitError};
+use crate::canvas_export::{
+    BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot, CanvasExportViewport,
+    render_canvas_png,
+};
+use crate::capture::file::{FileSaveConfig, expand_tilde};
+use crate::capture::types::CaptureType;
+use crate::capture::{
+    CaptureDestination, CaptureRequest, CaptureRequestId, CaptureSubmitError, ImageFormatMetadata,
+    ImageOperationKind,
+};
+use crate::config::Action;
 use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
+use anyhow::Result;
+use wayland_client::QueueHandle;
 
 mod backdrop;
 mod barrier;
@@ -79,7 +98,7 @@ impl WaylandState {
     /// saved without the magnification it was asked for.
     fn report_export_preflight_failure(
         &mut self,
-        error: &crate::capture::CaptureError,
+        error: &CaptureError,
         operation: ImageOperationKind,
         toast_source: &'static str,
     ) {
@@ -344,7 +363,7 @@ impl WaylandState {
             );
             return;
         }
-        let render: crate::capture::ImageRenderJob = Box::new(move || render_canvas_png(&snapshot));
+        let render: ImageRenderJob = Box::new(move || render_canvas_png(&snapshot));
 
         let save_config = if matches!(destination, CaptureDestination::ClipboardOnly) {
             None
@@ -362,7 +381,7 @@ impl WaylandState {
         self.capture.set_exit_on_success(exit_on_success);
         self.capture.mark_in_progress();
 
-        let request = crate::capture::RenderedImageDeliveryRequest {
+        let request = RenderedImageDeliveryRequest {
             render,
             destination,
             save_config,
@@ -387,20 +406,16 @@ impl WaylandState {
                 origin_x: origin_x.round() as i32,
                 origin_y: origin_y.round() as i32,
             },
-            spotlight: crate::canvas_export::SpotlightPassSnapshot {
+            spotlight: SpotlightPassSnapshot {
                 dim_opacity: self.input_state.style.spotlight_dim_opacity,
                 feather: self.input_state.style.spotlight_feather,
             },
             backdrop: match self.input_state.boards.active_background() {
-                crate::input::BoardBackground::Transparent => {
-                    CanvasExportBackdropSnapshot::Transparent
-                }
-                crate::input::BoardBackground::Solid(color) => {
-                    CanvasExportBackdropSnapshot::board_paper(
-                        *color,
-                        self.input_state.boards.active_board().spec.grid,
-                    )
-                }
+                BoardBackground::Transparent => CanvasExportBackdropSnapshot::Transparent,
+                BoardBackground::Solid(color) => CanvasExportBackdropSnapshot::board_paper(
+                    *color,
+                    self.input_state.boards.active_board().spec.grid,
+                ),
             },
             board: BoardExportSnapshot {
                 frame: self

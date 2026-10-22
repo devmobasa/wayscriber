@@ -1,14 +1,13 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 #[cfg(unix)]
-use std::{
-    ffi::CString,
-    os::unix::{
-        ffi::OsStrExt,
-        fs::{PermissionsExt, symlink},
-    },
-};
+use std::ffi::CString;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::os::unix::fs::{PermissionsExt, symlink};
+use std::path::{Path, PathBuf};
+use std::{fs, io, process};
+
+use crate::{test_env, test_temp};
 
 use super::config::options_from_config;
 use super::identifiers::{resolve_display_id, sanitize_identifier};
@@ -16,8 +15,6 @@ use super::types::{SessionOptions, SessionTarget};
 use super::validation;
 use crate::config::{SessionConfig, SessionStorageMode};
 use crate::env_vars::WAYLAND_DISPLAY_ENV;
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 fn sanitize_identifier_replaces_non_alphanumeric() {
@@ -35,12 +32,10 @@ fn sanitize_identifier_empty_defaults_to_default() {
 fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
     use std::env;
 
-    let _guard = ENV_MUTEX
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = test_env::lock();
 
     let prev = env::var_os(WAYLAND_DISPLAY_ENV);
-    // SAFETY: serialized via ENV_MUTEX
+    // SAFETY: the environment lease held above serializes environment access.
     unsafe {
         env::set_var(WAYLAND_DISPLAY_ENV, "wayland-0");
     }
@@ -51,9 +46,12 @@ fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
     let from_env = resolve_display_id(None);
     assert_eq!(from_env, "wayland_0");
 
-    match prev {
-        Some(v) => unsafe { env::set_var(WAYLAND_DISPLAY_ENV, v) },
-        None => unsafe { env::remove_var(WAYLAND_DISPLAY_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(v) => env::set_var(WAYLAND_DISPLAY_ENV, v),
+            None => env::remove_var(WAYLAND_DISPLAY_ENV),
+        }
     }
 }
 
@@ -165,7 +163,7 @@ fn force_resume_persistence_enables_all_session_payloads() {
 
 #[test]
 fn named_file_foreground_validation_accepts_writable_parent_and_cleans_probe() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("lecture-04.wayscriber-session");
 
     validation::validate_named_session_file_for_foreground(&path)
@@ -189,7 +187,7 @@ fn named_file_foreground_validation_accepts_writable_parent_and_cleans_probe() {
 #[cfg(unix)]
 #[test]
 fn named_file_open_validation_rejects_existing_session_in_readonly_parent() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let parent = temp.path().join("readonly-parent");
     fs::create_dir(&parent).expect("create parent");
     let path = parent.join("lecture-04.wayscriber-session");
@@ -207,7 +205,7 @@ fn named_file_open_validation_rejects_existing_session_in_readonly_parent() {
 
 #[test]
 fn named_file_offline_validation_allows_missing_parent() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp
         .path()
         .join("missing")
@@ -221,7 +219,7 @@ fn named_file_offline_validation_allows_missing_parent() {
 
 #[test]
 fn named_file_validation_rejects_missing_directory_shaped_path() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let raw_path = format!("{}/", temp.path().join("lecture").display());
     let path = PathBuf::from(raw_path);
 
@@ -250,7 +248,7 @@ fn named_file_validation_rejects_missing_directory_shaped_path() {
 #[cfg(unix)]
 #[test]
 fn named_file_validation_rejects_fifo_target() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("session-fifo.wayscriber-session");
     make_fifo(&path);
 
@@ -279,7 +277,7 @@ fn named_file_validation_rejects_fifo_target() {
 #[cfg(unix)]
 #[test]
 fn named_file_validation_rejects_symlink_target() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target = temp.path().join("real-session.wayscriber-session");
     let link = temp.path().join("linked-session.wayscriber-session");
     fs::write(&target, b"{}").expect("write symlink target");
@@ -320,7 +318,7 @@ fn named_file_validation_rejects_parent_with_write_bits_but_no_effective_access(
 
     let manual_probe = parent.join(format!(
         ".wayscriber-session-manual-access-test-{}",
-        std::process::id()
+        process::id()
     ));
     if let Ok(file) = fs::OpenOptions::new()
         .write(true)
@@ -334,7 +332,7 @@ fn named_file_validation_rejects_parent_with_write_bits_but_no_effective_access(
 
     let path = parent.join(format!(
         "wayscriber-session-validation-{}.wayscriber-session",
-        std::process::id()
+        process::id()
     ));
     let foreground_err = validation::validate_named_session_file_for_foreground(&path)
         .expect_err("foreground validation should reject process-unwritable parents");
@@ -381,7 +379,7 @@ fn readonly_dir_guard(path: &Path) -> ReadonlyDirGuard {
 fn can_create_probe(parent: &Path) -> bool {
     let probe = parent.join(format!(
         ".wayscriber-session-open-manual-access-test-{}",
-        std::process::id()
+        process::id()
     ));
     match fs::OpenOptions::new()
         .write(true)
@@ -407,6 +405,6 @@ fn make_fifo(path: &Path) {
         0,
         "mkfifo {} failed: {}",
         path.display(),
-        std::io::Error::last_os_error()
+        io::Error::last_os_error()
     );
 }

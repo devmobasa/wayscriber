@@ -49,6 +49,8 @@ pub(crate) fn step_marker_bounds_with(
 
 #[cfg(test)]
 mod tests {
+    use crate::draw;
+
     use super::*;
 
     #[test]
@@ -59,7 +61,7 @@ mod tests {
 
     #[test]
     fn step_marker_radius_grows_with_font_size() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = draw::TextMeasurer::default();
         let font = FontDescriptor::default();
         assert!(
             step_marker_radius_with(&measurer, 1, 32.0, &font)
@@ -69,7 +71,7 @@ mod tests {
 
     #[test]
     fn step_marker_radius_grows_for_multi_digit_labels() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = draw::TextMeasurer::default();
         let font = FontDescriptor::default();
         assert!(
             step_marker_radius_with(&measurer, 88, 18.0, &font)

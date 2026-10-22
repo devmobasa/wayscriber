@@ -1,6 +1,7 @@
+use crate::capture::desktop_backdrop::desktop_backdrop_from_argb;
 use crate::capture::{
     DesktopBackdropCaptureRequest, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
-    ImageOperationKind, desktop_backdrop::desktop_backdrop_from_argb,
+    ImageOperationKind,
 };
 
 fn request(

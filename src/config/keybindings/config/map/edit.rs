@@ -304,6 +304,8 @@ define_action_binding_accessors! {
 
 #[cfg(test)]
 mod tests {
+    use crate::config;
+
     use super::*;
 
     #[test]
@@ -345,7 +347,7 @@ mod tests {
     fn configurable_action_uses_canonical_action_labels() {
         assert_eq!(
             ConfigurableAction::CaptureRegionInteractive.label(),
-            crate::config::action_label(Action::CaptureRegionInteractive)
+            config::action_label(Action::CaptureRegionInteractive)
         );
     }
 

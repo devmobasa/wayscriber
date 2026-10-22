@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_apply_preset_1, default_apply_preset_2, default_apply_preset_3, default_apply_preset_4,
+    default_apply_preset_5, default_clear_preset_1, default_clear_preset_2, default_clear_preset_3,
+    default_clear_preset_4, default_clear_preset_5, default_save_preset_1, default_save_preset_2,
+    default_save_preset_3, default_save_preset_4, default_save_preset_5,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

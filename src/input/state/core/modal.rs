@@ -308,6 +308,9 @@ impl InputState {
 
 #[cfg(test)]
 mod wheel_tests {
+    use crate::draw::{Color, Shape, TextMeasurer};
+    use crate::ui::toolbar::PrecisionEntryTarget;
+
     use super::ModalSurface;
     use crate::input::state::test_support::make_test_input_state;
 
@@ -326,7 +329,7 @@ mod wheel_tests {
         assert!(state.modal_owns_wheel(), "colour picker");
         state.close_color_picker_popup(false);
 
-        state.open_precision_entry(crate::ui::toolbar::PrecisionEntryTarget::Thickness);
+        state.open_precision_entry(PrecisionEntryTarget::Thickness);
         assert!(state.modal_owns_wheel(), "precision entry");
     }
 
@@ -337,7 +340,7 @@ mod wheel_tests {
         // stop at them; the wheel used to carry on to zoom, Spotlight, and
         // stroke thickness behind them.
         let mut state = make_test_input_state();
-        state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
+        state.activate_eyedropper_with(&TextMeasurer::default(), None);
 
         assert!(state.eyedropper_is_active());
         assert!(state.modal_owns_wheel());
@@ -351,7 +354,7 @@ mod wheel_tests {
         state.open_font_picker();
         assert!(state.is_font_picker_open());
 
-        state.prepare_for_screen_modal_with_measurer(&crate::draw::TextMeasurer::default());
+        state.prepare_for_screen_modal_with_measurer(&TextMeasurer::default());
 
         assert!(!state.is_font_picker_open());
         assert!(
@@ -364,23 +367,20 @@ mod wheel_tests {
 
     #[test]
     fn the_properties_panel_leaves_the_wheel_to_the_canvas() {
-        let route_measurer = crate::draw::TextMeasurer::default();
+        let route_measurer = TextMeasurer::default();
         // It docks beside the canvas rather than over it, and the canvas stays
         // drawable underneath, so the wheel still means what it means elsewhere.
         let mut state = make_test_input_state();
-        let id = state
-            .boards
-            .active_frame_mut()
-            .add_shape(crate::draw::Shape::Rect {
-                x: 0,
-                y: 0,
-                w: 10,
-                h: 10,
-                fill: false,
-                fill_color: None,
-                color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
-                thick: 2.0,
-            });
+        let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+            fill: false,
+            fill_color: None,
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            thick: 2.0,
+        });
         state.set_selection(vec![id]);
         assert!(state.show_properties_panel_with(&route_measurer));
 
@@ -390,22 +390,19 @@ mod wheel_tests {
 
     #[test]
     fn a_popup_a_canvas_click_would_only_dismiss_hides_the_tool_preview() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         assert!(!state.canvas_press_dismisses_popup());
-        let id = state
-            .boards
-            .active_frame_mut()
-            .add_shape(crate::draw::Shape::Rect {
-                x: 0,
-                y: 0,
-                w: 10,
-                h: 10,
-                fill: false,
-                fill_color: None,
-                color: crate::draw::Color::new(1.0, 1.0, 1.0, 1.0),
-                thick: 2.0,
-            });
+        let id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 10,
+            fill: false,
+            fill_color: None,
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            thick: 2.0,
+        });
         state.set_selection(vec![id]);
 
         assert!(state.show_properties_panel_with(&measurer));
@@ -419,6 +416,7 @@ mod wheel_tests {
 #[cfg(test)]
 mod toolbar_chrome_tests {
     use crate::draw::TextMeasurer;
+    use crate::input::state::ContextMenuKind;
     use crate::input::state::test_support::make_test_input_state;
 
     #[test]
@@ -470,12 +468,7 @@ mod toolbar_chrome_tests {
     fn pointer_anchored_surfaces_and_the_tour_keep_the_toolbar() {
         let mut state = make_test_input_state();
 
-        state.open_context_menu(
-            (40, 40),
-            Vec::new(),
-            crate::input::state::ContextMenuKind::Canvas,
-            None,
-        );
+        state.open_context_menu((40, 40), Vec::new(), ContextMenuKind::Canvas, None);
         assert!(state.is_context_menu_open());
         assert!(!state.modal_hides_toolbar_chrome(), "context menu");
         state.close_context_menu();

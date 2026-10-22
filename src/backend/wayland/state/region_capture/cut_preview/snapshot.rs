@@ -1,3 +1,9 @@
+use std::sync::Arc;
+
+use crate::backend::wayland::state::screen_image::ScreenSourceToken;
+use crate::canvas_export::SpotlightPassSnapshot;
+use crate::screen_pixels::ScreenImage;
+
 use super::super::ActiveScreenRegion;
 use super::super::cut_review::{
     RegionAnnotatedRenderContext, RegionRenderFingerprint, RegionReviewCorrelation,
@@ -67,7 +73,7 @@ impl WaylandState {
             canvas_content_generation: self.input_state.canvas_content_generation(),
             board_view_offset: self.board_view_offset(),
             text_halo_enabled: self.config.drawing.text_halo_enabled,
-            spotlight: crate::canvas_export::SpotlightPassSnapshot {
+            spotlight: SpotlightPassSnapshot {
                 dim_opacity: self.input_state.style.spotlight_dim_opacity,
                 feather: self.input_state.style.spotlight_feather,
             },
@@ -96,8 +102,8 @@ impl WaylandState {
 
     fn retain_current_capture_image(
         &self,
-        token: &crate::backend::wayland::state::screen_image::ScreenSourceToken,
-    ) -> Result<std::sync::Arc<crate::screen_pixels::ScreenImage>, CaptureError> {
+        token: &ScreenSourceToken,
+    ) -> Result<Arc<ScreenImage>, CaptureError> {
         let Some(source) = displayed_screen_image(
             &self.zoom,
             &self.frozen,
@@ -126,7 +132,7 @@ impl WaylandState {
     fn region_pixel_source(
         &self,
         fingerprint: &RegionRenderFingerprint,
-        shared_image: std::sync::Arc<crate::screen_pixels::ScreenImage>,
+        shared_image: Arc<ScreenImage>,
     ) -> Result<RegionPixelSource, CaptureError> {
         match fingerprint {
             RegionRenderFingerprint::Raw { source_rect, .. } => Ok(RegionPixelSource::Raw {

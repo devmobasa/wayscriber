@@ -1,3 +1,5 @@
+use crate::draw::shape;
+
 use super::*;
 use crate::draw::{
     ArrowLabel, ArrowStyle, BLACK, DrawnShape, EmbeddedImage, EraserBrush, EraserKind,
@@ -251,7 +253,7 @@ fn arrowhead_hit_detects_point_near_tip_and_rejects_distant_point() {
     // Arrow pointing upwards from tail at (0, -20) to tip at (0, 0).
     let tip = (0, 0);
     let tail = (0, -20);
-    let skeleton = crate::util::calculate_arrow_skeleton(
+    let skeleton = util::calculate_arrow_skeleton(
         tip.0,
         tip.1,
         tail.0,
@@ -338,7 +340,7 @@ fn double_arrow_is_grabbed_by_either_head() {
 
 #[test]
 fn arrow_label_hit_detects_label_bounds() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let font = FontDescriptor::default();
     let label = ArrowLabel {
@@ -367,7 +369,7 @@ fn arrow_label_hit_detects_label_bounds() {
     );
 
     let label_text = "12";
-    let layout = crate::draw::shape::arrow_label_layout_with(
+    let layout = shape::arrow_label_layout_with(
         &test_text_measurer,
         100,
         0,
@@ -397,7 +399,7 @@ fn arrow_label_hit_detects_label_bounds() {
 
 #[test]
 fn step_marker_hit_detects_center_and_rejects_outside_point() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let font = FontDescriptor::default();
     let label = StepMarkerLabel {
@@ -425,13 +427,13 @@ fn step_marker_hit_detects_center_and_rejects_outside_point() {
     let Shape::StepMarker { label, .. } = &drawn.shape else {
         panic!("expected step marker shape");
     };
-    let radius = crate::draw::shape::step_marker_radius_with(
+    let radius = shape::step_marker_radius_with(
         &test_text_measurer,
         label.value,
         label.size,
         &label.font_descriptor,
     );
-    let outline = crate::draw::shape::step_marker_outline_thickness(label.size);
+    let outline = shape::step_marker_outline_thickness(label.size);
     let outside_x = 50 + (radius + outline / 2.0).ceil() as i32 + 2;
     assert!(
         !hit_test(&drawn, (outside_x, 60), 0.1),
@@ -563,14 +565,14 @@ fn labelled_arrow_shape(style: ArrowStyle, head_at_end: bool) -> DrawnShape {
 
 #[test]
 fn a_double_arrow_label_is_grabbable_from_the_same_place_either_way() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     // head_at_end has no effect on a Double arrow — the outline is the same
     // polygon either way, and docs/CONFIG.md says so. The hit area has to
     // follow, or the number is grabbable where it is not painted on exactly
     // one of the two readings.
     let font = FontDescriptor::default();
-    let layout = crate::draw::shape::arrow_label_layout_with(
+    let layout = shape::arrow_label_layout_with(
         &test_text_measurer,
         400,
         100,

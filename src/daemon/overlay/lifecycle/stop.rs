@@ -1,3 +1,5 @@
+use std::io;
+
 use anyhow::{Context, Result};
 use log::{info, warn};
 use std::os::fd::AsFd;
@@ -26,15 +28,15 @@ impl From<anyhow::Error> for StopFailure {
     }
 }
 
-impl From<std::io::Error> for StopFailure {
-    fn from(error: std::io::Error) -> Self {
+impl From<io::Error> for StopFailure {
+    fn from(error: io::Error) -> Self {
         anyhow::Error::from(error).into()
     }
 }
 
 impl OverlayLifecycle {
     /// Stops the child, returning the session it last reported.
-    fn terminate(&mut self) -> std::result::Result<Option<ReportedSession>, StopFailure> {
+    fn terminate(&mut self) -> Result<Option<ReportedSession>, StopFailure> {
         let mut session = None;
         if let Some(pid) = self.child.display_pid() {
             let stop_started = Instant::now();
@@ -123,7 +125,7 @@ impl OverlayLifecycle {
     /// Stops the overlay, returning the session its child last reported.
     pub(in crate::daemon::overlay) fn hide(
         &mut self,
-    ) -> std::result::Result<Option<ReportedSession>, StopFailure> {
+    ) -> Result<Option<ReportedSession>, StopFailure> {
         let session = self.terminate()?;
         self.mark_hidden();
         Ok(session)

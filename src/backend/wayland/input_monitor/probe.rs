@@ -9,6 +9,11 @@ use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
+use crate::env_vars;
+use std::ffi::OsString;
+use std::io::ErrorKind;
+use std::{env, fs, io};
+
 const DEV_INPUT_DIR: &str = "/dev/input";
 /// Seat to follow when the session does not name one. libinput's udev backend
 /// groups devices by seat and `seat0` is the single-seat default.
@@ -23,7 +28,7 @@ const DEFAULT_SEAT: &str = "seat0";
 /// callers need it, so it is dead code without the feature.
 #[cfg_attr(not(feature = "input-monitor"), allow(dead_code))]
 pub(in crate::backend::wayland) fn current_seat() -> String {
-    seat_name(std::env::var_os(crate::env_vars::XDG_SEAT_ENV))
+    seat_name(env::var_os(env_vars::XDG_SEAT_ENV))
 }
 
 /// Resolve a seat name from the environment value, falling back to the
@@ -31,7 +36,7 @@ pub(in crate::backend::wayland) fn current_seat() -> String {
 /// seat (or hold no devices at all), so the session's value wins when it is
 /// set to something usable.
 #[cfg_attr(not(feature = "input-monitor"), allow(dead_code))]
-fn seat_name(configured: Option<std::ffi::OsString>) -> String {
+fn seat_name(configured: Option<OsString>) -> String {
     configured
         .and_then(|seat| seat.into_string().ok())
         .map(|seat| seat.trim().to_string())
@@ -127,15 +132,15 @@ pub(in crate::backend::wayland) fn event_node_access() -> EventNodeAccess {
 /// Flat scan of `/dev/input`, used only when udev cannot attribute nodes to a
 /// seat. Cannot distinguish seats, so it is never the primary classifier.
 fn classify_event_nodes(dir: &Path) -> EventNodeAccess {
-    let entries = match std::fs::read_dir(dir) {
+    let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         // A directory this process may not list is itself the permission
         // case; reporting it as "no devices" would send the user looking for
         // hardware instead of at their group membership.
-        Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+        Err(err) if err.kind() == ErrorKind::PermissionDenied => {
             return EventNodeAccess::Unreadable;
         }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return EventNodeAccess::None,
+        Err(err) if err.kind() == ErrorKind::NotFound => return EventNodeAccess::None,
         Err(_) => return EventNodeAccess::Unknown,
     };
     let mut access = EventNodeAccess::None;
@@ -217,7 +222,7 @@ fn node_path_access(path: &Path) -> NodePathAccess {
     if unsafe { libc::access(c_path.as_ptr(), libc::R_OK) } == 0 {
         return NodePathAccess::Readable;
     }
-    match std::io::Error::last_os_error().raw_os_error() {
+    match io::Error::last_os_error().raw_os_error() {
         Some(libc::EACCES | libc::EPERM) => NodePathAccess::PermissionDenied,
         Some(libc::ENOENT | libc::ENOTDIR | libc::ENODEV) => NodePathAccess::Absent,
         _ => NodePathAccess::Unknown,
@@ -226,6 +231,10 @@ fn node_path_access(path: &Path) -> NodePathAccess {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::Permissions;
+
+    use crate::test_temp;
+
     use super::*;
 
     #[test]
@@ -240,11 +249,11 @@ mod tests {
     /// so a seat with only legacy nodes reads as unavailable.
     #[test]
     fn only_event_nodes_count_as_capture_devices() {
-        let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
-        std::fs::write(temp.path().join("mice"), b"").expect("fixture node");
+        let temp = test_temp::tempdir().expect("tempdir should succeed");
+        fs::write(temp.path().join("mice"), b"").expect("fixture node");
         assert_eq!(classify_event_nodes(temp.path()), EventNodeAccess::None);
 
-        std::fs::write(temp.path().join("event0"), b"").expect("fixture node");
+        fs::write(temp.path().join("event0"), b"").expect("fixture node");
         assert_eq!(classify_event_nodes(temp.path()), EventNodeAccess::Readable);
     }
 
@@ -252,23 +261,22 @@ mod tests {
     /// different fixes, so the classifier keeps them apart.
     #[test]
     fn node_access_separates_an_empty_directory_from_an_unreadable_one() {
-        let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let temp = test_temp::tempdir().expect("tempdir should succeed");
         assert_eq!(classify_event_nodes(temp.path()), EventNodeAccess::None);
 
         // Only non-event nodes: still nothing to capture from.
-        std::fs::write(temp.path().join("mice"), b"").expect("fixture node");
+        fs::write(temp.path().join("mice"), b"").expect("fixture node");
         assert_eq!(classify_event_nodes(temp.path()), EventNodeAccess::None);
 
         let node = temp.path().join("event0");
-        std::fs::write(&node, b"").expect("fixture node");
+        fs::write(&node, b"").expect("fixture node");
         assert_eq!(classify_event_nodes(temp.path()), EventNodeAccess::Readable);
 
         // A node this process cannot read reports the permission case. Running
         // as root defeats the mode bits, so skip there rather than assert a
         // condition the environment cannot produce.
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o000))
-            .expect("fixture permissions");
+        fs::set_permissions(&node, Permissions::from_mode(0o000)).expect("fixture permissions");
         if node_path_access(&node) == NodePathAccess::Readable {
             eprintln!("running with privileges that bypass file permissions; skipping");
             return;
@@ -290,27 +298,23 @@ mod tests {
     fn an_unlistable_directory_reports_the_permission_case() {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp = crate::test_temp::tempdir().expect("tempdir should succeed");
+        let temp = test_temp::tempdir().expect("tempdir should succeed");
         let dir = temp.path().join("input");
-        std::fs::create_dir(&dir).expect("fixture directory");
-        std::fs::write(dir.join("event0"), b"").expect("fixture node");
+        fs::create_dir(&dir).expect("fixture directory");
+        fs::write(dir.join("event0"), b"").expect("fixture node");
 
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000))
-            .expect("fixture permissions");
-        let listable = std::fs::read_dir(&dir).is_ok();
+        fs::set_permissions(&dir, Permissions::from_mode(0o000)).expect("fixture permissions");
+        let listable = fs::read_dir(&dir).is_ok();
         // Restore before any assertion so the tempdir can always be cleaned up.
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755))
-            .expect("restore permissions");
+        fs::set_permissions(&dir, Permissions::from_mode(0o755)).expect("restore permissions");
         if listable {
             eprintln!("running with privileges that bypass directory permissions; skipping");
             return;
         }
 
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000))
-            .expect("fixture permissions");
+        fs::set_permissions(&dir, Permissions::from_mode(0o000)).expect("fixture permissions");
         let access = classify_event_nodes(&dir);
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755))
-            .expect("restore permissions");
+        fs::set_permissions(&dir, Permissions::from_mode(0o755)).expect("restore permissions");
         assert_eq!(access, EventNodeAccess::Unreadable);
     }
 

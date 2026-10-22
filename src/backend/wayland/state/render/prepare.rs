@@ -1,8 +1,19 @@
-use super::plan::{CanvasPolicyInputs, PreparedFrame};
+use crate::draw::DirtyFullReason;
+use crate::util::Rect;
+
+use super::super::WaylandState;
+use super::super::buffer_damage::FullDamageReason;
+use super::super::perf::{
+    PerfDamageDiagnostics, PerfRenderBreakdown, PerfRenderProfileKind,
+    damage_covers_logical_surface,
+};
+use super::plan::{CanvasPolicyInputs, FrameGeometry, FrameVisibility, PreparedFrame};
 use super::profile::FrameProfile;
-use super::*;
+use super::record_render_stage;
+use super::runtime::{UiEffect, UiEffectFlags};
 use crate::backend::wayland::state::buffer_damage::{BufferDamageReport, BufferDamageTracker};
 use crate::backend::wayland::surface::AcquiredBuffer;
+use std::time::Instant;
 
 #[derive(Clone, Copy)]
 struct RenderAnimationState {
@@ -237,7 +248,7 @@ fn take_frame_damage(
         pool_size,
     );
     if report.regions.is_empty()
-        && let Some(full) = crate::util::Rect::new(0, 0, logical_width, logical_height)
+        && let Some(full) = Rect::new(0, 0, logical_width, logical_height)
     {
         report.regions = vec![full];
         report.full_reason = Some(FullDamageReason::EmptyDamageFallback);
@@ -247,13 +258,11 @@ fn take_frame_damage(
     report
 }
 
-fn input_full_damage_reason(
-    reason: Option<crate::draw::DirtyFullReason>,
-) -> Option<FullDamageReason> {
+fn input_full_damage_reason(reason: Option<DirtyFullReason>) -> Option<FullDamageReason> {
     reason.map(|reason| match reason {
-        crate::draw::DirtyFullReason::CanvasClear => FullDamageReason::CanvasClear,
-        crate::draw::DirtyFullReason::FirstRunOnboarding => FullDamageReason::FirstRunOnboarding,
-        crate::draw::DirtyFullReason::InlineToolbar => FullDamageReason::InlineToolbar,
+        DirtyFullReason::CanvasClear => FullDamageReason::CanvasClear,
+        DirtyFullReason::FirstRunOnboarding => FullDamageReason::FirstRunOnboarding,
+        DirtyFullReason::InlineToolbar => FullDamageReason::InlineToolbar,
     })
 }
 

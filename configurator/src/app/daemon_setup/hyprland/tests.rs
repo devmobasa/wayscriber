@@ -1,3 +1,6 @@
+use crate::test_env::EnvGuard;
+use crate::test_temp;
+
 use super::*;
 use wayscriber::env_vars::HOME_ENV;
 
@@ -76,9 +79,9 @@ fn has_source_line_matches_quoted_and_inline_commented_targets() {
 
 #[test]
 fn has_source_line_matches_tilde_target() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let home = tmp.path();
-    let _env = crate::test_env::EnvGuard::set(&[(HOME_ENV, home.as_os_str())]);
+    let _env = EnvGuard::set(&[(HOME_ENV, home.as_os_str())]);
 
     let absolute = home
         .join(".config")
@@ -93,7 +96,7 @@ fn has_source_line_matches_tilde_target() {
 
 #[test]
 fn write_light_controls_writes_include_and_sources_existing_main() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let hypr_dir = tmp.path().join(HYPRLAND_DIR);
     fs::create_dir_all(&hypr_dir).unwrap();
     let main = hypr_dir.join(MAIN_CONFIG);
@@ -113,7 +116,7 @@ fn write_light_controls_writes_include_and_sources_existing_main() {
 
 #[test]
 fn write_light_controls_is_idempotent_for_existing_source() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let hypr_dir = tmp.path().join(HYPRLAND_DIR);
     fs::create_dir_all(&hypr_dir).unwrap();
     let main = hypr_dir.join(MAIN_CONFIG);
@@ -131,7 +134,7 @@ fn write_light_controls_is_idempotent_for_existing_source() {
 
 #[test]
 fn write_light_controls_handles_missing_main_config() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
 
     let result = write_light_controls(tmp.path(), Path::new("/tmp/wayscriber")).unwrap();
 

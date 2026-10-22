@@ -1,4 +1,11 @@
-use super::*;
+use crate::backend::wayland::state::screen_image;
+
+use super::super::screen_image::{ScreenSourceToken, image_point_for_screen_point};
+use super::active_state::{ActiveScreenRegion, RegionInteractionPhase};
+use super::cut_review::RegionReviewEdits;
+use crate::input::SelectionHandle;
+use crate::input::state::{RegionPurposeTag, RegionSelection};
+use crate::screen_pixels::{ImagePixelRect, ImagePoint};
 
 pub(super) struct InteractiveReviewSeed {
     pub(super) generation: u64,
@@ -98,9 +105,7 @@ impl ActiveScreenRegion {
         if logical_anchor.is_some() || review_resize.is_some() {
             return false;
         }
-        let Some(display) =
-            crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(source, rect)
-        else {
+        let Some(display) = screen_image::screen_rect_for_image_rect(source, rect) else {
             return false;
         };
         let x = logical.0.floor() as i32;

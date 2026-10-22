@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::drawing::marker_color_with_opacity;
 use super::*;
 use crate::config::Action;
@@ -181,8 +183,8 @@ fn marker_opacity_helper_preserves_current_alpha_clamp() {
 
 #[test]
 fn provisional_polygon_bounds_include_extra_preview_padding() {
-    let measurer = crate::draw::TextMeasurer::default();
-    let stroke = Tool::Triangle.provisional_polygon_stroke(PolygonProvisionalSnapshot {
+    let measurer = TextMeasurer::default();
+    let stroke = Tool::Triangle.provisional_polygon_stroke(&PolygonProvisionalSnapshot {
         tool: Tool::Triangle,
         start: (10, 10),
         current: (60, 50),

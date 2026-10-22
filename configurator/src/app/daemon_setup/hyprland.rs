@@ -1,4 +1,5 @@
 use wayscriber::i18n::{tr, trf};
+use wayscriber::{durable_io, paths};
 
 use std::fs;
 use std::io::ErrorKind;
@@ -85,7 +86,7 @@ impl HyprlandLightControlsInstallResult {
 }
 
 pub(super) fn read_light_controls_status() -> HyprlandLightControlsStatus {
-    let Some(config_root) = wayscriber::paths::config_dir() else {
+    let Some(config_root) = paths::config_dir() else {
         return HyprlandLightControlsStatus {
             include_path: None,
             include_exists: false,
@@ -111,7 +112,7 @@ fn read_light_controls_status_from_config_root(config_root: &Path) -> HyprlandLi
 }
 
 pub(super) fn install_light_controls() -> Result<HyprlandLightControlsInstallResult, String> {
-    let config_root = wayscriber::paths::config_dir().ok_or_else(|| {
+    let config_root = paths::config_dir().ok_or_else(|| {
         tr("Cannot resolve config directory; failed to determine Hyprland config path.").to_string()
     })?;
     let binary_path = resolve_wayscriber_binary_path()?;
@@ -151,7 +152,7 @@ fn write_light_controls(
     })?;
 
     let include_path = light_controls_include_path(config_root);
-    wayscriber::durable_io::write_text_atomic(
+    durable_io::write_text_atomic(
         &include_path,
         &render_light_controls(binary_path),
         AtomicWriteOptions::user_config_file(),
@@ -174,7 +175,7 @@ fn write_light_controls(
             source_configured = true;
             source_updated = changed;
             if changed {
-                wayscriber::durable_io::write_text_atomic(
+                durable_io::write_text_atomic(
                     &main_config_path,
                     &updated_content,
                     AtomicWriteOptions::user_config_file(),
@@ -326,7 +327,7 @@ fn strip_matching_quotes(value: &str) -> &str {
 
 fn normalize_source_target(target: &str) -> PathBuf {
     let expanded = if let Some(stripped) = target.strip_prefix("~/") {
-        wayscriber::paths::home_dir()
+        paths::home_dir()
             .map(|home| home.join(stripped))
             .unwrap_or_else(|| PathBuf::from(target))
     } else {

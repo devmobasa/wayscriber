@@ -1,3 +1,5 @@
+use crate::util::Rect;
+
 use super::*;
 use crate::draw::{
     ArrowLabel, ArrowStyle, BLACK, BlurStyle, EmbeddedImage, EraserBrush, EraserKind,
@@ -157,7 +159,7 @@ fn every_shape_variant_translates_its_bounds() {
             .unwrap_or_else(|| panic!("{} should keep bounds", shape.kind_name()));
         assert_eq!(
             after,
-            crate::util::Rect::new(before.x + 17, before.y - 9, before.width, before.height)
+            Rect::new(before.x + 17, before.y - 9, before.width, before.height)
                 .expect("translated bounds"),
             "{} translated incorrectly",
             shape.kind_name()

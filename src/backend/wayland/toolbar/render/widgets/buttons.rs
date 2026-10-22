@@ -1,3 +1,5 @@
+use crate::toolbar_icons;
+
 use super::constants::{
     COLOR_ACCENT_BRIGHT, COLOR_ACCENT_GLOW, COLOR_BUTTON_ACTIVE, COLOR_BUTTON_DEFAULT,
     COLOR_BUTTON_DESTRUCTIVE_HOVER, COLOR_BUTTON_DISABLED, COLOR_BUTTON_HOVER, COLOR_CLOSE_DEFAULT,
@@ -57,7 +59,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_drag_handle(
         },
     );
     let icon_size = w.min(h);
-    crate::toolbar_icons::draw_icon_drag(
+    toolbar_icons::draw_icon_drag(
         ctx,
         x + (w - icon_size) / 2.0,
         y + (h - icon_size) / 2.0,
@@ -108,14 +110,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_minimize_button(
     size: f64,
     hover: bool,
 ) {
-    draw_collapse_button(
-        ctx,
-        x,
-        y,
-        size,
-        hover,
-        crate::toolbar_icons::draw_icon_minimize,
-    );
+    draw_collapse_button(ctx, x, y, size, hover, toolbar_icons::draw_icon_minimize);
 }
 
 fn draw_collapse_button(
@@ -187,9 +182,9 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_pin_button(
     let icon_x = x + (size - icon_size) / 2.0;
     let icon_y = y + (size - icon_size) / 2.0;
     if pinned {
-        crate::toolbar_icons::draw_icon_pin(ctx, icon_x, icon_y, icon_size);
+        toolbar_icons::draw_icon_pin(ctx, icon_x, icon_y, icon_size);
     } else {
-        crate::toolbar_icons::draw_icon_unpin(ctx, icon_x, icon_y, icon_size);
+        toolbar_icons::draw_icon_unpin(ctx, icon_x, icon_y, icon_size);
     }
 }
 

@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
+use crate::draw::{Color, TextMeasurer};
+
 use super::types::Shape;
 use super::{EmbeddedImage, EraserBrush};
+use crate::draw::color::{BLACK, WHITE};
 use crate::draw::{
     ArrowLabel, ArrowStyle, EraserKind, FontDescriptor, PolygonKind, StepMarkerLabel,
-    color::{BLACK, WHITE},
 };
 use crate::util;
 
@@ -212,7 +216,7 @@ fn double_arrow_bounds_contain_the_second_head() {
 
 #[test]
 fn arrow_label_layout_offsets_from_line() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let font = FontDescriptor::default();
     let layout =
         super::arrow_label_layout_with(&measurer, 100, 0, 0, 0, 2.0, 0.0, "1", 12.0, &font)
@@ -502,7 +506,7 @@ fn pressure_and_image_bounds_handle_extreme_coordinates() {
 
 #[test]
 fn curved_arrow_label_follows_the_arc_not_the_chord() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     // Anchored to the chord, the label would sit in the gap the arrow was drawn
     // to route around - far from the shaft it numbers.
     let font = FontDescriptor::default();
@@ -577,7 +581,7 @@ fn flipping_the_head_still_moves_a_single_headed_arrow_label() {
 
 #[test]
 fn arrow_label_layout_handles_full_span_endpoints() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let font = FontDescriptor::default();
     let layout = super::arrow_label_layout_with(
         &measurer,
@@ -635,7 +639,7 @@ fn embedded_image_clones_share_the_encoded_payload() {
 
     let cloned = image.clone();
 
-    assert!(std::sync::Arc::ptr_eq(&image.bytes, &cloned.bytes));
+    assert!(Arc::ptr_eq(&image.bytes, &cloned.bytes));
 }
 
 #[test]
@@ -657,7 +661,7 @@ fn a_fill_color_is_written_only_when_set_and_old_files_read_without_one() {
         "an unset fill color stays out: {json}"
     );
 
-    let blue = crate::draw::Color {
+    let blue = Color {
         r: 0.0,
         g: 0.0,
         b: 1.0,

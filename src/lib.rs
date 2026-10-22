@@ -77,10 +77,15 @@ use cli::CliOutcome;
 static RUN_ENTRY_LEASE: Mutex<()> = Mutex::new(());
 
 /// Run wayscriber using the current process arguments and return its process exit status.
+///
+/// # Panics
+///
+/// Panics if an earlier call in this process panicked while it ran, which
+/// leaves the run entry lease poisoned.
 pub fn run_from_env() -> ExitCode {
     let _run_entry = RUN_ENTRY_LEASE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .expect("an earlier run panicked while holding the run entry lease");
     if let Some(exit_code) = process_broker::run_internal_broker_if_requested() {
         return exit_code;
     }

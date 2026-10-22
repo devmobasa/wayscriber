@@ -1,5 +1,8 @@
+use std::fmt::Display;
+
 use crate::i18n::{tr, trf};
 use crate::ui::primitives::text_extents_for_with_engine;
+use crate::ui_text::UiTextEngine;
 
 use super::super::search::ellipsize_to_fit_with_engine;
 
@@ -19,7 +22,7 @@ pub(crate) struct NavState {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_nav_state(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     help_font_family: &str,
     nav_title: &str,
@@ -40,7 +43,7 @@ pub(crate) fn build_nav_state(
         trf(
             "{}  {}  Page {}/{}",
             &[
-                &nav_title as &dyn std::fmt::Display,
+                &nav_title as &dyn Display,
                 &BULLET,
                 &(page_index + 1),
                 &page_count,
@@ -54,7 +57,7 @@ pub(crate) fn build_nav_state(
         vec![
             ("Esc".to_string(), nav_key_color),
             (tr(": Close").to_string(), subtitle_color),
-            (nav_separator.clone(), subtitle_color),
+            (nav_separator, subtitle_color),
             ("Backspace".to_string(), nav_key_color),
             (tr(": Remove").to_string(), subtitle_color),
         ]

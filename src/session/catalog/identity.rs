@@ -1,4 +1,8 @@
-use super::*;
+use std::env;
+
+use super::CatalogEntry;
+use anyhow::{Result, anyhow};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogPathIdentity {
@@ -7,6 +11,7 @@ pub struct CatalogPathIdentity {
 }
 
 /// Compute the exact/canonical identity used for dedupe without creating files.
+#[must_use]
 pub fn session_path_identity(path: &Path) -> CatalogPathIdentity {
     let exact_path = normalize_exact_path(path);
     let canonical_path = existing_or_parent_canonical_path(&exact_path);
@@ -18,6 +23,7 @@ pub fn session_path_identity(path: &Path) -> CatalogPathIdentity {
 
 /// Return true when two paths identify the same session target by exact or
 /// canonical identity without requiring the primary file to exist.
+#[must_use]
 pub fn session_paths_match(a: &Path, b: &Path) -> bool {
     let a = session_path_identity(a);
     let b = session_path_identity(b);
@@ -67,7 +73,7 @@ pub(super) fn normalize_exact_path(path: &Path) -> PathBuf {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()
+        env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(path)
     };

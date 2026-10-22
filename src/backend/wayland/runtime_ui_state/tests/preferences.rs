@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 
 /// Status-bar content is chrome the user arranges from the overlay's settings
@@ -10,7 +12,7 @@ fn status_bar_content_survives_restart_without_touching_config() {
     use crate::config::StatusBarItem;
 
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -37,8 +39,8 @@ fn status_bar_content_survives_restart_without_touching_config() {
         .begin_toolbar_mutation(target, &input)
         .expect("item permit");
     input.set_status_bar_item_visible_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         StatusBarItem::Size,
         false,
     );
@@ -52,8 +54,8 @@ fn status_bar_content_survives_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -79,7 +81,7 @@ fn status_bar_content_survives_restart_without_touching_config() {
 #[test]
 fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -147,8 +149,8 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -185,7 +187,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
 /// the persistence at the next unrelated refresh.
 #[test]
 fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -203,8 +205,8 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     // Whatever else the run does, the seed baseline stays authored.
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -215,8 +217,8 @@ fn a_seed_refresh_does_not_prune_persisted_preference_overrides() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -235,7 +237,7 @@ fn section_visibility_survives_restart_without_touching_config() {
     use crate::config::{ToolbarSectionFlag, resolve_section_visibility};
 
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -270,8 +272,8 @@ fn section_visibility_survives_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 
@@ -306,7 +308,7 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
     use crate::config::{ToolbarLayoutMode, ToolbarSectionFlag, resolve_section_visibility};
 
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -341,8 +343,8 @@ fn toolbar_layout_mode_survives_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
 

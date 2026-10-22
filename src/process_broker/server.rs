@@ -1,11 +1,15 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::io;
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
-use std::process::{ExitCode, Stdio};
+use std::process::{Child, ExitCode, Stdio};
+use std::thread::Builder;
 use std::time::Duration;
+use std::{env, io, mem};
 
 use anyhow::{Context, Result, anyhow, bail};
+
+use crate::daemon::protocol_v2::ProtocolId;
+use crate::env_vars;
 
 use super::execution::{
     OwnedProcess, kill_child_process_group, publish_bounded, run_bounded, status_code,
@@ -23,12 +27,12 @@ use super::wire::{
 };
 
 pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
-    let fd = std::env::var(BROKER_FD_ENV).ok()?.parse::<RawFd>().ok()?;
-    let shutdown_fd = std::env::var(BROKER_SHUTDOWN_FD_ENV)
+    let fd = env::var(BROKER_FD_ENV).ok()?.parse::<RawFd>().ok()?;
+    let shutdown_fd = env::var(BROKER_SHUTDOWN_FD_ENV)
         .ok()?
         .parse::<RawFd>()
         .ok()?;
-    let token = std::env::var(BROKER_TOKEN_ENV).ok()?;
+    let token = env::var(BROKER_TOKEN_ENV).ok()?;
     if fd != BROKER_FD
         || shutdown_fd != BROKER_SHUTDOWN_FD
         || !canonical_lower_hex(&token, 64)
@@ -46,9 +50,9 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
     }
     // SAFETY: this entry runs before application worker threads start.
     unsafe {
-        std::env::remove_var(BROKER_FD_ENV);
-        std::env::remove_var(BROKER_SHUTDOWN_FD_ENV);
-        std::env::remove_var(BROKER_TOKEN_ENV);
+        env::remove_var(BROKER_FD_ENV);
+        env::remove_var(BROKER_SHUTDOWN_FD_ENV);
+        env::remove_var(BROKER_TOKEN_ENV);
     }
     Some(match broker_loop(fd, shutdown_fd, &token) {
         Ok(()) => ExitCode::SUCCESS,
@@ -58,7 +62,7 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
 
 fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
     let mut socket_type = 0_i32;
-    let mut length = std::mem::size_of::<i32>() as libc::socklen_t;
+    let mut length = mem::size_of::<i32>() as libc::socklen_t;
     // SAFETY: the output slots are valid for getsockopt.
     if unsafe {
         libc::getsockopt(
@@ -199,13 +203,13 @@ pub(super) fn run_loop_for_test(socket: RawFd, shutdown_fd: RawFd, token: &str) 
 
 #[derive(Default)]
 struct BrokerOwnership {
-    children: BTreeMap<String, std::process::Child>,
+    children: BTreeMap<String, Child>,
     /// At most one regular clipboard provider is current for this runtime.
-    retained_publication: Option<std::process::Child>,
+    retained_publication: Option<Child>,
 }
 
 impl BrokerOwnership {
-    fn replace_retained_publication(&mut self, child: std::process::Child) {
+    fn replace_retained_publication(&mut self, child: Child) {
         if let Some(mut previous) = self.retained_publication.replace(child) {
             kill_child_process_group(&mut previous);
             let _ = previous.wait();
@@ -404,7 +408,7 @@ struct SpawnRequest {
 fn spawn_helper(
     request: SpawnRequest,
     descriptors: &mut VecDeque<OwnedFd>,
-    children: &mut BTreeMap<String, std::process::Child>,
+    children: &mut BTreeMap<String, Child>,
     shutdown_fd: RawFd,
 ) -> Result<BrokerWireResponse> {
     let SpawnRequest {
@@ -440,7 +444,7 @@ fn spawn_helper(
             .ok_or_else(|| anyhow!("checked watchdog descriptor disappeared"))?;
         set_cloexec(&descriptor, false)?;
         command.env(
-            crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
+            env_vars::DAEMON_WATCHDOG_FD_ENV,
             descriptor.as_raw_fd().to_string(),
         );
         Some(descriptor)
@@ -457,7 +461,7 @@ fn spawn_helper(
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     let handle = loop {
-        let candidate = crate::daemon::protocol_v2::ProtocolId::generate()?.to_string();
+        let candidate = ProtocolId::generate()?.to_string();
         if !children.contains_key(&candidate) {
             break candidate;
         }
@@ -480,7 +484,7 @@ fn spawn_helper(
             children.insert(handle.clone(), child.into_child());
         }
         HelperLifetime::DetachedAfterExec => {
-            std::thread::Builder::new()
+            Builder::new()
                 .name(format!("wayscriber-detached-reaper-{pid}"))
                 .spawn(move || {
                     let mut child = child;
@@ -510,6 +514,8 @@ fn set_cloexec(descriptor: &OwnedFd, enabled: bool) -> Result<()> {
     } else {
         current & !libc::FD_CLOEXEC
     };
+    // SAFETY: `descriptor` is borrowed open for the call, and `updated` only
+    // changes FD_CLOEXEC in the flags just read from it.
     if unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_SETFD, updated) } != 0 {
         return Err(io::Error::last_os_error()).context("failed to update descriptor flags");
     }
@@ -543,13 +549,15 @@ fn canonical_lower_hex(value: &str, length: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
     use super::*;
     use std::os::fd::FromRawFd;
 
     fn test_socket_pair() -> (OwnedFd, OwnedFd) {
         let mut sockets = [0; 2];
-        // SAFETY: sockets has room for both returned descriptors.
         assert_eq!(
+            // SAFETY: sockets has room for both returned descriptors.
             unsafe {
                 libc::socketpair(
                     libc::AF_UNIX,
@@ -589,8 +597,8 @@ mod tests {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let signal = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE];
-        // SAFETY: both the descriptor and one-byte buffer are valid.
         assert_eq!(
+            // SAFETY: both the descriptor and one-byte buffer are valid.
             unsafe {
                 libc::send(
                     shutdown_writer.as_raw_fd(),
@@ -614,8 +622,8 @@ mod tests {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [2_u8];
-        // SAFETY: both the descriptor and one-byte buffer are valid.
         assert_eq!(
+            // SAFETY: both the descriptor and one-byte buffer are valid.
             unsafe {
                 libc::send(
                     shutdown_writer.as_raw_fd(),
@@ -641,8 +649,8 @@ mod tests {
         let (_control_writer, control_reader) = test_socket_pair();
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE; 2];
-        // SAFETY: both the descriptor and two-byte buffer are valid.
         assert_eq!(
+            // SAFETY: both the descriptor and two-byte buffer are valid.
             unsafe {
                 libc::send(
                     shutdown_writer.as_raw_fd(),
@@ -665,7 +673,7 @@ mod tests {
 
     #[test]
     fn abnormal_ownership_drop_kills_a_retained_provider() {
-        let mut command = std::process::Command::new("sleep");
+        let mut command = Command::new("sleep");
         command.arg("30").process_group(0);
         let child = command.spawn().unwrap();
         let pid = i32::try_from(child.id()).unwrap();

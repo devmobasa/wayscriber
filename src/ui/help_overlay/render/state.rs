@@ -1,4 +1,6 @@
+use crate::config::HelpOverlayStyle;
 use crate::i18n::{tr, trf};
+use crate::ui_text::UiTextEngine;
 
 use super::super::super::primitives::text_extents_for_with_engine;
 use super::super::content::HelpContentSnapshot;
@@ -36,9 +38,9 @@ pub(super) struct OverlayLayout {
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_overlay_layout(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
-    style: &crate::config::HelpOverlayStyle,
+    style: &HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
     page_index: usize,

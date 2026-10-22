@@ -1,12 +1,11 @@
 use super::super::super::state::WaylandState;
-use crate::{
-    backend::wayland::session::{
-        self as runtime_session, PersistenceCompletion, PersistenceOperation, PersistenceOutcome,
-        SaveStrategy, SessionState, SubmitFailure,
-    },
-    session,
-    session::SaveSnapshotReport,
+use crate::backend::wayland::session::{
+    self as runtime_session, ContentlessSaveCheck, PersistenceCompletion, PersistenceOperation,
+    PersistenceOutcome, SaveStrategy, SessionState, SubmitFailure,
 };
+use crate::session;
+#[cfg(test)]
+use crate::session::SaveSnapshotReport;
 use std::time::{Duration, Instant};
 
 mod diagnostics;
@@ -17,14 +16,14 @@ use diagnostics::{SessionSaveReason, log_session_save_result, log_snapshot_captu
 
 use final_save::persist_final_session_and_shutdown;
 pub(in crate::backend::wayland) use interaction::should_defer_for_interaction;
+#[cfg(test)]
+use interaction::{
+    PersistenceInteractions, defer_pending_autosave_for_interaction,
+    input_persistence_interaction_active, persistence_interaction_active,
+};
 use interaction::{
     defer_autosave_for_active_interaction, finalize_spotlight_wheel_for_shutdown_persistence,
     min_optional_timeout,
-};
-#[cfg(test)]
-use interaction::{
-    defer_pending_autosave_for_interaction, input_persistence_interaction_active,
-    persistence_interaction_active,
 };
 
 pub(super) use notifications::notify_session_failure;
@@ -320,7 +319,7 @@ pub(in crate::backend::wayland) fn drain_persistence_completion_for_runtime(
 
 pub(in crate::backend::wayland) fn report_autosave_success(
     state: &mut WaylandState,
-    save: runtime_session::SaveCompletion,
+    save: &runtime_session::SaveCompletion,
     execution_time: Duration,
 ) {
     log_session_save_result(
@@ -442,13 +441,13 @@ fn should_skip_unloaded_contentless_save(
             "unexpected session artifact inspection outcome"
         ));
     };
-    let skip = runtime_session::should_skip_unloaded_contentless_save(
-        state.session.has_loaded_board_data(),
-        state.session.is_dirty(),
-        state.input_state.is_session_dirty(),
+    let skip = runtime_session::should_skip_unloaded_contentless_save(ContentlessSaveCheck {
+        loaded_board_data: state.session.has_loaded_board_data(),
+        session_dirty: state.session.is_dirty(),
+        input_dirty: state.input_state.is_session_dirty(),
         has_board_data,
-        has_artifacts,
-    );
+        session_artifact_exists: has_artifacts,
+    });
     if skip {
         log::warn!(
             "Skipping session save to {} because no session was loaded, no session changes were recorded, and the current snapshot has no board data",

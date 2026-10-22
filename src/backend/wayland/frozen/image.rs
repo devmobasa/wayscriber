@@ -240,7 +240,7 @@ mod tests {
     fn image(width: u32, height: u32, values: &[u8]) -> FrozenImage {
         let mut data = Vec::with_capacity(values.len() * 4);
         for value in values {
-            data.extend_from_slice(&[*value, 0, 0, 0xFF]);
+            data.extend_from_slice(&[*value, 0, 0, 0xff]);
         }
 
         FrozenImage {

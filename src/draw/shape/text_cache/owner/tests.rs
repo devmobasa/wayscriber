@@ -1,5 +1,8 @@
 mod bounds;
 
+use crate::draw;
+use crate::draw::FontDescriptor;
+
 use super::*;
 use crate::draw::shape::text_cache::{VisualCaretDirection, VisualLineDirection, VisualLineEdge};
 
@@ -102,15 +105,15 @@ fn destination_settings_do_not_change_canonical_measurements() {
     destination.set_font_options(&options);
     let owner = TextMeasurer::default();
     let fresh = TextMeasurer::default();
-    crate::draw::render_text_with_measurer(
+    draw::render_text_with_measurer(
         &owner,
         &destination,
         0,
         5,
         "Hello 你好\nאבג",
-        crate::draw::RED,
+        draw::RED,
         16.0,
-        &crate::draw::FontDescriptor::default(),
+        &FontDescriptor::default(),
         false,
         Some(70),
     );

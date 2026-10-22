@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
+
 use super::super::active::active_interaction_kind;
 use super::super::event::PointerPoints;
 use super::super::outcome::{
@@ -17,7 +20,7 @@ pub(crate) fn update_pointer_positions(state: &mut InputState, points: PointerPo
 
 pub(crate) fn handle_radial_menu_press(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -37,7 +40,7 @@ pub(crate) fn handle_radial_menu_press(
 
 pub(crate) fn handle_building_polygon_non_left_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -92,7 +95,7 @@ pub(crate) fn handle_board_picker_press(
 
 pub(crate) fn handle_properties_panel_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -175,7 +178,7 @@ pub(crate) fn close_properties_panel_before_tool_routing(state: &mut InputState)
 
 pub(crate) fn handle_tool_button_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -216,7 +219,7 @@ pub(crate) fn handle_tool_button_press(
 
 pub(crate) fn handle_unbound_left_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> RoutingOutcome {
     let screen = points.screen();
@@ -262,7 +265,7 @@ pub(crate) fn handle_unbound_left_press(
 
 pub(crate) fn handle_right_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> RoutingOutcome {
     let screen = points.screen();
@@ -308,7 +311,7 @@ pub(crate) fn handle_middle_press(state: &mut InputState, points: PointerPoints)
 
 fn open_context_menu_from_right_click(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     screen_x: i32,
     screen_y: i32,
     canvas_x: i32,
@@ -348,7 +351,7 @@ fn open_context_menu_from_right_click(
 
     state.update_context_menu_hover_from_pointer(screen_x, screen_y);
     if focus_edit {
-        state.focus_context_menu_command(MenuCommand::EditText);
+        state.focus_context_menu_command(&MenuCommand::EditText);
     }
     if state.is_context_menu_open() {
         state.pending_onboarding_usage.used_context_menu_right_click = true;
@@ -358,7 +361,7 @@ fn open_context_menu_from_right_click(
 
 pub(crate) fn handle_radial_menu_motion(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     if !state.is_radial_menu_open() {
@@ -413,7 +416,7 @@ pub(crate) fn handle_font_picker_motion(
 
 pub(crate) fn handle_font_picker_press(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -458,7 +461,7 @@ pub(crate) fn handle_board_picker_motion(
 
 pub(crate) fn handle_properties_panel_motion(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     if !state.is_properties_panel_open() {
@@ -485,7 +488,7 @@ pub(crate) fn handle_context_menu_motion(
 
 pub(crate) fn handle_release_overlays(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -514,7 +517,7 @@ pub(crate) fn handle_release_overlays(
 
 pub(crate) fn handle_radial_menu_release(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     button: MouseButton,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
@@ -531,7 +534,7 @@ pub(crate) fn handle_radial_menu_release(
 
 pub(crate) fn finish_pointer_interaction(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) {
     let canvas = points.canvas();

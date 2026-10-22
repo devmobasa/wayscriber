@@ -1,6 +1,6 @@
 //! Floating stroke coordinates accept legacy JSON integers and validate both directions.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser};
 
 fn valid(x: f64, y: f64) -> bool {
     [x, y]
@@ -13,7 +13,7 @@ pub(super) fn serialize<S: Serializer>(
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     if points.iter().any(|&(x, y)| !valid(x, y)) {
-        return Err(serde::ser::Error::custom("invalid stroke coordinate"));
+        return Err(ser::Error::custom("invalid stroke coordinate"));
     }
     points.serialize(serializer)
 }
@@ -23,7 +23,7 @@ pub(super) fn deserialize<'de, D: Deserializer<'de>>(
 ) -> Result<Vec<(f64, f64)>, D::Error> {
     let points = Vec::<(f64, f64)>::deserialize(deserializer)?;
     if points.iter().any(|&(x, y)| !valid(x, y)) {
-        return Err(serde::de::Error::custom("invalid stroke coordinate"));
+        return Err(de::Error::custom("invalid stroke coordinate"));
     }
     Ok(points)
 }
@@ -36,7 +36,7 @@ pub(super) fn serialize_pressure<S: Serializer>(
         .iter()
         .any(|&(x, y, width)| !valid(x, y) || !width.is_finite())
     {
-        return Err(serde::ser::Error::custom("invalid pressure stroke sample"));
+        return Err(ser::Error::custom("invalid pressure stroke sample"));
     }
     points.serialize(serializer)
 }
@@ -49,14 +49,15 @@ pub(super) fn deserialize_pressure<'de, D: Deserializer<'de>>(
         .iter()
         .any(|&(x, y, width)| !valid(x, y) || !width.is_finite())
     {
-        return Err(serde::de::Error::custom("invalid pressure stroke sample"));
+        return Err(de::Error::custom("invalid pressure stroke sample"));
     }
     Ok(points)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::draw::{Shape, color::BLACK};
+    use crate::draw::Shape;
+    use crate::draw::color::BLACK;
 
     #[test]
     fn fractional_ink_survives_selection_transforms_and_serialization() {

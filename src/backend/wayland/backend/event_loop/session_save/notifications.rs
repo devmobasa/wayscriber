@@ -1,11 +1,11 @@
-use super::*;
+use crate::backend::wayland::session::SessionState;
+use crate::backend::wayland::state::WaylandState;
+use crate::config::{Action, Config};
 use crate::i18n::{tr, trf};
 use crate::input::state::{Toast, ToastPriority};
-use crate::{
-    config::{Action, Config},
-    notification,
-    session::SaveSnapshotOutcome,
-};
+use crate::session::{SaveSnapshotOutcome, SaveSnapshotReport};
+use crate::{notification, session};
+use std::time::Instant;
 
 const SESSION_SAVE_NOTIFICATION_TIMEOUT_MS: i32 = 15_000;
 const SESSION_SAVE_WARNING_TOAST_MS: u64 = 20_000;
@@ -267,26 +267,30 @@ fn suggested_limit_mb(projected_written_size: u64, current_limit_bytes: u64) -> 
 }
 
 fn config_path_display() -> String {
-    Config::get_config_path()
+    Config::config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
+    use crate::input::{InputState, MouseButton};
+    use crate::test_temp;
+
     use super::*;
 
     #[test]
     fn real_size_failures_name_the_limit_and_durable_recovery_without_save_as_advice() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let mut options = session::SessionOptions::new(temp.path().to_path_buf(), "size-notice");
         options.persist_transparent = true;
         options.max_file_size_bytes = 1;
-        let measurer = crate::draw::TextMeasurer::default();
-        let mut input = crate::input::InputState::from_config(&Config::default());
-        input.on_mouse_press(crate::input::MouseButton::Left, 300, 300);
+        let measurer = TextMeasurer::default();
+        let mut input = InputState::from_config(&Config::default());
+        input.on_mouse_press(MouseButton::Left, 300, 300);
         input.on_mouse_motion(400, 400);
-        input.on_mouse_release(crate::input::MouseButton::Left, 400, 400);
+        input.on_mouse_release(MouseButton::Left, 400, 400);
         let snapshot = input
             .snapshot_for_persistence_with(&measurer, &options)
             .unwrap();

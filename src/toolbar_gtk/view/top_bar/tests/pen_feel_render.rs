@@ -1,5 +1,17 @@
 //! Actual GTK snapshots on the repository's isolated headless compositor.
 
+use std::cell::Cell;
+use std::process::Command;
+use std::rc::Rc;
+use std::sync::mpsc;
+use std::{env, thread};
+
+use gtk4::gdk::Display;
+use gtk4::glib::MainContext;
+use gtk4::graphene::Point;
+
+use crate::toolbar_gtk::css;
+
 use super::super::{FeedbackSender, ToolbarSnapshot, TopBar};
 use super::gtk_contract::install_gtk_contract_metrics;
 use super::widget_support::find_widget_named;
@@ -11,16 +23,16 @@ use std::time::{Duration, Instant};
 fn gtk_pen_feel_headless_render_at_fractional_scale() {
     // A window is allowed only on the dedicated test compositor, never on
     // the user's display. Ordinary library runs skip this render check.
-    if std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
-        || std::env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
+    if env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
+        || env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
     {
         return;
     }
 
     const CHILD_ENV: &str = "WAYSCRIBER_GTK_PEN_RENDER_CHILD";
     const TEST_NAME: &str = "toolbar_gtk::view::top_bar::tests::pen_feel_render::gtk_pen_feel_headless_render_at_fractional_scale";
-    if std::env::var_os(CHILD_ENV).is_none() {
-        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+    if env::var_os(CHILD_ENV).is_none() {
+        let status = Command::new(env::current_exe().expect("test binary"))
             .args([TEST_NAME, "--exact", "--test-threads=1", "--nocapture"])
             .env(CHILD_ENV, "1")
             .status()
@@ -34,13 +46,13 @@ fn gtk_pen_feel_headless_render_at_fractional_scale() {
     let mut state = make_test_input_state();
     state.set_pen_smoothing(3);
     let snapshot = ToolbarSnapshot::from_input(&state);
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = mpsc::channel();
     let top = TopBar::new_for_test(FeedbackSender::new(tx));
 
     for scale in [1.0, 5.0 / 3.0] {
         let provider = gtk4::CssProvider::new();
-        provider.load_from_string(&crate::toolbar_gtk::css::stylesheet(scale));
-        let display = gtk4::gdk::Display::default().unwrap();
+        provider.load_from_string(&css::stylesheet(scale));
+        let display = Display::default().unwrap();
         gtk4::style_context_add_provider_for_display(
             &display,
             &provider,
@@ -55,7 +67,7 @@ fn gtk_pen_feel_headless_render_at_fractional_scale() {
         let dot = find_widget_named(content.upcast_ref(), "top.feel.smoothing.level-0")
             .expect("zero dot");
         let origin = dot
-            .compute_point(&content, &gtk4::graphene::Point::new(0.0, 0.0))
+            .compute_point(&content, &Point::new(0.0, 0.0))
             .expect("dot in panel");
         let controllers = dot.observe_controllers();
         let motion = (0..controllers.n_items())
@@ -122,7 +134,7 @@ fn gtk_pen_feel_headless_render_at_fractional_scale() {
 }
 
 fn wait_for_frame(widget: &impl IsA<gtk4::Widget>) {
-    let context = gtk4::glib::MainContext::default();
+    let context = MainContext::default();
     let deadline = Instant::now() + Duration::from_secs(3);
     let clock = loop {
         while context.pending() {
@@ -132,9 +144,9 @@ fn wait_for_frame(widget: &impl IsA<gtk4::Widget>) {
             break clock;
         }
         assert!(Instant::now() < deadline, "GTK widget has no frame clock");
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     };
-    let painted = std::rc::Rc::new(std::cell::Cell::new(false));
+    let painted = Rc::new(Cell::new(false));
     let observed = painted.clone();
     let handler = clock.connect_after_paint(move |_| observed.set(true));
     widget.as_ref().queue_draw();
@@ -146,7 +158,7 @@ fn wait_for_frame(widget: &impl IsA<gtk4::Widget>) {
             Instant::now() < deadline,
             "GTK did not paint the requested frame"
         );
-        std::thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_millis(2));
     }
     clock.disconnect(handler);
 }

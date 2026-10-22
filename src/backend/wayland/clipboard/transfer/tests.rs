@@ -1,3 +1,6 @@
+use crate::draw;
+use crate::input::state::PasteAnchor;
+
 use super::*;
 use crate::draw::Shape;
 use crate::util::Rect;
@@ -8,7 +11,7 @@ fn fingerprint_mismatch_supersedes_then_reads_system_clipboard() {
     let previous = fingerprint(1);
     let current = fingerprint(2);
 
-    let plan = plan_after_fingerprint_probe(request, 7, Some(previous), Some(current), None);
+    let plan = plan_after_fingerprint_probe(request, 7, Some(&previous), Some(&current), None);
 
     assert_eq!(
         plan.effects,
@@ -94,7 +97,7 @@ fn clipboard_terminal_outcomes_keep_their_existing_event_loop_policy() {
     let image = plan_paste_completion(
         ClipboardPasteCompletion {
             request: request_with_fallback_generation(Some(7)),
-            result: ClipboardPasteResult::Image(crate::draw::EmbeddedImage {
+            result: ClipboardPasteResult::Image(EmbeddedImage {
                 mime_type: "image/png".to_string(),
                 width: 1,
                 height: 1,
@@ -197,7 +200,7 @@ fn request_with_fallback_generation(
         target_board_id: "board".to_string(),
         target_page_index: 0,
         target_page_generation: 1,
-        anchor: crate::input::state::PasteAnchor::VisibleCenter { x: 50, y: 50 },
+        anchor: PasteAnchor::VisibleCenter { x: 50, y: 50 },
         visible_canvas_rect: Rect::new(0, 0, 100, 100).unwrap(),
         screen_size: (100, 100),
         selection_clipboard_generation_at_request: local_selection_fallback_generation.unwrap_or(0),
@@ -223,7 +226,7 @@ fn rect() -> Shape {
         h: 10,
         fill: false,
         fill_color: None,
-        color: crate::draw::BLACK,
+        color: draw::BLACK,
         thick: 1.0,
     }
 }

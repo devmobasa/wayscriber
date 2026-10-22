@@ -20,6 +20,7 @@ pub struct BoardAppearance {
 }
 
 impl BoardAppearance {
+    #[must_use]
     pub fn from_spec(spec: &BoardSpec) -> Self {
         Self {
             background: spec.background.clone(),

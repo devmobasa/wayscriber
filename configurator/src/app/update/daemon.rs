@@ -194,7 +194,7 @@ mod tests {
             }]
         ));
         let _ = app.handle_daemon_action_completed(Ok(DaemonActionResult {
-            status: new_status.clone(),
+            status: new_status,
             message: "refresh complete".to_string(),
             partial_failure: false,
         }));

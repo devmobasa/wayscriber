@@ -41,7 +41,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             buffer_metadata.label,
             buffer_metadata.help,
             buffer_counts,
-            buffer_labels,
+            &buffer_labels,
             |app| app.draft.performance_buffer_count,
             Message::BufferCountChanged,
         )

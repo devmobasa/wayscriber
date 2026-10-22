@@ -1,10 +1,11 @@
-use std::fmt;
-use std::fs::{File, OpenOptions};
+use std::ffi::CString;
+use std::fs::{File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use std::{fmt, fs, process, ptr};
 
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const TIME_NAMESPACE_PATH: &str = "/proc/self/ns/time";
@@ -54,7 +55,7 @@ pub(crate) struct CommandWatchDrain {
 pub(crate) struct CommandQueueWatcher {
     fd: OwnedFd,
     watch_descriptor: i32,
-    queue_path: std::path::PathBuf,
+    queue_path: PathBuf,
     queue_identity: FileIdentity,
     _queue_fd: File,
     buffer: Box<[u8; COMMAND_WATCH_BUFFER_BYTES]>,
@@ -196,7 +197,7 @@ pub(crate) fn read_bounded_private_file(path: &Path, cap: usize) -> io::Result<V
 }
 
 /// Whether this user owns the file or directory and nobody else may use it.
-pub(crate) fn is_private(metadata: &std::fs::Metadata) -> bool {
+pub(crate) fn is_private(metadata: &Metadata) -> bool {
     // SAFETY: geteuid has no preconditions and cannot fail.
     metadata.uid() == unsafe { libc::geteuid() } && metadata.mode() & 0o077 == 0
 }
@@ -207,25 +208,25 @@ pub(crate) fn is_private(metadata: &std::fs::Metadata) -> bool {
 pub(crate) fn create_private_directory(path: &Path) -> anyhow::Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
-    match std::fs::create_dir(path) {
+    match fs::create_dir(path) {
         Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error.into()),
     }
 
-    let metadata = std::fs::symlink_metadata(path)?;
+    let metadata = fs::symlink_metadata(path)?;
     // SAFETY: geteuid has no preconditions and cannot fail.
     if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() } {
         anyhow::bail!("{} is not a no-follow private directory", path.display());
     }
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
+    fs::set_permissions(path, Permissions::from_mode(0o700))?;
     Ok(())
 }
 
 fn read_bounded_file(
     path: &Path,
     cap: usize,
-    trusted: impl Fn(&std::fs::Metadata) -> bool,
+    trusted: impl Fn(&Metadata) -> bool,
 ) -> io::Result<Vec<u8>> {
     let mut options = OpenOptions::new();
     options
@@ -279,10 +280,10 @@ pub(crate) const QUARANTINE_RETAINED_ENTRIES: usize = 64;
 /// another way to wedge the daemon — and a concurrently removed entry is not
 /// an error.
 pub(crate) fn gc_quarantine_tail(dir: &Path, retain: usize) -> io::Result<usize> {
-    let mut entries: Vec<(i64, i64, std::path::PathBuf)> = Vec::new();
-    for entry in std::fs::read_dir(dir)? {
+    let mut entries: Vec<(i64, i64, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(dir)? {
         let path = entry?.path();
-        match std::fs::symlink_metadata(&path) {
+        match fs::symlink_metadata(&path) {
             Ok(metadata) => entries.push((metadata.ctime(), metadata.ctime_nsec(), path)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
@@ -295,13 +296,13 @@ pub(crate) fn gc_quarantine_tail(dir: &Path, retain: usize) -> io::Result<usize>
     let excess = entries.len() - retain;
     let mut removed = 0;
     for (_, _, path) in entries.into_iter().take(excess) {
-        let is_dir = std::fs::symlink_metadata(&path)
+        let is_dir = fs::symlink_metadata(&path)
             .map(|metadata| metadata.is_dir())
             .unwrap_or(false);
         let result = if is_dir {
-            std::fs::remove_dir_all(&path)
+            fs::remove_dir_all(&path)
         } else {
-            std::fs::remove_file(&path)
+            fs::remove_file(&path)
         };
         match result {
             Ok(()) => {
@@ -359,12 +360,12 @@ pub(crate) fn revalidate_path_identity(path: &Path, expected: FileIdentity) -> i
 }
 
 pub(crate) fn current_process_start_ticks() -> io::Result<u64> {
-    process_start_ticks(std::process::id())
+    process_start_ticks(process::id())
 }
 
 pub(crate) fn process_start_ticks(pid: u32) -> io::Result<u64> {
     let path = format!("/proc/{pid}/stat");
-    let contents = std::fs::read_to_string(path)?;
+    let contents = fs::read_to_string(path)?;
     let close = contents.rfind(')').ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -447,7 +448,7 @@ pub(crate) fn validate_pidfd(fd: BorrowedFd<'_>) -> io::Result<()> {
             libc::SYS_pidfd_send_signal,
             fd.as_raw_fd(),
             0,
-            std::ptr::null::<libc::siginfo_t>(),
+            ptr::null::<libc::siginfo_t>(),
             0,
         )
     } == 0
@@ -508,7 +509,7 @@ impl BootDeadline {
 }
 
 impl BootDeadlineSource {
-    pub(crate) fn new() -> io::Result<Self> {
+    pub(crate) fn try_new() -> io::Result<Self> {
         // SAFETY: timerfd_create returns a new owned descriptor on success.
         let raw = unsafe {
             libc::timerfd_create(libc::CLOCK_BOOTTIME, libc::TFD_NONBLOCK | libc::TFD_CLOEXEC)
@@ -516,8 +517,8 @@ impl BootDeadlineSource {
         if raw < 0 {
             return Err(io::Error::last_os_error());
         }
-        // SAFETY: raw is a newly created descriptor not wrapped elsewhere.
         Ok(Self {
+            // SAFETY: raw is a newly created descriptor not wrapped elsewhere.
             fd: unsafe { OwnedFd::from_raw_fd(raw) },
         })
     }
@@ -549,7 +550,7 @@ impl BootDeadlineSource {
                 self.fd.as_raw_fd(),
                 libc::TFD_TIMER_ABSTIME,
                 &value,
-                std::ptr::null_mut(),
+                ptr::null_mut(),
             )
         } != 0
         {
@@ -570,9 +571,7 @@ impl BootDeadlineSource {
             },
         };
         // SAFETY: value is initialized and fd owns a timerfd.
-        if unsafe { libc::timerfd_settime(self.fd.as_raw_fd(), 0, &value, std::ptr::null_mut()) }
-            != 0
-        {
+        if unsafe { libc::timerfd_settime(self.fd.as_raw_fd(), 0, &value, ptr::null_mut()) } != 0 {
             return Err(io::Error::last_os_error());
         }
         Ok(())
@@ -609,7 +608,7 @@ impl BootDeadlineSource {
 }
 
 impl CommandQueueWatcher {
-    pub(crate) fn new(queue_path: &Path) -> io::Result<Self> {
+    pub(crate) fn try_new(queue_path: &Path) -> io::Result<Self> {
         let (queue_fd, queue_identity) = open_nofollow_directory(queue_path)?;
         // SAFETY: inotify_init1 returns a newly owned descriptor on success.
         let raw = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
@@ -618,7 +617,7 @@ impl CommandQueueWatcher {
         }
         // SAFETY: raw is a new descriptor not wrapped elsewhere.
         let fd = unsafe { OwnedFd::from_raw_fd(raw) };
-        let path = std::ffi::CString::new(queue_path.as_os_str().as_encoded_bytes())
+        let path = CString::new(queue_path.as_os_str().as_encoded_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "queue path contains NUL"))?;
         let mask = libc::IN_MOVED_TO
             | libc::IN_CREATE
@@ -705,9 +704,8 @@ impl CommandQueueWatcher {
             }
             // SAFETY: length was checked and read_unaligned copies the fixed
             // header without retaining the pointer.
-            let event = unsafe {
-                std::ptr::read_unaligned(remaining.as_ptr().cast::<libc::inotify_event>())
-            };
+            let event =
+                unsafe { ptr::read_unaligned(remaining.as_ptr().cast::<libc::inotify_event>()) };
             let event_length = size_of::<libc::inotify_event>()
                 .checked_add(event.len as usize)
                 .ok_or_else(|| {
@@ -751,7 +749,7 @@ impl CommandQueueWatcher {
 
 #[cfg(test)]
 pub(crate) fn open_self_pidfd() -> io::Result<OwnedFd> {
-    open_pidfd(std::process::id())
+    open_pidfd(process::id())
 }
 
 /// Immediately terminate the process without Rust or libc cleanup.

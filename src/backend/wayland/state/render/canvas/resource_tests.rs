@@ -1,3 +1,8 @@
+use crate::domain::{BoardGrid, BoardGridKind};
+use crate::draw::FontDescriptor;
+
+use std::io::Cursor;
+
 use super::*;
 use crate::backend::wayland::state::canvas_layer::{CanvasLayerCache, CanvasLayerInputs};
 use crate::backend::wayland::state::render::plan::{CanvasFrame, FrameGeometry};
@@ -23,7 +28,7 @@ fn inputs() -> CanvasLayerInputs {
 }
 
 fn shapes() -> Vec<DrawnShape> {
-    let mut bytes = std::io::Cursor::new(Vec::new());
+    let mut bytes = Cursor::new(Vec::new());
     let source = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
     let context = cairo::Context::new(&source).unwrap();
     context.set_source_rgb(220.0 / 255.0, 40.0 / 255.0, 20.0 / 255.0);
@@ -53,7 +58,7 @@ fn shapes() -> Vec<DrawnShape> {
                 a: 1.0,
             },
             size: 14.0,
-            font_descriptor: crate::draw::FontDescriptor::default(),
+            font_descriptor: FontDescriptor::default(),
             background_enabled: false,
             wrap_width: None,
         },
@@ -72,10 +77,10 @@ fn shapes() -> Vec<DrawnShape> {
 }
 
 fn paint(
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     shapes: &[DrawnShape],
     layer: &CanvasLayerCache,
-    caches: &mut crate::draw::RenderCaches,
+    caches: &mut RenderCaches,
     inputs: CanvasLayerInputs,
     cached: bool,
 ) -> Vec<u8> {
@@ -144,18 +149,18 @@ fn assert_pixels_match(actual: &[u8], expected: &[u8], label: &str) {
 }
 
 fn fresh_baked(shapes: &[DrawnShape], request: CanvasLayerInputs) -> Vec<u8> {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     assert!(layer.ensure(&measurer, &mut caches, shapes, request));
     paint(&measurer, shapes, &layer, &mut caches, request, true)
 }
 
 #[test]
 fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     let mut shapes = shapes();
     let initial = inputs();
     for (iteration, request) in [
@@ -213,9 +218,9 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
             &fresh_baked(&shapes, request),
             &format!("baked pass {iteration}"),
         );
-        let mut fresh = crate::draw::RenderCaches::default();
+        let mut fresh = RenderCaches::default();
         let expected_direct = paint(
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             &shapes,
             &CanvasLayerCache::new(),
             &mut fresh,
@@ -232,9 +237,9 @@ fn baked_and_direct_passes_match_fresh_owners_across_reuse_and_invalidation() {
 
 #[test]
 fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut layer = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     let shapes = shapes();
     let request = inputs();
     assert!(layer.ensure(&measurer, &mut caches, &shapes, request));
@@ -258,7 +263,7 @@ fn rejected_bake_clears_previous_layer_and_direct_fallback_still_paints() {
 
 #[test]
 fn each_scene_key_rebakes_without_shape_identity_changes() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let initial = inputs();
     for (name, changed, replace_image) in [
         (
@@ -308,7 +313,7 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
         ),
     ] {
         let mut layer = CanvasLayerCache::new();
-        let mut caches = crate::draw::RenderCaches::default();
+        let mut caches = RenderCaches::default();
         let mut scene = shapes();
         assert!(layer.ensure(&measurer, &mut caches, &scene, initial));
         let before = paint(&measurer, &scene, &layer, &mut caches, initial, true);
@@ -346,9 +351,9 @@ fn each_scene_key_rebakes_without_shape_identity_changes() {
 #[test]
 #[ignore = "release timing workload; run with --release --ignored --nocapture"]
 fn measure_sparse_damage_scan() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let layer = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1920, 1080).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     let geometry = FrameGeometry::new(1920, 1080, 1);
@@ -361,7 +366,7 @@ fn measure_sparse_damage_scan() {
         text_halo_enabled: true,
         layer_cache_eligible: false,
     };
-    let damage = [crate::util::Rect {
+    let damage = [Rect {
         x: 0,
         y: 0,
         width: 32,
@@ -429,9 +434,9 @@ fn measure_sparse_damage_scan() {
 #[test]
 fn board_grid_baked_pan_matches_direct_and_invalidates_on_pattern_and_spacing() {
     use crate::domain::{BoardGrid, BoardGridKind};
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut cache = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     let shapes = shapes();
     for origin in [(0.0, 0.0), (-71.0, -53.0), (-1_000_021.0, -2_000_003.0)] {
         for kind in BoardGridKind::ALL {
@@ -462,15 +467,15 @@ mod grid_performance;
 
 #[test]
 fn warm_4k_paper_render_skips_source_and_failed_blit_restores_paper() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let request = CanvasLayerInputs {
         width: 3840,
         height: 2160,
-        grid: crate::domain::BoardGrid::new(crate::domain::BoardGridKind::Isometric, 40),
+        grid: BoardGrid::new(BoardGridKind::Isometric, 40),
         ..inputs()
     };
     let mut cache = CanvasLayerCache::new();
-    let mut caches = crate::draw::RenderCaches::default();
+    let mut caches = RenderCaches::default();
     assert!(cache.ensure(&measurer, &mut caches, &[], request));
     let warm = paint(&measurer, &[], &cache, &mut caches, request, true);
     // Simulate an unavailable cache even though readiness was reported. The

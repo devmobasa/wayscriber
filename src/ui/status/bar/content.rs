@@ -1,7 +1,18 @@
-use super::helpers::*;
-use super::measurement::*;
-use super::*;
+use crate::config::StatusBarStyle;
+use crate::draw::TextMeasurer;
+use crate::{build_info, util};
+
+use super::helpers::{help_binding_label, pill_origin, tool_display_name, toolbar_hint_label};
+use super::measurement::{cluster_line_metrics, layout_mode_badges, measure_status_bar};
+use super::{
+    BOARD_NAME_DEGRADATION_RUNGS, BOARD_NAME_MAX_CHARS, MIN_INTERACTIVE_WIDTH, SEGMENT_SEPARATOR,
+    STATUS_BAR_MAX_WIDTH_FRACTION, StatusHudLayout, StatusHudPrefix, StatusHudRun,
+    StatusHudSegment, StatusHudSegmentKind,
+};
+use crate::config::{Action, StatusPosition, action_display_label};
 use crate::i18n::trf;
+use crate::input::{DrawingState, InputState, Tool};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
 
 pub(super) fn status_text_style(font_size: f64) -> UiTextStyle<'static> {
     UiTextStyle {
@@ -65,12 +76,12 @@ impl StatusHudPiece {
 pub fn compute_status_hud_layout(
     input_state: &InputState,
     position: StatusPosition,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
 ) -> Option<StatusHudLayout> {
     let engine = UiTextEngine::default();
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     compute_status_hud_layout_with_resources(
         &engine,
         &measurer,
@@ -84,10 +95,10 @@ pub fn compute_status_hud_layout(
 
 pub(crate) fn compute_status_hud_layout_with_resources(
     engine: &UiTextEngine,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     input_state: &InputState,
     position: StatusPosition,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
 ) -> Option<StatusHudLayout> {
@@ -290,7 +301,7 @@ fn board_segment_label(input_state: &InputState, max_name_chars: Option<usize>) 
     let index = input_state.boards.active_index() + 1;
     let count = input_state.boards.board_count().max(1);
     let name = max_name_chars
-        .map(|limit| crate::util::truncate_with_ellipsis(input_state.board_name(), limit))
+        .map(|limit| util::truncate_with_ellipsis(input_state.board_name(), limit))
         .unwrap_or_default();
     if name.trim().is_empty() {
         trf("Board {}/{}", &[&index, &count])
@@ -437,7 +448,7 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
     // name or the help hint their space.
     if input_state.ui_visibility.show_status_about {
         pieces.push(StatusHudPiece::text(
-            trf("About v{}", &[&crate::build_info::version()]),
+            trf("About v{}", &[&build_info::version()]),
             Some(StatusHudSegmentKind::About),
             true,
         ));
@@ -450,11 +461,11 @@ pub(super) fn build_cluster_pieces(input_state: &InputState) -> Vec<StatusHudPie
 /// output label), or `None` when nothing applies.
 pub(super) fn build_prefix_text(
     input_state: &InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
 ) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     if let Some(label) = input_state.status_output_label() {
-        let label = crate::util::truncate_with_ellipsis(label, 28);
+        let label = util::truncate_with_ellipsis(label, 28);
         parts.push(trf("Output: {}", &[&label]));
     }
     if input_state.ui_visibility.show_status_selection_info

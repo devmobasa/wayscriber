@@ -1,3 +1,5 @@
+use crate::ui_text::UiTextEngine;
+
 use super::super::primitives::{draw_rounded_rect, text_extents_for_with_engine};
 use super::keycaps::{KeyComboStyle, draw_key_combo, draw_key_combo_highlight, measure_key_combo};
 use super::layout::GridLayout;
@@ -21,8 +23,8 @@ const LEADER_DOT_PITCH: f64 = 4.0;
 /// the font size.
 const LABEL_CAP_CENTER: f64 = 0.36;
 
-pub(crate) struct GridStyle<'a> {
-    pub(crate) help_font_family: &'a str,
+pub(crate) struct GridStyle<'font> {
+    pub(crate) help_font_family: &'font str,
     pub(crate) body_font_size: f64,
     pub(crate) key_font_size: f64,
     pub(crate) heading_font_size: f64,
@@ -99,14 +101,14 @@ struct CardPlacement {
 }
 
 /// Borrowed paint inputs shared by every card, row, and badge of one grid.
-struct GridPainter<'a> {
-    engine: &'a crate::ui_text::UiTextEngine,
-    ctx: &'a cairo::Context,
-    style: &'a GridStyle<'a>,
-    colors: &'a GridColors,
-    key_combo_style: &'a KeyComboStyle<'a>,
+struct GridPainter<'render> {
+    engine: &'render UiTextEngine,
+    ctx: &'render cairo::Context,
+    style: &'render GridStyle<'render>,
+    colors: &'render GridColors,
+    key_combo_style: &'render KeyComboStyle<'render>,
     /// Lowercase search query while search is active.
-    search: Option<&'a str>,
+    search: Option<&'render str>,
     /// Vertical band of the visible grid; hit rects are clipped to it so a
     /// partially scrolled row never reports a click outside the view.
     clip: (f64, f64),
@@ -382,7 +384,7 @@ impl GridPainter<'_> {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_sections_grid(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     grid: &GridLayout,
     grid_start_y: f64,

@@ -44,10 +44,9 @@ pub use click_highlight::{
 };
 pub use context_menu::ContextMenuUiConfig;
 pub(crate) use drawing::DEFAULT_HIT_TEST_TOLERANCE;
-pub use drawing::DEFAULT_PEN_SMOOTHING;
-pub use drawing::{DEFAULT_SHAPE_RECOGNITION_SENSITIVITY, MAX_SHAPE_RECOGNITION_SENSITIVITY};
 pub use drawing::{
-    DragButtonConfig, DrawingConfig, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
+    DEFAULT_PEN_SMOOTHING, DEFAULT_SHAPE_RECOGNITION_SENSITIVITY, DragButtonConfig, DrawingConfig,
+    MAX_SHAPE_RECOGNITION_SENSITIVITY, MouseDragToolsConfig, QUICK_COLOR_RENDER_LIMIT,
     QuickColorConfig, QuickColorPalette, QuickColorPaletteEntry, QuickColorSlot, QuickColorWrite,
     QuickColorsConfig, default_quick_color_for_index,
 };
@@ -79,7 +78,6 @@ pub use spotlight::SpotlightConfig;
 pub use status_bar::{StatusBarItem, StatusBarStyle};
 #[cfg(feature = "tablet-input")]
 pub use tablet::{StylusButtonBinding, TabletInputConfig};
-pub use toolbar::ids as toolbar_item_ids;
 #[allow(unused_imports)]
 pub use toolbar::{
     ResolvedToolbarItems, ToolbarBackendKind, ToolbarConfig, ToolbarGroupId, ToolbarItemCategory,
@@ -95,7 +93,8 @@ pub(crate) use toolbar::{
 };
 pub use toolbar::{
     ToolbarSectionFlag, ToolbarSectionVisibility, fold_legacy_section_flags,
-    resolve_section_visibility, section_flag_for_item, set_section_visibility,
+    ids as toolbar_item_ids, resolve_section_visibility, section_flag_for_item,
+    set_section_visibility,
 };
 pub use tray::{TrayConfig, TrayIconStyle};
 pub use ui::UiConfig;

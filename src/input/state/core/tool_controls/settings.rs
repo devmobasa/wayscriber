@@ -1,13 +1,13 @@
+use crate::config::PresenterToolBehavior;
+use crate::domain;
+
 use super::super::base::{DrawingState, InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
-use crate::draw::TextMeasurer;
-use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor};
+use crate::draw::{ArrowStyle, BlurStyle, Color, FontDescriptor, TextMeasurer};
 use crate::i18n::tr;
+use crate::input::modifiers::DragToolBindings;
 use crate::input::state::{Toast, ToastPriority};
-use crate::input::{
-    DragBinding, MouseButton,
-    modifiers::DragToolBindings,
-    tool::{EraserMode, Tool},
-};
+use crate::input::tool::{EraserMode, Tool};
+use crate::input::{DragBinding, MouseButton};
 
 impl InputState {
     /// Returns the stored drawing color for a tool.
@@ -153,7 +153,7 @@ impl InputState {
         if self.presenter_mode_active()
             && matches!(
                 self.presenter_mode_config().tool_behavior,
-                crate::config::PresenterToolBehavior::ForceHighlightLocked
+                PresenterToolBehavior::ForceHighlightLocked
             )
             && !matches!(tool, Some(Tool::Highlight | Tool::Laser))
         {
@@ -358,7 +358,7 @@ impl InputState {
         let changed = if tool.uses_eraser_size() {
             self.set_eraser_size_with(measurer, self.style.eraser_size + delta)
         } else {
-            let next = crate::domain::step_stroke_thickness(self.thickness_for_tool(tool), delta);
+            let next = domain::step_stroke_thickness(self.thickness_for_tool(tool), delta);
             self.set_thickness_with(measurer, next)
         };
         if changed {
@@ -402,7 +402,10 @@ impl InputState {
 
         self.mark_current_provisional_dirty_full_with(measurer);
         let changed = self.style.set_thickness(tool, clamped);
-        debug_assert!(changed);
+        debug_assert!(
+            changed,
+            "thickness {clamped} differs from {current}, so the style must change"
+        );
         self.mark_current_provisional_dirty_full_with(measurer);
         self.finish_preset_style_change();
         true
@@ -421,7 +424,10 @@ impl InputState {
         }
         self.mark_current_provisional_dirty_full_with(measurer);
         let changed = self.style.set_eraser_size(clamped);
-        debug_assert!(changed);
+        debug_assert!(
+            changed,
+            "eraser size {clamped} differs from the current size, so the style must change"
+        );
         self.mark_current_provisional_dirty_full_with(measurer);
         self.finish_preset_style_change();
         true

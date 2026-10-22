@@ -1,3 +1,6 @@
+use crate::daemon::protocol_v2::ClaimedAction;
+use crate::{daemon, tray_action};
+
 use super::super::state::WaylandState;
 use crate::config::Action;
 use crate::daemon::protocol_v2::{
@@ -21,17 +24,13 @@ pub(super) fn durable_action_retry_timeout(state: &WaylandState, now: Instant) -
         .map(|deadline| deadline.saturating_duration_since(now))
 }
 
-fn defer_durable_action(
-    state: &mut WaylandState,
-    action: Option<crate::daemon::protocol_v2::ClaimedAction>,
-) {
+fn defer_durable_action(state: &mut WaylandState, action: Option<ClaimedAction>) {
     state.durable_action_finish = action;
     state.durable_action_retry_at = Some(Instant::now() + DURABLE_ACTION_RETRY_DELAY);
 }
 
 pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
-    let actions =
-        crate::tray_action::take_pending_legacy_actions(DaemonControlProtocolMode::production());
+    let actions = tray_action::take_pending_legacy_actions(DaemonControlProtocolMode::production());
     let mut processed = !actions.is_empty();
     for action in actions {
         apply_tray_action(state, action);
@@ -62,7 +61,7 @@ pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
     }
 
     for _ in 0..MAX_DURABLE_ACTIONS_PER_DRAIN {
-        match crate::daemon::try_claim_overlay_action() {
+        match daemon::try_claim_overlay_action() {
             Ok(ActionClaimOutcome::Claimed(action)) => {
                 apply_tray_action(state, action.action());
                 processed = true;

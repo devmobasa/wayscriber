@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::{io, mem, process, thread};
+
 use anyhow::{Context, Result};
 use log::{info, warn};
 use std::fs;
@@ -13,10 +16,14 @@ use std::time::{Duration, Instant};
 use crate::backend::wayland::RuntimeWakeSource;
 use crate::env_vars::NO_TRAY_ENV;
 use crate::paths::daemon_lock_file;
+use crate::process_broker::ProcessBroker;
 use crate::session::try_lock_exclusive;
 use crate::shortcut_hint::{ShortcutRuntimeBackend, current_shortcut_runtime_backend};
 use crate::tray_action::TrayAction;
-use crate::{decode_session_override, encode_session_override};
+use crate::unix_signals::{SignalListener, SignalListenerHealth};
+use crate::{
+    daemon, decode_session_override, encode_session_override, paths, process_broker, unix_signals,
+};
 
 use super::control::DaemonToggleRequest;
 #[cfg(test)]
@@ -27,10 +34,9 @@ use super::global_shortcuts::{GlobalShortcutsListener, start_global_shortcuts_li
 use super::overlay::launch::OverlayLaunchRequest;
 use super::overlay::lifecycle::OverlayLifecycle;
 use super::overlay::{ShowOutcome, overlay_start_backoff_reason};
-use super::protocol_v2::DaemonControlProtocolMode;
 use super::protocol_v2::{
     ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
-    DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
+    DaemonControlProtocolMode, DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
 };
 use super::tray::{TrayRuntime, start_system_tray};
 #[cfg(feature = "tray")]
@@ -63,9 +69,7 @@ mod toggles;
 /// can never start an overlay again. Staying up would keep the tray alive
 /// while every show silently backs off, so the daemon exits instead and lets
 /// the service manager's `Restart=on-failure` start a fresh one.
-fn ensure_process_broker_usable(
-    broker: Option<&crate::process_broker::ProcessBroker>,
-) -> Result<()> {
+fn ensure_process_broker_usable(broker: Option<&ProcessBroker>) -> Result<()> {
     match broker {
         Some(broker) if !broker.is_healthy() => Err(anyhow::anyhow!(
             "process broker is no longer usable; exiting so the daemon can be restarted"
@@ -74,7 +78,7 @@ fn ensure_process_broker_usable(
     }
 }
 
-fn finish_action_batch(failures: Vec<String>) -> Result<()> {
+fn finish_action_batch(failures: &[String]) -> Result<()> {
     if failures.is_empty() {
         Ok(())
     } else {
@@ -101,7 +105,7 @@ pub struct Daemon {
     pub(super) overlay_action_intents: Arc<OverlayActionIntents>,
     pub(super) pending_launch: Option<OverlayLaunchRequest>,
     pub(super) session_resume_override: Arc<AtomicU8>,
-    pub(super) lock_file: Option<std::fs::File>,
+    pub(super) lock_file: Option<File>,
     pub(super) last_plain_visibility_toggle_completed_at: Option<Instant>,
     protocol_mode: DaemonControlProtocolMode,
     v2_command_owner: Option<CommandOwner>,
@@ -111,7 +115,7 @@ pub struct Daemon {
     pending_action_admission_retry: Vec<TrayAction>,
     action_admission_retry_at: Option<BootDeadline>,
     #[cfg(unix)]
-    signal_listener: Option<crate::unix_signals::SignalListener>,
+    signal_listener: Option<SignalListener>,
     #[cfg(feature = "tray")]
     pub(super) tray_status: Arc<TrayStatusShared>,
 }
@@ -134,7 +138,7 @@ impl Daemon {
             initial_mode,
             initial_named_session_file,
             remembered_session_file: None,
-            instance_token: crate::daemon::generate_daemon_instance_token(),
+            instance_token: daemon::generate_daemon_instance_token(),
             freeze_on_show: false,
             tray_enabled,
             backend_runner: None,
@@ -210,7 +214,7 @@ impl Daemon {
                     if Instant::now() >= deadline {
                         return Err(AlreadyRunningError.into());
                     }
-                    std::thread::sleep(DAEMON_LOCK_RETRY);
+                    thread::sleep(DAEMON_LOCK_RETRY);
                 }
                 Err(err) => return Err(err).context("failed to lock daemon instance"),
             }
@@ -218,10 +222,10 @@ impl Daemon {
     }
 
     fn clear_stale_runtime_files() {
-        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+        if let Err(err) = daemon::clear_daemon_pid_file() {
             warn!("Failed to clear stale daemon pid file on startup: {}", err);
         }
-        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+        if let Err(err) = daemon::clear_daemon_toggle_request_file() {
             warn!(
                 "Failed to clear stale daemon toggle request on startup: {}",
                 err
@@ -276,7 +280,7 @@ impl Daemon {
         let signal_visibility = visibility.clone();
         let signal_quit = quit_event.clone();
         self.signal_listener = Some(
-            crate::unix_signals::spawn_listener(
+            unix_signals::spawn_listener(
                 &DAEMON_SIGNALS,
                 move |sig| {
                     if signal_quit.is_raised() {
@@ -334,8 +338,8 @@ impl Daemon {
         self.acquire_daemon_lock()?;
         Self::clear_stale_runtime_files();
 
-        let daemon_wake =
-            RuntimeWakeSource::new().context("Failed to create daemon control wake descriptor")?;
+        let daemon_wake = RuntimeWakeSource::try_new()
+            .context("Failed to create daemon control wake descriptor")?;
         let visibility = self.visibility_intents.publisher(daemon_wake.handle());
         let action = self.overlay_action_intents.publisher(daemon_wake.handle());
         let quit_event = DaemonControlEvent::new(self.should_quit.clone(), daemon_wake.handle());
@@ -350,7 +354,7 @@ impl Daemon {
             DaemonControlProtocolMode::LegacyV1 => {
                 super::protocol_v2::prepare_rollback_compatibility()
                     .context("v2 state is not safe for rollback compatibility")?;
-                crate::daemon::write_daemon_pid_file(std::process::id(), &self.instance_token)
+                daemon::write_daemon_pid_file(process::id(), &self.instance_token)
             }
             #[cfg(test)]
             DaemonControlProtocolMode::DarkV2Harness => {
@@ -363,9 +367,9 @@ impl Daemon {
                     .context("failed to open daemon v2 command owner")?;
                 super::protocol_v2::recover_stale_child_records()
                     .context("failed to recover daemon v2 child proofs")?;
-                let watcher = CommandQueueWatcher::new(&owner.queue_path())
+                let watcher = CommandQueueWatcher::try_new(&owner.queue_path())
                     .context("failed to watch daemon v2 command queue")?;
-                let deadline_source = BootDeadlineSource::new()
+                let deadline_source = BootDeadlineSource::try_new()
                     .context("failed to create daemon v2 deadline source")?;
                 let action_journal =
                     ActionJournal::open().context("failed to open daemon v2 action journal")?;
@@ -376,10 +380,7 @@ impl Daemon {
                 self.v2_command_watcher = Some(watcher);
                 self.v2_deadline_source = Some(deadline_source);
                 self.v2_action_journal = Some(action_journal);
-                super::protocol_v2::write_runtime_record_v2(
-                    &crate::paths::daemon_pid_file(),
-                    &runtime,
-                )
+                super::protocol_v2::write_runtime_record_v2(&paths::daemon_pid_file(), &runtime)
             }
         };
         if let Err(err) = publish_result {
@@ -439,7 +440,7 @@ impl Daemon {
     ) -> Result<()> {
         let result = self.run_control_loop(daemon_wake);
         if result.is_err()
-            && let Err(err) = crate::daemon::clear_daemon_pid_file()
+            && let Err(err) = daemon::clear_daemon_pid_file()
         {
             warn!("Failed to invalidate daemon readiness after runtime failure: {err}");
         }
@@ -498,7 +499,7 @@ impl Daemon {
                 }
             }
 
-            ensure_process_broker_usable(crate::process_broker::current().ok().as_ref())?;
+            ensure_process_broker_usable(process_broker::current().ok().as_ref())?;
             self.arm_v2_lifecycle_deadline()?;
             let readiness = wait_for_daemon_lifecycle(
                 daemon_wake,
@@ -564,10 +565,7 @@ impl Daemon {
             return Ok((Vec::new(), false));
         }
         self.action_admission_retry_at = None;
-        Ok((
-            std::mem::take(&mut self.pending_action_admission_retry),
-            true,
-        ))
+        Ok((mem::take(&mut self.pending_action_admission_retry), true))
     }
 
     fn process_overlay_action_intents(&mut self, actions: Vec<TrayAction>) -> Result<()> {
@@ -587,20 +585,20 @@ impl Daemon {
                 }
             }
             self.overlay_action_intents.finish_batch(action_count);
-            return finish_action_batch(failures);
+            return finish_action_batch(&failures);
         }
 
         let Some(journal) = self.v2_action_journal.clone() else {
             self.retain_action_admission_retry(actions, 0, &mut failures);
             failures.push("v2 action journal is not installed".to_string());
-            return finish_action_batch(failures);
+            return finish_action_batch(&failures);
         };
         let mut admitted = Vec::with_capacity(actions.len());
         let mut retry = Vec::new();
         let mut will_be_visible = self.overlay.state() == OverlayState::Visible;
         let mut actions = actions.into_iter();
         while let Some(action) = actions.next() {
-            if !will_be_visible && matches!(action, crate::tray_action::TrayAction::LightDrawOff) {
+            if !will_be_visible && matches!(action, TrayAction::LightDrawOff) {
                 continue;
             }
             match journal.publish_anonymous(&self.instance_token, action) {
@@ -625,7 +623,7 @@ impl Daemon {
         // begin, so an early runtime failure cannot silently lose the tail.
         for (action, prepared) in admitted {
             if self.overlay.state() == OverlayState::Hidden
-                && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
+                && matches!(action, TrayAction::LightDrawOff)
             {
                 let reason = "overlay remained hidden before LightDrawOff delivery";
                 if let Err(error) = journal.abandon(&prepared, reason) {
@@ -660,7 +658,7 @@ impl Daemon {
         }
         let completed = action_count - retry.len();
         self.retain_action_admission_retry(retry, completed, &mut failures);
-        finish_action_batch(failures)
+        finish_action_batch(&failures)
     }
 
     fn retain_action_admission_retry(
@@ -714,7 +712,7 @@ impl Daemon {
 
             if let Some(action) = legacy_request.overlay_action {
                 if self.overlay.state() == OverlayState::Hidden
-                    && matches!(action, crate::tray_action::TrayAction::LightDrawOff)
+                    && matches!(action, TrayAction::LightDrawOff)
                 {
                     claimed.commit(EffectKind::NoOp)?;
                     claimed.defer()?;
@@ -853,10 +851,10 @@ impl Daemon {
                 Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
             }
         }
-        if let Err(err) = crate::daemon::clear_daemon_toggle_request_file() {
+        if let Err(err) = daemon::clear_daemon_toggle_request_file() {
             warn!("Failed to clear daemon toggle request file: {}", err);
         }
-        if let Err(err) = crate::daemon::clear_daemon_pid_file() {
+        if let Err(err) = daemon::clear_daemon_pid_file() {
             warn!("Failed to clear daemon pid file: {}", err);
         }
         self.stop_signal_listener()
@@ -870,8 +868,8 @@ impl Daemon {
                 .as_ref()
                 .context("daemon signal listener is not installed")?;
             match listener.health() {
-                crate::unix_signals::SignalListenerHealth::Running => Ok(()),
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => {
+                SignalListenerHealth::Running => Ok(()),
+                SignalListenerHealth::Failed(failure) => {
                     Err(anyhow::anyhow!("daemon signal listener failed: {failure}"))
                 }
                 health => Err(anyhow::anyhow!(
@@ -890,7 +888,7 @@ impl Daemon {
         #[cfg(unix)]
         if let Some(mut listener) = self.signal_listener.take() {
             let failure = match listener.health() {
-                crate::unix_signals::SignalListenerHealth::Failed(failure) => Some(failure),
+                SignalListenerHealth::Failed(failure) => Some(failure),
                 _ => None,
             };
             listener
@@ -977,7 +975,7 @@ fn wait_for_daemon_lifecycle(
             });
         }
         if ready < 0 {
-            let err = std::io::Error::last_os_error();
+            let err = io::Error::last_os_error();
             if err.kind() == ErrorKind::Interrupted {
                 continue;
             }

@@ -1,3 +1,9 @@
+use crate::config::SessionConfig;
+use crate::draw::{EraserKind, ShapeId, color};
+use crate::image_decode::EncodedImageFormat;
+use crate::session::{lock, options};
+use crate::{draw, image_decode, session};
+
 use super::compression::{ExpandedSessionTooLarge, compress_bytes, is_gzip};
 use super::load::{
     LoadSnapshotOutcome, load_named_session_candidate,
@@ -18,13 +24,17 @@ use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
 use crate::test_temp::tempdir;
 use crate::time_utils::now_rfc3339;
-use std::path::Path;
-use std::time::{Duration, SystemTime};
 #[cfg(unix)]
-use std::{
-    ffi::CString,
-    os::unix::{ffi::OsStrExt, fs::symlink},
-};
+use std::ffi::CString;
+use std::fs::{File, Permissions};
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, SystemTime};
+use std::{fs, io, thread};
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();
@@ -71,32 +81,23 @@ fn corrupt_primary_restores_backup_without_destroying_its_bytes() {
         }
 
         save_snapshot(&sample_snapshot(), &options).unwrap();
-        let good_bytes = std::fs::read(options.session_file_path()).unwrap();
-        std::fs::copy(options.session_file_path(), options.backup_file_path()).unwrap();
-        std::fs::write(options.session_file_path(), b"{broken primary").unwrap();
+        let good_bytes = fs::read(options.session_file_path()).unwrap();
+        fs::copy(options.session_file_path(), options.backup_file_path()).unwrap();
+        fs::write(options.session_file_path(), b"{broken primary").unwrap();
 
         let restored = load_snapshot(&options)
             .unwrap()
             .expect("restore the backup");
         assert!(restored.has_board_data());
-        assert_eq!(
-            std::fs::read(options.backup_file_path()).unwrap(),
-            good_bytes
-        );
+        assert_eq!(fs::read(options.backup_file_path()).unwrap(), good_bytes);
         if named {
-            assert_eq!(
-                std::fs::read(options.session_file_path()).unwrap(),
-                good_bytes
-            );
+            assert_eq!(fs::read(options.session_file_path()).unwrap(), good_bytes);
         } else {
             assert!(!options.session_file_path().exists());
         }
 
         save_snapshot(&restored, &options).unwrap();
-        assert_eq!(
-            std::fs::read(options.backup_file_path()).unwrap(),
-            good_bytes
-        );
+        assert_eq!(fs::read(options.backup_file_path()).unwrap(), good_bytes);
     }
 }
 
@@ -107,20 +108,20 @@ fn corrupt_artifacts_have_separate_copies_and_only_marked_recovery_restores() {
         let mut options = SessionOptions::new(temp.path().to_path_buf(), "corrupt-recovery");
         options.persist_transparent = true;
         save_snapshot(&sample_snapshot(), &options).unwrap();
-        std::fs::rename(options.session_file_path(), options.recovery_file_path()).unwrap();
+        fs::rename(options.session_file_path(), options.recovery_file_path()).unwrap();
         set_modified(
             &options.recovery_file_path(),
             SystemTime::UNIX_EPOCH + Duration::from_secs(10),
         );
         if recoverable {
-            std::fs::write(
+            fs::write(
                 options.recovery_recoverable_marker_file_path(),
                 b"recoverable",
             )
             .unwrap();
         }
-        std::fs::write(options.backup_file_path(), b"broken backup").unwrap();
-        std::fs::write(options.session_file_path(), b"broken primary").unwrap();
+        fs::write(options.backup_file_path(), b"broken backup").unwrap();
+        fs::write(options.session_file_path(), b"broken primary").unwrap();
         set_modified(
             &options.session_file_path(),
             SystemTime::UNIX_EPOCH + Duration::from_secs(20),
@@ -146,7 +147,7 @@ fn corrupt_artifacts_have_separate_copies_and_only_marked_recovery_restores() {
             (options.backup_file_path(), b"broken backup".as_slice()),
         ] {
             assert_eq!(
-                std::fs::read(crate::session::append_path_suffix(&slot, ".corrupt-1")).unwrap(),
+                fs::read(session::append_path_suffix(&slot, ".corrupt-1")).unwrap(),
                 expected
             );
         }
@@ -161,24 +162,21 @@ fn corrupt_copy_retention_skips_foreign_entries_and_named_loads_reuse_bytes() {
     let primary = temp.path().join("board.wayscriber-session");
     options.set_named_file_target(primary.clone());
     options.persist_transparent = true;
-    let copy = |n| crate::session::append_path_suffix(&primary, &format!(".corrupt-{n}"));
-    std::fs::create_dir(copy(1)).unwrap();
+    let copy = |n| session::append_path_suffix(&primary, &format!(".corrupt-{n}"));
+    fs::create_dir(copy(1)).unwrap();
     let foreign = temp.path().join("foreign");
-    std::fs::write(&foreign, b"unrelated").unwrap();
+    fs::write(&foreign, b"unrelated").unwrap();
     symlink(&foreign, copy(2)).unwrap();
 
     for n in 3..=7 {
-        std::fs::write(&primary, format!("broken {n}")).unwrap();
+        fs::write(&primary, format!("broken {n}")).unwrap();
         let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024).unwrap();
         assert!(matches!(
             outcome,
             LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         ));
         load_snapshot_with_expanded_limit(&options, 64 * 1024).unwrap();
-        assert_eq!(
-            std::fs::read(copy(n)).unwrap(),
-            format!("broken {n}").as_bytes()
-        );
+        assert_eq!(fs::read(copy(n)).unwrap(), format!("broken {n}").as_bytes());
         assert!(!copy(n + 1).exists());
     }
     assert!(!copy(3).exists());
@@ -186,12 +184,12 @@ fn corrupt_copy_retention_skips_foreign_entries_and_named_loads_reuse_bytes() {
     assert!(copy(5).exists() && copy(6).exists() && copy(7).exists());
     assert!(copy(1).is_dir());
     assert!(
-        std::fs::symlink_metadata(copy(2))
+        fs::symlink_metadata(copy(2))
             .unwrap()
             .file_type()
             .is_symlink()
     );
-    assert_eq!(std::fs::read(foreign).unwrap(), b"unrelated");
+    assert_eq!(fs::read(foreign).unwrap(), b"unrelated");
 }
 
 pub(super) fn sample_tool_state() -> ToolStateSnapshot {
@@ -204,7 +202,7 @@ pub(super) fn sample_tool_state() -> ToolStateSnapshot {
         },
         current_thickness: 3.0,
         eraser_size: 12.0,
-        eraser_kind: crate::draw::EraserKind::Circle,
+        eraser_kind: EraserKind::Circle,
         eraser_mode: EraserMode::Brush,
         blur_style: Default::default(),
         recent_colors: Vec::new(),
@@ -222,7 +220,7 @@ pub(super) fn sample_tool_state() -> ToolStateSnapshot {
         arrow_head_at_end: Some(false),
         arrow_style: None,
         arrow_label_enabled: Some(false),
-        polygon_sides: crate::draw::REGULAR_POLYGON_DEFAULT_SIDES,
+        polygon_sides: draw::REGULAR_POLYGON_DEFAULT_SIDES,
         board_previous_color: None,
         tool_settings: None,
     }
@@ -276,7 +274,7 @@ fn sample_session_file() -> SessionFile {
 }
 
 fn write_contentless_session(path: &Path) {
-    std::fs::write(
+    fs::write(
         path,
         serde_json::to_vec_pretty(&contentless_session_file()).expect("contentless session json"),
     )
@@ -293,12 +291,12 @@ pub(super) fn make_fifo(path: &Path) {
         0,
         "mkfifo {} failed: {}",
         path.display(),
-        std::io::Error::last_os_error()
+        io::Error::last_os_error()
     );
 }
 
 pub(super) fn set_modified(path: &Path, modified: SystemTime) {
-    std::fs::File::options()
+    File::options()
         .write(true)
         .open(path)
         .expect("open file for timestamp update")
@@ -355,7 +353,7 @@ fn a_legacy_session_payload_ignores_its_status_bar_visibility() {
         ),
         version = CURRENT_VERSION
     );
-    std::fs::write(options.session_file_path(), payload).expect("write legacy session");
+    fs::write(options.session_file_path(), payload).expect("write legacy session");
 
     let outcome =
         load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("legacy session should load");
@@ -388,7 +386,7 @@ fn a_saved_session_no_longer_records_status_bar_visibility() {
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
 
     let written =
-        std::fs::read_to_string(options.session_file_path()).expect("saved session should be text");
+        fs::read_to_string(options.session_file_path()).expect("saved session should be text");
     assert!(
         !written.contains("show_status_bar"),
         "chrome visibility must not reach the session file: {written}"
@@ -477,7 +475,7 @@ fn save_snapshot_respects_auto_compression_threshold() {
     plain.compression = CompressionMode::Auto;
     plain.auto_compress_threshold_bytes = u64::MAX;
     save_snapshot(&snapshot, &plain).expect("save_snapshot should succeed");
-    let plain_bytes = std::fs::read(plain.session_file_path()).unwrap();
+    let plain_bytes = fs::read(plain.session_file_path()).unwrap();
     assert!(
         !is_gzip(&plain_bytes),
         "expected uncompressed session payload"
@@ -488,7 +486,7 @@ fn save_snapshot_respects_auto_compression_threshold() {
     compressed.compression = CompressionMode::Auto;
     compressed.auto_compress_threshold_bytes = 1;
     save_snapshot(&snapshot, &compressed).expect("save_snapshot should succeed");
-    let compressed_bytes = std::fs::read(compressed.session_file_path()).unwrap();
+    let compressed_bytes = fs::read(compressed.session_file_path()).unwrap();
     assert!(is_gzip(&compressed_bytes), "expected gzip payload");
 }
 
@@ -529,7 +527,7 @@ fn save_named_file_rejects_symlink_lock_without_truncating_target() {
     let mut options = SessionOptions::new(temp.path().join("configured"), "named-symlink-save");
     options.persist_transparent = true;
     options.set_named_file_target(named_path);
-    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    fs::write(&lock_target, b"preserve me").expect("write lock target");
     symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
 
     let err =
@@ -540,7 +538,7 @@ fn save_named_file_rejects_symlink_lock_without_truncating_target() {
         "{err:#}"
     );
     assert_eq!(
-        std::fs::read(&lock_target).expect("read lock target"),
+        fs::read(&lock_target).expect("read lock target"),
         b"preserve me",
         "named save must not truncate a symlink lock target"
     );
@@ -584,8 +582,8 @@ fn load_named_file_rejects_symlink_lock_without_truncating_target() {
     options.persist_transparent = true;
     options.set_named_file_target(named_path);
     save_snapshot(&snapshot, &options).expect("save named snapshot");
-    std::fs::remove_file(options.lock_file_path()).expect("remove regular lock");
-    std::fs::write(&lock_target, b"preserve me").expect("write lock target");
+    fs::remove_file(options.lock_file_path()).expect("remove regular lock");
+    fs::write(&lock_target, b"preserve me").expect("write lock target");
     symlink(&lock_target, options.lock_file_path()).expect("create lock symlink");
 
     let err = load_snapshot(&options).expect_err("named load should reject symlink lock");
@@ -595,7 +593,7 @@ fn load_named_file_rejects_symlink_lock_without_truncating_target() {
         "{err:#}"
     );
     assert_eq!(
-        std::fs::read(&lock_target).expect("read lock target"),
+        fs::read(&lock_target).expect("read lock target"),
         b"preserve me",
         "named load must not truncate a symlink lock target"
     );
@@ -688,9 +686,7 @@ fn load_snapshot_inner_reads_plain_payload_up_to_the_configured_file_size() {
     options.persist_transparent = true;
     options.compression = CompressionMode::Off;
     save_snapshot(&sample_snapshot(), &options).expect("save_snapshot should succeed");
-    let file_size = std::fs::metadata(options.session_file_path())
-        .unwrap()
-        .len();
+    let file_size = fs::metadata(options.session_file_path()).unwrap().len();
     options.max_file_size_bytes = file_size;
 
     let loaded =
@@ -719,8 +715,7 @@ fn load_snapshot_inner_drops_all_history_nested_past_the_compound_limit() {
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
 
     let path = options.session_file_path();
-    let mut doc: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     let stack = doc["boards"][0]["pages"][0]["undo_stack"]
         .as_array_mut()
         .expect("saved undo stack");
@@ -730,7 +725,7 @@ fn load_snapshot_inner_drops_all_history_nested_past_the_compound_limit() {
         nested = serde_json::json!({ "kind": "compound", "actions": [nested] });
     }
     stack.push(nested);
-    std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
 
     let loaded = load_snapshot_inner(&path, &options)
         .expect("load_snapshot_inner should succeed")
@@ -771,7 +766,7 @@ fn load_named_primary_rejects_symlink_without_following_target() {
     let temp = tempdir().unwrap();
     let target = temp.path().join("real-session.wayscriber-session");
     let link = temp.path().join("linked-session.wayscriber-session");
-    std::fs::write(&target, b"{not valid json").expect("write invalid target");
+    fs::write(&target, b"{not valid json").expect("write invalid target");
     symlink(&target, &link).expect("create primary symlink");
 
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "symlink-primary");
@@ -799,18 +794,14 @@ fn load_named_corrupt_primary_preserves_diagnostics_without_removing_selected_fi
 
     let temp = tempdir().unwrap();
     let named_path = temp.path().join("corrupt.wayscriber-session");
-    std::fs::write(&named_path, b"{not valid json").expect("write corrupt named primary");
+    fs::write(&named_path, b"{not valid json").expect("write corrupt named primary");
 
     let mut options = SessionOptions::new(temp.path().join("configured"), "named-corrupt");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(options.backup_file_path(), b"older diagnostic bytes")
-        .expect("seed legacy backup");
-    std::fs::set_permissions(
-        options.backup_file_path(),
-        std::fs::Permissions::from_mode(0o644),
-    )
-    .expect("make legacy backup public");
+    fs::write(options.backup_file_path(), b"older diagnostic bytes").expect("seed legacy backup");
+    fs::set_permissions(options.backup_file_path(), Permissions::from_mode(0o644))
+        .expect("make legacy backup public");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("corrupt named primary should be handled");
@@ -820,21 +811,21 @@ fn load_named_corrupt_primary_preserves_diagnostics_without_removing_selected_fi
     };
     assert_eq!(
         corrupt_copy,
-        &crate::session::append_path_suffix(&named_path, ".corrupt-1"),
+        &session::append_path_suffix(&named_path, ".corrupt-1"),
         "the reported path is the one holding the preserved bytes"
     );
     assert_eq!(
-        std::fs::read(&named_path).expect("named primary remains"),
+        fs::read(&named_path).expect("named primary remains"),
         b"{not valid json",
         "named corrupt backup must not remove the selected primary path"
     );
     assert_eq!(
-        std::fs::read(corrupt_copy).expect("corrupt copy bytes"),
+        fs::read(corrupt_copy).expect("corrupt copy bytes"),
         b"{not valid json",
         "named corrupt primary should still be backed up for diagnostics"
     );
     assert_eq!(
-        std::fs::metadata(corrupt_copy)
+        fs::metadata(corrupt_copy)
             .expect("corrupt copy metadata")
             .permissions()
             .mode()
@@ -872,7 +863,7 @@ fn load_named_candidate_rejects_symlink_without_following_target() {
     let temp = tempdir().unwrap();
     let target = temp.path().join("real.wayscriber-session");
     let link = temp.path().join("linked.wayscriber-session");
-    std::fs::write(&target, b"target bytes").expect("write target");
+    fs::write(&target, b"target bytes").expect("write target");
     symlink(&target, &link).expect("create symlink");
 
     let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-symlink");
@@ -883,7 +874,7 @@ fn load_named_candidate_rejects_symlink_without_following_target() {
 
     assert!(err.to_string().contains("symlink"), "{err:#}");
     assert_eq!(
-        std::fs::read(&target).expect("target bytes"),
+        fs::read(&target).expect("target bytes"),
         b"target bytes",
         "symlink target must not be opened or mutated"
     );
@@ -899,28 +890,28 @@ fn load_named_candidate_waits_for_existing_lock_before_validating_primary() {
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
 
-    let lock_file = std::fs::File::options()
+    let lock_file = File::options()
         .read(true)
         .write(true)
         .create_new(true)
         .open(options.lock_file_path())
         .expect("create lock");
-    crate::session::lock::lock_exclusive(&lock_file).expect("exclusive lock");
+    lock::lock_exclusive(&lock_file).expect("exclusive lock");
 
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let load_options = options.clone();
-    let loader = std::thread::spawn(move || {
+    let loader = thread::spawn(move || {
         tx.send(load_named_session_candidate(&load_options))
             .expect("send candidate result");
     });
 
-    std::thread::sleep(Duration::from_millis(50));
-    std::fs::write(
+    thread::sleep(Duration::from_millis(50));
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&sample_session_file()).expect("session json"),
     )
     .expect("write session while lock is held");
-    crate::session::lock::unlock(&lock_file).expect("unlock");
+    lock::unlock(&lock_file).expect("unlock");
 
     let outcome = rx
         .recv_timeout(Duration::from_secs(2))
@@ -951,7 +942,7 @@ fn load_named_candidate_rejects_fifo_without_blocking_or_creating_artifacts() {
 fn load_named_candidate_corrupt_primary_does_not_create_sidecars() {
     let temp = tempdir().unwrap();
     let named_path = temp.path().join("corrupt-open.wayscriber-session");
-    std::fs::write(&named_path, b"{not valid json").expect("write corrupt candidate");
+    fs::write(&named_path, b"{not valid json").expect("write corrupt candidate");
 
     let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-corrupt");
     options.persist_transparent = true;
@@ -961,7 +952,7 @@ fn load_named_candidate_corrupt_primary_does_not_create_sidecars() {
 
     assert!(format!("{err:#}").contains("failed to parse session json"));
     assert_eq!(
-        std::fs::read(&named_path).expect("candidate bytes remain"),
+        fs::read(&named_path).expect("candidate bytes remain"),
         b"{not valid json"
     );
     assert_no_candidate_sidecars(&options);
@@ -974,23 +965,23 @@ fn load_named_candidate_ignores_contentful_primary_older_than_clear_marker() {
     let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-cleared");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
     )
     .expect("write primary");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
     let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
     let clear_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
     set_modified(&named_path, primary_time);
     set_modified(&options.clear_marker_file_path(), clear_time);
-    let primary_before = std::fs::read(&named_path).expect("primary bytes");
+    let primary_before = fs::read(&named_path).expect("primary bytes");
 
     let outcome = load_named_session_candidate(&options).expect("cleared primary should not load");
 
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
     assert_eq!(
-        std::fs::read(&named_path).expect("primary remains"),
+        fs::read(&named_path).expect("primary remains"),
         primary_before
     );
     assert!(
@@ -1014,12 +1005,12 @@ fn load_named_candidate_ignores_symlink_clear_marker() {
         SessionOptions::new(temp.path().join("configured"), "candidate-symlink-clear");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
     )
     .expect("write primary");
-    std::fs::write(&clear_marker_target, b"target clear marker").expect("write target marker");
+    fs::write(&clear_marker_target, b"target clear marker").expect("write target marker");
     symlink(&clear_marker_target, options.clear_marker_file_path())
         .expect("create clear marker symlink");
     let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
@@ -1031,7 +1022,7 @@ fn load_named_candidate_ignores_symlink_clear_marker() {
 
     assert_loaded_sample_snapshot(outcome);
     assert!(
-        std::fs::symlink_metadata(options.clear_marker_file_path())
+        fs::symlink_metadata(options.clear_marker_file_path())
             .expect("clear marker metadata")
             .file_type()
             .is_symlink(),
@@ -1049,8 +1040,8 @@ fn load_named_candidate_ignores_corrupt_primary_older_than_clear_marker() {
         SessionOptions::new(temp.path().join("configured"), "candidate-cleared-corrupt");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(&named_path, b"{not valid json").expect("write corrupt primary");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
+    fs::write(&named_path, b"{not valid json").expect("write corrupt primary");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("write clear marker");
     let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
     let clear_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
     set_modified(&named_path, primary_time);
@@ -1061,7 +1052,7 @@ fn load_named_candidate_ignores_corrupt_primary_older_than_clear_marker() {
 
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
     assert_eq!(
-        std::fs::read(&named_path).expect("corrupt primary remains"),
+        fs::read(&named_path).expect("corrupt primary remains"),
         b"{not valid json"
     );
     assert!(
@@ -1087,13 +1078,13 @@ fn load_named_candidate_ignores_symlink_backup_recoverable_marker() {
     );
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         options.backup_file_path(),
         serde_json::to_vec_pretty(&sample_session_file()).expect("backup session json"),
     )
     .expect("write backup");
     write_contentless_session(&named_path);
-    std::fs::write(&marker_target, b"target backup marker").expect("write target marker");
+    fs::write(&marker_target, b"target backup marker").expect("write target marker");
     symlink(&marker_target, options.backup_recovery_marker_file_path())
         .expect("create backup marker symlink");
     let backup_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
@@ -1124,13 +1115,13 @@ fn load_named_candidate_ignores_symlink_recovery_recoverable_marker() {
     );
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         options.recovery_file_path(),
         serde_json::to_vec_pretty(&sample_session_file()).expect("recovery session json"),
     )
     .expect("write recovery");
     write_contentless_session(&named_path);
-    std::fs::write(&marker_target, b"target recovery marker").expect("write target marker");
+    fs::write(&marker_target, b"target recovery marker").expect("write target marker");
     symlink(
         &marker_target,
         options.recovery_recoverable_marker_file_path(),
@@ -1159,22 +1150,22 @@ fn load_named_candidate_falls_back_to_valid_primary_when_recovery_is_corrupt() {
     let mut options = SessionOptions::new(temp.path().join("configured"), "candidate-recovery");
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
     )
     .expect("write primary");
 
     let recovery_bytes = b"{not valid recovery json";
-    std::thread::sleep(Duration::from_millis(2));
-    std::fs::write(options.recovery_file_path(), recovery_bytes).expect("write corrupt recovery");
+    thread::sleep(Duration::from_millis(2));
+    fs::write(options.recovery_file_path(), recovery_bytes).expect("write corrupt recovery");
 
     let outcome =
         load_named_session_candidate(&options).expect("corrupt recovery should not block primary");
 
     assert_loaded_sample_snapshot(outcome);
     assert_eq!(
-        std::fs::read(options.recovery_file_path()).expect("corrupt recovery remains"),
+        fs::read(options.recovery_file_path()).expect("corrupt recovery remains"),
         recovery_bytes
     );
     assert!(
@@ -1197,13 +1188,13 @@ fn load_named_candidate_reports_newer_oversized_recovery_without_loading_primary
     );
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
-    std::fs::write(
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&sample_session_file()).expect("primary session json"),
     )
     .expect("write primary");
     let recovery_bytes = vec![b' '; 64];
-    std::fs::write(options.recovery_file_path(), &recovery_bytes).expect("write recovery");
+    fs::write(options.recovery_file_path(), &recovery_bytes).expect("write recovery");
     let primary_time = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
     let recovery_time = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
     set_modified(&named_path, primary_time);
@@ -1220,7 +1211,7 @@ fn load_named_candidate_reports_newer_oversized_recovery_without_loading_primary
         } if path == options.recovery_file_path()
     ));
     assert_eq!(
-        std::fs::read(options.recovery_file_path()).expect("recovery remains"),
+        fs::read(options.recovery_file_path()).expect("recovery remains"),
         recovery_bytes
     );
     assert!(
@@ -1241,15 +1232,15 @@ fn load_named_candidate_oversize_primary_does_not_create_sidecars() {
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
     save_snapshot(&snapshot, &options).expect("save candidate");
-    let original_bytes = std::fs::read(&named_path).expect("candidate bytes");
-    std::fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
+    let original_bytes = fs::read(&named_path).expect("candidate bytes");
+    fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
     options.max_file_size_bytes = 1;
 
     let err = load_named_session_candidate(&options).expect_err("oversize candidate should fail");
 
     assert!(format!("{err:#}").contains("exceeds the configured limit"));
     assert_eq!(
-        std::fs::read(&named_path).expect("candidate bytes remain"),
+        fs::read(&named_path).expect("candidate bytes remain"),
         original_bytes
     );
     assert_no_candidate_sidecars(&options);
@@ -1261,7 +1252,7 @@ fn load_named_candidate_newer_version_does_not_create_sidecars() {
     let named_path = temp.path().join("newer.wayscriber-session");
     let mut file = sample_session_file();
     file.version = CURRENT_VERSION + 1;
-    std::fs::write(
+    fs::write(
         &named_path,
         serde_json::to_vec_pretty(&file).expect("newer session json"),
     )
@@ -1282,8 +1273,8 @@ fn load_named_candidate_newer_version_does_not_create_sidecars() {
 }
 
 /// Paths of `.vN-preserved-*` copies under `dir`, sorted for stable asserts.
-fn preserved_copies_in(dir: &Path) -> Vec<std::path::PathBuf> {
-    let mut copies: Vec<_> = std::fs::read_dir(dir)
+fn preserved_copies_in(dir: &Path) -> Vec<PathBuf> {
+    let mut copies: Vec<_> = fs::read_dir(dir)
         .expect("scan for preserved copies")
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
@@ -1298,17 +1289,17 @@ fn preserved_copies_in(dir: &Path) -> Vec<std::path::PathBuf> {
 }
 
 fn occupy_copy_preservation_candidates(base: &Path) {
-    std::fs::write(base, b"foreign preservation").expect("occupy base preservation name");
+    fs::write(base, b"foreign preservation").expect("occupy base preservation name");
     for attempt in 1..16 {
-        std::fs::write(
-            std::path::PathBuf::from(format!("{}-{attempt}", base.display())),
+        fs::write(
+            PathBuf::from(format!("{}-{attempt}", base.display())),
             b"foreign preservation",
         )
         .expect("occupy numbered preservation name");
     }
 }
 
-fn occupy_move_preservation_candidates(base: &Path) -> Vec<std::path::PathBuf> {
+fn occupy_move_preservation_candidates(base: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     for attempt in 0..16 {
         let suffix = if attempt == 0 {
@@ -1316,8 +1307,8 @@ fn occupy_move_preservation_candidates(base: &Path) -> Vec<std::path::PathBuf> {
         } else {
             format!("-moved-{attempt}")
         };
-        let path = std::path::PathBuf::from(format!("{}{suffix}", base.display()));
-        std::fs::write(&path, b"previous preservation").expect("occupy moved preservation name");
+        let path = PathBuf::from(format!("{}{suffix}", base.display()));
+        fs::write(&path, b"previous preservation").expect("occupy moved preservation name");
         paths.push(path);
     }
     paths
@@ -1333,9 +1324,9 @@ fn load_named_candidate_rejects_special_lock_without_creating_replacement() {
     options.persist_transparent = true;
     options.set_named_file_target(named_path.clone());
     save_snapshot(&snapshot, &options).expect("save candidate");
-    std::fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
+    fs::remove_file(options.lock_file_path()).expect("remove save-created lock");
     make_fifo(&options.lock_file_path());
-    let original_bytes = std::fs::read(&named_path).expect("candidate bytes");
+    let original_bytes = fs::read(&named_path).expect("candidate bytes");
 
     let err = load_named_session_candidate(&options).expect_err("fifo lock should fail");
 
@@ -1344,7 +1335,7 @@ fn load_named_candidate_rejects_special_lock_without_creating_replacement() {
         "{err:#}"
     );
     assert_eq!(
-        std::fs::read(&named_path).expect("candidate bytes remain"),
+        fs::read(&named_path).expect("candidate bytes remain"),
         original_bytes
     );
     assert!(
@@ -1387,7 +1378,7 @@ fn load_snapshot_expansion_limit_leaves_primary_file_unchanged() {
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
 
     let session_path = options.session_file_path();
-    let original_bytes = std::fs::read(&session_path).expect("session bytes");
+    let original_bytes = fs::read(&session_path).expect("session bytes");
     let outcome = load_snapshot_with_expanded_limit(&options, 16)
         .expect("expanded-cap refusal should not be a load error");
 
@@ -1399,7 +1390,7 @@ fn load_snapshot_expansion_limit_leaves_primary_file_unchanged() {
         }
     ));
     assert_eq!(
-        std::fs::read(&session_path).expect("session should remain in place"),
+        fs::read(&session_path).expect("session should remain in place"),
         original_bytes
     );
     assert!(
@@ -1418,7 +1409,7 @@ fn load_snapshot_reports_successful_recovery_source() {
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
     let recovery_file = sample_session_file();
-    std::fs::write(
+    fs::write(
         options.recovery_file_path(),
         serde_json::to_vec_pretty(&recovery_file).expect("recovery json"),
     )
@@ -1438,8 +1429,8 @@ fn load_snapshot_prefers_valid_recovery_when_primary_is_non_regular() {
 
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "nonregular-recovery");
     options.persist_transparent = true;
-    std::fs::create_dir(options.session_file_path()).expect("primary directory");
-    std::fs::write(
+    fs::create_dir(options.session_file_path()).expect("primary directory");
+    fs::write(
         options.recovery_file_path(),
         serde_json::to_vec_pretty(&sample_session_file()).expect("recovery json"),
     )
@@ -1468,7 +1459,7 @@ fn load_snapshot_falls_back_to_normal_when_recovery_is_corrupt() {
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
     let recovery_path = options.recovery_file_path();
-    std::fs::write(&recovery_path, b"{not valid json").expect("recovery write");
+    fs::write(&recovery_path, b"{not valid json").expect("recovery write");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("corrupt recovery should fall back to normal session");
@@ -1478,7 +1469,7 @@ fn load_snapshot_falls_back_to_normal_when_recovery_is_corrupt() {
         "corrupt recovery should be moved out of the recovery path"
     );
     assert!(
-        crate::session::append_path_suffix(&recovery_path, ".corrupt-1").exists(),
+        session::append_path_suffix(&recovery_path, ".corrupt-1").exists(),
         "corrupt recovery should be backed up for inspection"
     );
 }
@@ -1511,7 +1502,7 @@ fn load_snapshot_falls_back_to_normal_when_recovery_is_empty() {
         tool_state: None,
     };
     let recovery_path = options.recovery_file_path();
-    std::fs::write(
+    fs::write(
         &recovery_path,
         serde_json::to_vec_pretty(&empty_file).expect("empty recovery json"),
     )
@@ -1542,7 +1533,7 @@ fn load_snapshot_rejects_oversized_plain_recovery_before_falling_back() {
     save_snapshot(&snapshot, &options).expect("normal session should save");
 
     let recovery_path = options.recovery_file_path();
-    std::fs::write(
+    fs::write(
         &recovery_path,
         vec![b' '; usize::try_from(MAX_EXPANDED_SIZE + 1).expect("test size fits")],
     )
@@ -1571,7 +1562,7 @@ fn load_snapshot_restores_newer_contentful_backup_when_primary_has_no_board_data
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "blank-primary");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::copy(options.session_file_path(), options.backup_file_path())
+    fs::copy(options.session_file_path(), options.backup_file_path())
         .expect("backup should be seeded");
 
     write_contentless_session(&options.session_file_path());
@@ -1596,7 +1587,7 @@ fn load_snapshot_ignores_older_contentful_backup_when_primary_has_no_board_data(
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "stale-backup");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::copy(options.session_file_path(), options.backup_file_path())
+    fs::copy(options.session_file_path(), options.backup_file_path())
         .expect("backup should be seeded");
     write_contentless_session(&options.session_file_path());
     set_modified(&options.backup_file_path(), older);
@@ -1622,7 +1613,7 @@ fn load_snapshot_restores_contentful_backup_when_primary_is_missing() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "backup-only");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
@@ -1641,9 +1632,9 @@ fn save_contentless_snapshot_preserves_backup_when_primary_is_missing() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "backup-preserved");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
-    let backup_before = std::fs::read(options.backup_file_path()).expect("backup bytes");
+    let backup_before = fs::read(options.backup_file_path()).expect("backup bytes");
 
     let contentless = SessionSnapshot {
         active_board_id: "transparent".to_string(),
@@ -1657,7 +1648,7 @@ fn save_contentless_snapshot_preserves_backup_when_primary_is_missing() {
         "contentless primary should be saved"
     );
     assert_eq!(
-        std::fs::read(options.backup_file_path()).expect("backup should remain"),
+        fs::read(options.backup_file_path()).expect("backup should remain"),
         backup_before,
         "contentless save must not delete the only backup when primary was missing"
     );
@@ -1681,9 +1672,9 @@ fn save_contentless_snapshot_preserves_recovery_when_primary_is_missing() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "recovery-preserved");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+    fs::rename(options.session_file_path(), options.recovery_file_path())
         .expect("primary should be moved to recovery");
-    let recovery_before = std::fs::read(options.recovery_file_path()).expect("recovery bytes");
+    let recovery_before = fs::read(options.recovery_file_path()).expect("recovery bytes");
 
     let contentless = SessionSnapshot {
         active_board_id: "transparent".to_string(),
@@ -1697,7 +1688,7 @@ fn save_contentless_snapshot_preserves_recovery_when_primary_is_missing() {
         "contentless primary should be saved"
     );
     assert_eq!(
-        std::fs::read(options.recovery_file_path()).expect("recovery should remain"),
+        fs::read(options.recovery_file_path()).expect("recovery should remain"),
         recovery_before,
         "contentless save must not delete the only recovery artifact when primary was missing"
     );
@@ -1714,8 +1705,7 @@ fn save_contentless_snapshot_preserves_recovery_when_primary_is_missing() {
 
     save_snapshot(&contentless, &options).expect("second contentless session should save");
     assert_eq!(
-        std::fs::read(options.recovery_file_path())
-            .expect("recovery should remain after second save"),
+        fs::read(options.recovery_file_path()).expect("recovery should remain after second save"),
         recovery_before,
         "a later non-clear contentless save must not remove the recoverable recovery artifact"
     );
@@ -1730,9 +1720,9 @@ fn clear_empty_snapshot_removes_backup_when_primary_is_missing() {
     options.persist_transparent = true;
     options.restore_tool_state = false;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
-    std::fs::write(options.backup_recovery_marker_file_path(), b"recoverable")
+    fs::write(options.backup_recovery_marker_file_path(), b"recoverable")
         .expect("backup recovery marker");
 
     let cleared = SessionSnapshot {
@@ -1770,7 +1760,7 @@ fn clear_empty_snapshot_removes_recovery_when_primary_is_missing() {
     options.persist_transparent = true;
     options.restore_tool_state = false;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+    fs::rename(options.session_file_path(), options.recovery_file_path())
         .expect("primary should be moved to recovery");
 
     let cleared = SessionSnapshot {
@@ -1805,9 +1795,9 @@ fn load_snapshot_ignores_backup_older_than_clear_marker() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-backup");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
     set_modified(&options.backup_file_path(), older);
     set_modified(&options.clear_marker_file_path(), newer);
 
@@ -1828,7 +1818,7 @@ fn load_snapshot_ignores_primary_older_than_clear_marker() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-primary");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
     set_modified(&options.session_file_path(), older);
     set_modified(&options.clear_marker_file_path(), newer);
 
@@ -1854,10 +1844,10 @@ fn load_snapshot_preserves_backup_when_suppressed_primary_is_corrupt() {
     let primary_path = options.session_file_path();
     let backup_path = options.backup_file_path();
     let clear_marker_path = options.clear_marker_file_path();
-    let backup_bytes = std::fs::read(&primary_path).expect("saved primary bytes");
-    std::fs::write(&backup_path, &backup_bytes).expect("backup write");
-    std::fs::write(&primary_path, b"{not valid json").expect("corrupt primary write");
-    std::fs::write(&clear_marker_path, b"cleared").expect("clear marker");
+    let backup_bytes = fs::read(&primary_path).expect("saved primary bytes");
+    fs::write(&backup_path, &backup_bytes).expect("backup write");
+    fs::write(&primary_path, b"{not valid json").expect("corrupt primary write");
+    fs::write(&clear_marker_path, b"cleared").expect("clear marker");
     set_modified(&primary_path, primary_time);
     set_modified(&clear_marker_path, marker_time);
     set_modified(&backup_path, backup_time);
@@ -1869,7 +1859,7 @@ fn load_snapshot_preserves_backup_when_suppressed_primary_is_corrupt() {
     };
     assert_sample_snapshot(&snapshot);
     assert_eq!(
-        std::fs::read(&backup_path).expect("backup should remain readable"),
+        fs::read(&backup_path).expect("backup should remain readable"),
         backup_bytes,
         "suppressed corrupt primary probe must not overwrite the valid backup"
     );
@@ -1889,9 +1879,9 @@ fn load_snapshot_ignores_recovery_older_than_clear_marker() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-recovery");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.recovery_file_path())
+    fs::rename(options.session_file_path(), options.recovery_file_path())
         .expect("primary should be moved to recovery");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
     set_modified(&options.recovery_file_path(), older);
     set_modified(&options.clear_marker_file_path(), newer);
 
@@ -1912,9 +1902,9 @@ fn load_snapshot_restores_backup_newer_than_clear_marker() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "marker-newer-backup");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
     set_modified(&options.clear_marker_file_path(), older);
     set_modified(&options.backup_file_path(), newer);
 
@@ -1937,7 +1927,7 @@ fn save_contentless_tool_state_snapshot_marks_clear_boundary_before_backup_rotat
     options.persist_transparent = true;
     options.restore_tool_state = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    let stale_backup_bytes = std::fs::read(options.session_file_path()).expect("primary bytes");
+    let stale_backup_bytes = fs::read(options.session_file_path()).expect("primary bytes");
 
     let contentless = SessionSnapshot {
         active_board_id: "transparent".to_string(),
@@ -1965,8 +1955,8 @@ fn save_contentless_tool_state_snapshot_marks_clear_boundary_before_backup_rotat
         "clear marker must not suppress the freshly saved tool state"
     );
 
-    std::fs::remove_file(options.session_file_path()).expect("remove primary to simulate crash");
-    std::fs::write(options.backup_file_path(), stale_backup_bytes).expect("stale backup write");
+    fs::remove_file(options.session_file_path()).expect("remove primary to simulate crash");
+    fs::write(options.backup_file_path(), stale_backup_bytes).expect("stale backup write");
     set_modified(&options.backup_file_path(), older);
     set_modified(&options.clear_marker_file_path(), newer);
 
@@ -1987,9 +1977,9 @@ fn contentful_save_after_clear_marker_removes_stale_backup_before_marker() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "contentful-after-clear");
     options.persist_transparent = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    std::fs::rename(options.session_file_path(), options.backup_file_path())
+    fs::rename(options.session_file_path(), options.backup_file_path())
         .expect("primary should be moved to backup");
-    std::fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
+    fs::write(options.clear_marker_file_path(), b"cleared").expect("clear marker");
     set_modified(&options.backup_file_path(), older);
     set_modified(&options.clear_marker_file_path(), newer);
 
@@ -2018,7 +2008,7 @@ fn contentless_save_without_loaded_board_data_preserves_rotated_backup() {
     options.persist_transparent = true;
     options.restore_tool_state = true;
     save_snapshot(&snapshot, &options).expect("normal session should save");
-    let primary_before = std::fs::read(options.session_file_path()).expect("primary bytes");
+    let primary_before = fs::read(options.session_file_path()).expect("primary bytes");
 
     let contentless = SessionSnapshot {
         active_board_id: "transparent".to_string(),
@@ -2033,7 +2023,7 @@ fn contentless_save_without_loaded_board_data_preserves_rotated_backup() {
         "contentless primary should be saved"
     );
     assert_eq!(
-        std::fs::read(options.backup_file_path()).expect("backup should remain"),
+        fs::read(options.backup_file_path()).expect("backup should remain"),
         primary_before,
         "contentless save without loaded board data must preserve the rotated recoverable primary"
     );
@@ -2056,7 +2046,7 @@ fn contentless_save_without_loaded_board_data_preserves_rotated_backup() {
     save_snapshot_with_report_and_clear_boundary(&contentless, &options, false)
         .expect("second dirty tool-state-only session should save");
     assert_eq!(
-        std::fs::read(options.backup_file_path()).expect("backup should remain after second save"),
+        fs::read(options.backup_file_path()).expect("backup should remain after second save"),
         primary_before,
         "a later non-clear contentless save must not replace the recoverable backup with a blank primary"
     );
@@ -2072,7 +2062,7 @@ fn contentless_save_twice_without_loaded_board_data_preserves_preserved_recovery
     let preserved_recovery = options
         .recovery_file_path()
         .with_extension("recovery.empty");
-    std::fs::write(&preserved_recovery, b"unloadable recovery").expect("preserved recovery write");
+    fs::write(&preserved_recovery, b"unloadable recovery").expect("preserved recovery write");
 
     let contentless = SessionSnapshot {
         active_board_id: "transparent".to_string(),
@@ -2181,7 +2171,7 @@ fn load_snapshot_inner_skips_newer_versions() {
         tool_state: None,
     };
     let bytes = serde_json::to_vec_pretty(&file).unwrap();
-    std::fs::write(&session_path, bytes).unwrap();
+    fs::write(&session_path, bytes).unwrap();
 
     let options = SessionOptions::new(temp.path().to_path_buf(), "skip");
     let loaded =
@@ -2205,7 +2195,7 @@ fn newer_version_session_survives_downgrade_saves() {
     let mut file = sample_session_file();
     file.version = CURRENT_VERSION + 1;
     let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
-    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    fs::write(&session_path, &newer_bytes).expect("write newer session");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("newer-version session load is handled");
@@ -2214,12 +2204,12 @@ fn newer_version_session_survives_downgrade_saves() {
     let copies = preserved_copies_in(temp.path());
     assert_eq!(copies.len(), 1, "one preserved copy after first load");
     assert_eq!(
-        std::fs::read(&copies[0]).expect("preserved copy exists"),
+        fs::read(&copies[0]).expect("preserved copy exists"),
         newer_bytes,
         "runtime load must preserve the exact loaded bytes"
     );
     assert_eq!(
-        std::fs::metadata(&copies[0])
+        fs::metadata(&copies[0])
             .expect("preserved copy metadata")
             .permissions()
             .mode()
@@ -2232,7 +2222,7 @@ fn newer_version_session_survives_downgrade_saves() {
     save_snapshot(&sample_snapshot(), &options).expect("second post-downgrade save");
 
     assert_eq!(
-        std::fs::read(&copies[0]).expect("preserved copy survives rotation"),
+        fs::read(&copies[0]).expect("preserved copy survives rotation"),
         newer_bytes,
         "save rotation must not touch the preserved newer-version copy"
     );
@@ -2244,7 +2234,7 @@ fn newer_version_session_survives_downgrade_saves() {
     changed.version = CURRENT_VERSION + 1;
     changed.active_board_id = Some("whiteboard".to_string());
     let changed_bytes = serde_json::to_vec_pretty(&changed).expect("changed newer session json");
-    std::fs::write(&session_path, &changed_bytes).expect("write changed newer session");
+    fs::write(&session_path, &changed_bytes).expect("write changed newer session");
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("repeated newer-version load is handled");
     assert!(matches!(outcome, LoadSnapshotOutcome::Empty));
@@ -2252,7 +2242,7 @@ fn newer_version_session_survives_downgrade_saves() {
     assert_eq!(copies.len(), 2, "each distinct newer session is preserved");
     let mut contents: Vec<Vec<u8>> = copies
         .iter()
-        .map(|path| std::fs::read(path).expect("read preserved copy"))
+        .map(|path| fs::read(path).expect("read preserved copy"))
         .collect();
     contents.sort();
     let mut expected = vec![newer_bytes, changed_bytes];
@@ -2272,7 +2262,7 @@ fn compressed_newer_version_session_is_preserved_byte_for_byte() {
     let json = serde_json::to_vec_pretty(&file).expect("newer session json");
     let encoded = compress_bytes(&json).expect("compress newer session");
     assert!(is_gzip(&encoded));
-    std::fs::write(&session_path, &encoded).expect("write compressed newer session");
+    fs::write(&session_path, &encoded).expect("write compressed newer session");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("compressed newer-version session load is handled");
@@ -2281,7 +2271,7 @@ fn compressed_newer_version_session_is_preserved_byte_for_byte() {
     let copies = preserved_copies_in(temp.path());
     assert_eq!(copies.len(), 1);
     assert_eq!(
-        std::fs::read(&copies[0]).expect("read preserved compressed session"),
+        fs::read(&copies[0]).expect("read preserved compressed session"),
         encoded,
         "preservation must retain the original encoded bytes"
     );
@@ -2297,11 +2287,11 @@ fn exhausted_copy_names_move_newer_primary_without_replacing_anything() {
     file.version = CURRENT_VERSION + 1;
     let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
 
-    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    fs::write(&session_path, &newer_bytes).expect("write newer session");
     load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("establish base copy");
     let base = preserved_copies_in(temp.path()).remove(0);
     occupy_copy_preservation_candidates(&base);
-    std::fs::write(&session_path, &newer_bytes).expect("restore newer primary");
+    fs::write(&session_path, &newer_bytes).expect("restore newer primary");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("free moved candidate should preserve the primary");
@@ -2310,9 +2300,9 @@ fn exhausted_copy_names_move_newer_primary_without_replacing_anything() {
         !session_path.exists(),
         "fallback must move the exposed primary"
     );
-    let moved = std::path::PathBuf::from(format!("{}-moved", base.display()));
+    let moved = PathBuf::from(format!("{}-moved", base.display()));
     assert_eq!(
-        std::fs::read(moved).expect("read moved preservation"),
+        fs::read(moved).expect("read moved preservation"),
         newer_bytes
     );
 }
@@ -2327,18 +2317,18 @@ fn preservation_exhaustion_fails_closed_without_backing_up_or_replacing_files() 
     file.version = CURRENT_VERSION + 1;
     let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
 
-    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    fs::write(&session_path, &newer_bytes).expect("write newer session");
     load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("establish base copy");
     let base = preserved_copies_in(temp.path()).remove(0);
     occupy_copy_preservation_candidates(&base);
     let moved_candidates = occupy_move_preservation_candidates(&base);
-    std::fs::write(&session_path, &newer_bytes).expect("restore newer primary");
+    fs::write(&session_path, &newer_bytes).expect("restore newer primary");
 
     let err = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect_err("no durable preservation target must abort the load");
     assert!(format!("{err:#}").contains("could not durably preserve"));
     assert_eq!(
-        std::fs::read(&session_path).expect("primary remains untouched"),
+        fs::read(&session_path).expect("primary remains untouched"),
         newer_bytes
     );
     assert!(
@@ -2347,7 +2337,7 @@ fn preservation_exhaustion_fails_closed_without_backing_up_or_replacing_files() 
     );
     for path in moved_candidates {
         assert_eq!(
-            std::fs::read(path).expect("existing moved candidate remains"),
+            fs::read(path).expect("existing moved candidate remains"),
             b"previous preservation"
         );
     }
@@ -2366,21 +2356,21 @@ fn a_mismatched_preserved_file_is_stepped_over_not_trusted() {
     let mut file = sample_session_file();
     file.version = CURRENT_VERSION + 1;
     let newer_bytes = serde_json::to_vec_pretty(&file).expect("newer session json");
-    std::fs::write(&session_path, &newer_bytes).expect("write newer session");
+    fs::write(&session_path, &newer_bytes).expect("write newer session");
 
     // First load establishes the content-addressed name, which is then
     // clobbered with content that is not the session.
     load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("first load");
     let copies = preserved_copies_in(temp.path());
     assert_eq!(copies.len(), 1);
-    std::fs::write(&copies[0], b"not the session").expect("clobber preserved copy");
+    fs::write(&copies[0], b"not the session").expect("clobber preserved copy");
 
     // Re-write the primary (the first load left it in place) and load again.
-    std::fs::write(&session_path, &newer_bytes).expect("rewrite newer session");
+    fs::write(&session_path, &newer_bytes).expect("rewrite newer session");
     load_snapshot_with_expanded_limit(&options, 64 * 1024).expect("second load");
 
     assert_eq!(
-        std::fs::read(&copies[0]).expect("clobbered file remains"),
+        fs::read(&copies[0]).expect("clobbered file remains"),
         b"not the session",
         "a non-matching file at the preserved name must not be overwritten"
     );
@@ -2388,7 +2378,7 @@ fn a_mismatched_preserved_file_is_stepped_over_not_trusted() {
     assert!(
         copies
             .iter()
-            .any(|path| std::fs::read(path).is_ok_and(|bytes| bytes == newer_bytes)),
+            .any(|path| fs::read(path).is_ok_and(|bytes| bytes == newer_bytes)),
         "the real bytes must be preserved under some name"
     );
 }
@@ -2409,7 +2399,7 @@ fn forward_incompatible_newer_session_is_preserved_not_treated_as_corrupt() {
         CURRENT_VERSION + 1
     )
     .into_bytes();
-    std::fs::write(&session_path, &newer_bytes).expect("write incompatible newer session");
+    fs::write(&session_path, &newer_bytes).expect("write incompatible newer session");
 
     let outcome = load_snapshot_with_expanded_limit(&options, 64 * 1024)
         .expect("incompatible newer-version load is handled");
@@ -2422,7 +2412,7 @@ fn forward_incompatible_newer_session_is_preserved_not_treated_as_corrupt() {
     let copies = preserved_copies_in(temp.path());
     assert_eq!(copies.len(), 1, "the incompatible session is preserved");
     assert_eq!(
-        std::fs::read(&copies[0]).expect("preserved copy exists"),
+        fs::read(&copies[0]).expect("preserved copy exists"),
         newer_bytes
     );
 }
@@ -2601,7 +2591,7 @@ fn save_snapshot_serializes_compound_undo_history() {
 
     save_snapshot(&snapshot, &options).expect("save_snapshot should serialize compound history");
 
-    let raw = std::fs::read_to_string(options.session_file_path()).expect("read session json");
+    let raw = fs::read_to_string(options.session_file_path()).expect("read session json");
     assert!(raw.contains("\"kind\": \"compound\""));
     assert!(raw.contains("\"actions\""));
 
@@ -2612,7 +2602,7 @@ fn save_snapshot_serializes_compound_undo_history() {
     assert_eq!(page.undo_stack_len(), 1);
 }
 
-fn snapshot_for_shape(frame: &Frame, shape_id: crate::draw::ShapeId) -> ShapeSnapshot {
+fn snapshot_for_shape(frame: &Frame, shape_id: ShapeId) -> ShapeSnapshot {
     let drawn = frame.shape(shape_id).expect("shape exists");
     ShapeSnapshot {
         shape: drawn.shape.clone(),
@@ -2620,7 +2610,7 @@ fn snapshot_for_shape(frame: &Frame, shape_id: crate::draw::ShapeId) -> ShapeSna
     }
 }
 
-fn translate_line(frame: &mut Frame, shape_id: crate::draw::ShapeId, dx: i32, dy: i32) {
+fn translate_line(frame: &mut Frame, shape_id: ShapeId, dx: i32, dy: i32) {
     let shape = frame.shape_mut(shape_id).expect("shape exists");
     if let Shape::Line { x1, y1, x2, y2, .. } = &mut shape.shape {
         *x1 += dx;
@@ -2670,7 +2660,7 @@ fn load_snapshot_inner_migrates_legacy_frame_to_pages() {
         tool_state: None,
     };
     let bytes = serde_json::to_vec_pretty(&file).unwrap();
-    std::fs::write(&session_path, bytes).unwrap();
+    fs::write(&session_path, bytes).unwrap();
 
     let options = SessionOptions::new(temp.path().to_path_buf(), "legacy");
     let loaded = load_snapshot_inner(&session_path, &options)
@@ -2716,7 +2706,7 @@ fn load_snapshot_inner_falls_back_when_active_board_is_missing() {
         tool_state: None,
     };
     let bytes = serde_json::to_vec_pretty(&file).unwrap();
-    std::fs::write(&session_path, bytes).unwrap();
+    fs::write(&session_path, bytes).unwrap();
 
     let options = SessionOptions::new(temp.path().to_path_buf(), "missing-active-board");
     let loaded = load_snapshot_inner(&session_path, &options)
@@ -2750,7 +2740,7 @@ fn load_snapshot_inner_normalizes_empty_legacy_page_lists() {
         tool_state: None,
     };
     let bytes = serde_json::to_vec_pretty(&file).unwrap();
-    std::fs::write(&session_path, bytes).unwrap();
+    fs::write(&session_path, bytes).unwrap();
 
     let options = SessionOptions::new(temp.path().to_path_buf(), "empty-legacy-pages");
     let loaded = load_snapshot_inner(&session_path, &options)
@@ -2782,15 +2772,12 @@ fn session_artifacts_are_private_to_their_owner() {
     // Simulate a primary written by a release that still used the default
     // 0644 mode. A second save rotates it into the backup slot, which must
     // tighten the legacy permissions rather than preserve them.
-    std::fs::set_permissions(
-        options.session_file_path(),
-        std::fs::Permissions::from_mode(0o644),
-    )
-    .expect("make legacy primary public");
+    fs::set_permissions(options.session_file_path(), Permissions::from_mode(0o644))
+        .expect("make legacy primary public");
     save_snapshot(&sample_snapshot(), &options).expect("second save");
 
     for path in [options.session_file_path(), options.backup_file_path()] {
-        let mode = std::fs::metadata(&path)
+        let mode = fs::metadata(&path)
             .unwrap_or_else(|err| panic!("stat {}: {err}", path.display()))
             .permissions()
             .mode()
@@ -2817,7 +2804,7 @@ fn a_failed_save_leaves_no_temporary_file_behind() {
 
     let _ = save_snapshot(&sample_snapshot(), &options);
 
-    let strays: Vec<_> = std::fs::read_dir(temp.path())
+    let strays: Vec<_> = fs::read_dir(temp.path())
         .expect("scan session dir")
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
@@ -2858,12 +2845,7 @@ fn maximum_admitted_image_and_create_history_fit_actual_default_session_budget()
         bytes.push(random_byte());
     }
     assert!(limits.allows_bytes(bytes.len()));
-    crate::image_decode::decode_rgba(
-        crate::image_decode::EncodedImageFormat::Png,
-        &bytes,
-        limits.into(),
-    )
-    .unwrap();
+    image_decode::decode_rgba(EncodedImageFormat::Png, &bytes, limits.into()).unwrap();
 
     let mut snapshot = sample_snapshot();
     let mut frame = Frame::new();
@@ -2887,8 +2869,8 @@ fn maximum_admitted_image_and_create_history_fit_actual_default_session_budget()
     );
     snapshot.boards[0].pages.pages[0] = frame;
     let temp = tempdir().unwrap();
-    let options = crate::session::options::options_from_config_for_named_file(
-        &crate::config::SessionConfig::default(),
+    let options = options::options_from_config_for_named_file(
+        &SessionConfig::default(),
         temp.path().join("maximum-image.wayscriber-session"),
         Some("test"),
     );
@@ -2932,14 +2914,14 @@ fn offline_tool_clear_reports_corruption_instead_of_silently_rewriting_restored_
         }
         let snapshot = sample_snapshot();
         save_snapshot(&snapshot, &options).unwrap();
-        std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
-        let backup = std::fs::read(options.backup_file_path()).unwrap();
-        std::fs::write(options.session_file_path(), b"unreadable primary").unwrap();
-        let error = crate::session::clear_tool_state(&options).unwrap_err();
+        fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+        let backup = fs::read(options.backup_file_path()).unwrap();
+        fs::write(options.session_file_path(), b"unreadable primary").unwrap();
+        let error = session::clear_tool_state(&options).unwrap_err();
         assert!(format!("{error:#}").contains("diagnostic bytes were preserved"));
-        assert_eq!(std::fs::read(options.backup_file_path()).unwrap(), backup);
+        assert_eq!(fs::read(options.backup_file_path()).unwrap(), backup);
         assert_eq!(
-            std::fs::read(crate::session::append_path_suffix(
+            fs::read(session::append_path_suffix(
                 &options.session_file_path(),
                 ".corrupt-1"
             ))
@@ -2948,7 +2930,7 @@ fn offline_tool_clear_reports_corruption_instead_of_silently_rewriting_restored_
         );
         if named {
             assert_eq!(
-                std::fs::read(options.session_file_path()).unwrap(),
+                fs::read(options.session_file_path()).unwrap(),
                 b"unreadable primary"
             );
         } else {
@@ -2968,7 +2950,7 @@ fn format_eight_preserves_fractional_ink_and_loads_legacy_integer_history() {
     let frame = &mut snapshot.boards[0].pages.pages[0];
     let shape = Shape::Freehand {
         points: vec![(300.25, 300.5), (301.75, 301.125)],
-        color: crate::draw::color::BLACK,
+        color: color::BLACK,
         thick: 2.0,
     };
     let id = frame.add_shape(shape.clone());
@@ -2980,7 +2962,7 @@ fn format_eight_preserves_fractional_ink_and_loads_legacy_integer_history() {
         100,
     );
     save_snapshot(&snapshot, &options).unwrap();
-    let encoded = std::fs::read(options.session_file_path()).unwrap();
+    let encoded = fs::read(options.session_file_path()).unwrap();
     let mut value: serde_json::Value = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(value["version"], 8);
     let loaded = load_snapshot_inner(&options.session_file_path(), &options)
@@ -3021,13 +3003,13 @@ fn format_eight_preserves_fractional_ink_and_loads_legacy_integer_history() {
     value["version"] = serde_json::json!(7);
     integer_coordinates(&mut value);
     let legacy = serde_json::to_vec(&value).unwrap();
-    std::fs::write(options.session_file_path(), &legacy).unwrap();
+    fs::write(options.session_file_path(), &legacy).unwrap();
     let loaded = load_snapshot_inner(&options.session_file_path(), &options)
         .unwrap()
         .unwrap();
     assert_eq!(loaded.version, 7);
     assert_eq!(
-        std::fs::read(options.session_file_path()).unwrap(),
+        fs::read(options.session_file_path()).unwrap(),
         legacy,
         "loading does not migrate on disk"
     );
@@ -3040,6 +3022,6 @@ fn format_eight_preserves_fractional_ink_and_loads_legacy_integer_history() {
     assert!(restored.redo_last().is_some());
     save_snapshot(&loaded.snapshot, &options).unwrap();
     let value: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(options.session_file_path()).unwrap()).unwrap();
+        serde_json::from_slice(&fs::read(options.session_file_path()).unwrap()).unwrap();
     assert_eq!(value["version"], 8);
 }

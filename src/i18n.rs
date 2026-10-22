@@ -17,13 +17,19 @@
 //! notes, board names — is user data and is never translated.
 
 use std::collections::BTreeMap;
-use std::fmt::{Display, Write};
+use std::fmt::{Display, Formatter, Write};
+use std::fs::OpenOptions;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::{env, fmt, io};
 
 use crate::domain::Language;
+#[cfg(not(test))]
+use crate::env_vars;
 use crate::env_vars::{LANGUAGE_OVERRIDE_ENV, LOCALE_DIR_ENV};
+use crate::paths;
 
 /// Translation catalogs shipped in the binary. Adding one means adding a
 /// `locales/<code>.toml`, a `Language` variant, and an entry here.
@@ -78,6 +84,7 @@ pub enum LanguageSource {
 
 /// The language the deciding setting asks for, possibly [`Language::Auto`],
 /// and which setting that is, given the configured language.
+#[must_use]
 pub fn requested_language(configured: Language) -> (Language, LanguageSource) {
     select(
         configured,
@@ -140,6 +147,7 @@ pub(crate) fn restore_language(language: Language) {
 /// Explicit languages resolve to themselves (English is the fallback, so
 /// asking for it is always satisfiable). `Auto` follows
 /// [`detect_from_env`], and a locale without a catalog falls back to English.
+#[must_use]
 pub fn resolve(language: Language) -> Language {
     if !language.is_auto() {
         return language;
@@ -153,6 +161,7 @@ pub fn resolve(language: Language) -> Language {
 /// `LANGUAGE` is a colon-separated priority list (`zh_CN:en`), so its first
 /// translated entry wins. Locales without a catalog leave the slot empty and
 /// the search continues; English is the final fallback.
+#[must_use]
 pub fn detect_from_env() -> Language {
     // The test suite asserts source-language strings, so the locale of whoever
     // runs it must not leak in: a Chinese desktop would otherwise translate the
@@ -166,7 +175,7 @@ pub fn detect_from_env() -> Language {
 
     #[cfg(not(test))]
     {
-        for name in crate::env_vars::LOCALE_ENV_KEYS {
+        for name in env_vars::LOCALE_ENV_KEYS {
             let Some(value) = env_var(name) else {
                 continue;
             };
@@ -191,6 +200,7 @@ pub fn language_from_locale_chain(value: &str) -> Option<Language> {
 /// caller's cue to keep looking or fall back to English. `zh_TW`/`zh_HK` are
 /// Traditional Chinese and stay untranslated until they have their own
 /// catalog.
+#[must_use]
 pub fn language_from_locale(locale: &str) -> Option<Language> {
     let normalized = locale
         .trim()
@@ -212,6 +222,7 @@ pub fn language_from_locale(locale: &str) -> Option<Language> {
 }
 
 /// Parses the spellings `WAYSCRIBER_LANGUAGE` and configuration accept.
+#[must_use]
 pub fn language_from_code(code: &str) -> Option<Language> {
     match code.trim().to_ascii_lowercase().as_str() {
         "auto" => Some(Language::Auto),
@@ -225,6 +236,7 @@ pub fn language_from_code(code: &str) -> Option<Language> {
 ///
 /// The argument must be a literal so that the guard test can find every
 /// translatable string in the sources. Unknown strings pass through.
+#[must_use]
 pub fn tr(source: &'static str) -> &'static str {
     lookup(language(), source)
 }
@@ -397,11 +409,11 @@ enum OverrideRejection {
     NotARegularFile,
     TooLarge,
     InvalidUtf8,
-    Unreadable(std::io::Error),
+    Unreadable(io::Error),
 }
 
-impl std::fmt::Display for OverrideRejection {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for OverrideRejection {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Missing => formatter.write_str("no such file"),
             Self::SymbolicLink => formatter.write_str("it is a symbolic link"),
@@ -422,12 +434,12 @@ fn read_override(path: &Path) -> Result<String, OverrideRejection> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
 
-    let file = std::fs::OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
         .map_err(|err| match err.raw_os_error() {
-            _ if err.kind() == std::io::ErrorKind::NotFound => OverrideRejection::Missing,
+            _ if err.kind() == ErrorKind::NotFound => OverrideRejection::Missing,
             Some(libc::ELOOP) => OverrideRejection::SymbolicLink,
             _ => OverrideRejection::Unreadable(err),
         })?;
@@ -452,11 +464,11 @@ fn locale_dir() -> Option<PathBuf> {
         return Some(PathBuf::from(dir));
     }
 
-    crate::paths::data_dir().map(|dir| dir.join("locales"))
+    paths::data_dir().map(|dir| dir.join("locales"))
 }
 
 fn env_var(name: &str) -> Option<String> {
-    match std::env::var(name) {
+    match env::var(name) {
         Ok(value) if !value.trim().is_empty() => Some(value),
         _ => None,
     }

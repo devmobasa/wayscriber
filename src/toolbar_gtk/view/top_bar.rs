@@ -23,7 +23,7 @@ mod meter;
 mod pen_feel;
 mod popover_owner;
 mod popovers;
-use popover_owner::{PopoverOwner, PopoverResources};
+use popover_owner::PopoverOwner;
 mod stepper;
 mod strip;
 mod style_pill;
@@ -31,25 +31,36 @@ mod style_pill;
 mod tests;
 
 use std::cell::{Cell, RefCell};
+use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk4::prelude::*;
+use gtk4::prelude::{GtkWindowExt, *};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::backend::wayland::{plan_top_strip, top_toolbar_size};
-use crate::config::{Action, ToolbarLayoutMode, action_short_label};
+#[cfg(test)]
+use crate::config::Action;
+use crate::config::{
+    QuickColorPalette, ResolvedToolbarItems, ToolbarLayoutMode, ToolbarStrokeControls,
+};
+use crate::draw::ArrowStyle;
 use crate::input::Tool;
+use crate::toolbar_gtk;
 use crate::toolbar_icons::top_toolbar_icon_painter;
-use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use crate::ui::theme::toolbar;
+#[cfg(test)]
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::{
+    PresetSlotSnapshot, RuntimeUiPersistenceSnapshot, SessionRecentSnapshot, ToolbarBindingHints,
+    ToolbarItemCustomizeGroup, ToolbarSnapshot, model,
+};
+use crate::ui_text::UiTextEngine;
 use model::TopStripPlan;
 
-use super::super::icons::IconWidget;
 use super::super::widgets::{
-    FeedbackSender, SliderRow, SwatchButton, add_button_shortcut_hint, icon_button,
-    install_click_modifier_capture, install_key_relay, install_quick_color_recolor,
-    install_shortcut_focus_policy, send_event, set_active_class, sized_button, text_button,
+    FeedbackSender, icon_button, install_key_relay, install_shortcut_focus_policy, text_button,
 };
-use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
+use super::super::{GtkToolbarFeedback, GtkToolbarKind};
 
 // Spec-unit design tokens mirrored from the built-in layout
 // (`layout/spec/top.rs`); the plan/natural-width math reuses the builtin
@@ -105,11 +116,11 @@ const STYLE_PEN_FEEL_W: f64 = 92.0;
 const STYLE_TAB_H: f64 = 22.0;
 /// Extra clear gap before a segmented control in the pill (M7-C3), on top of
 /// the standard control gap, sharing `theme::toolbar::SEGMENT_LEADING_GAP`.
-const STYLE_SEGMENT_LEAD: f64 = crate::ui::theme::toolbar::SEGMENT_LEADING_GAP;
+const STYLE_SEGMENT_LEAD: f64 = toolbar::SEGMENT_LEADING_GAP;
 const BASE_MARGIN: (i32, i32) = (12, 12);
 const END_MARGIN: (f64, f64) = (12.0, 0.0);
 
-use super::{CaptureProofTarget, CaptureSurfaceContent, Updater};
+use super::{CaptureProofTarget, CaptureSurfaceContent, ToolbarSurfaceState, Updater};
 
 fn control_face_button(
     control: model::TopToolbarControl,
@@ -159,7 +170,7 @@ type OverflowContentKey = (Tool, Option<Tool>, bool, bool, bool, bool, bool, boo
 /// harmless there.
 #[derive(PartialEq)]
 struct CanvasMenuContentKey {
-    items: crate::config::ResolvedToolbarItems,
+    items: ResolvedToolbarItems,
     use_icons: bool,
     show_actions_section: bool,
     show_boards_section: bool,
@@ -218,13 +229,13 @@ impl CanvasMenuContentKey {
 /// text modes.
 #[derive(PartialEq)]
 struct SessionMenuContentKey {
-    items: crate::config::ResolvedToolbarItems,
+    items: ResolvedToolbarItems,
     active_session_name: Option<String>,
-    active_session_path: Option<std::path::PathBuf>,
-    recent_sessions: Vec<crate::ui::toolbar::SessionRecentSnapshot>,
+    active_session_path: Option<PathBuf>,
+    recent_sessions: Vec<SessionRecentSnapshot>,
     home_session_name: Option<String>,
     at_home_session: bool,
-    pending_save_as_overwrite_path: Option<std::path::PathBuf>,
+    pending_save_as_overwrite_path: Option<PathBuf>,
     use_icons: bool,
 }
 
@@ -252,19 +263,19 @@ struct SettingsMenuContentKey {
     /// Settings action buttons render differently in icon and text mode.
     use_icons: bool,
     customize_items_open: bool,
-    customize_items_group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+    customize_items_group: Option<ToolbarItemCustomizeGroup>,
     /// The resolved item store is structural for every Settings pane: the
     /// main page filters its toggle grid and offers "Restore built-in
     /// visibility" from it, and the customization rows bake visibility,
     /// ordering, and button enabled state into their widgets. Restoring
     /// visibility keeps the popover open, so the controls it revives can
     /// only appear through a keyed rebuild.
-    items: crate::config::ResolvedToolbarItems,
+    items: ResolvedToolbarItems,
     status_bar_contents_open: bool,
     /// The "Details" disclosure adds and removes notice rows.
     settings_details_open: bool,
     layout_mode: ToolbarLayoutMode,
-    runtime_ui_persistence: Option<crate::ui::toolbar::RuntimeUiPersistenceSnapshot>,
+    runtime_ui_persistence: Option<RuntimeUiPersistenceSnapshot>,
 }
 
 impl SettingsMenuContentKey {
@@ -285,12 +296,12 @@ impl SettingsMenuContentKey {
 /// Canvas/Session/Settings popover content width and internal-scroll cap, in spec
 /// units — the same theme tokens the builtin `view/top/menus.rs` popovers
 /// build from, so the frontends cannot drift.
-const MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::MENU_CONTENT_W;
+const MENU_CONTENT_W: f64 = toolbar::MENU_CONTENT_W;
 /// The Canvas popover content column, shared with the builtin canvas nodes via
 /// the theme token. It is wider than [`MENU_CONTENT_W`] so the five-action rows
 /// and Step Undo/Redo controls have breathing room.
-const CANVAS_MENU_CONTENT_W: f64 = crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W;
-const MENU_MAX_CONTENT_H: f64 = crate::ui::theme::toolbar::MENU_MAX_CONTENT_H;
+const CANVAS_MENU_CONTENT_W: f64 = toolbar::CANVAS_MENU_CONTENT_W;
+const MENU_MAX_CONTENT_H: f64 = toolbar::MENU_MAX_CONTENT_H;
 
 /// Inputs that force a rebuild of the bar's widget structure.
 #[derive(PartialEq)]
@@ -303,8 +314,8 @@ struct StructureKey {
     /// Exact renderer-neutral top structure. Using the full resolved item store
     /// here made popover-only section changes tear down this bar and its popovers.
     top_spec: model::TopToolbarSpec,
-    quick_colors: crate::config::QuickColorPalette,
-    binding_hints: crate::ui::toolbar::ToolbarBindingHints,
+    quick_colors: QuickColorPalette,
+    binding_hints: ToolbarBindingHints,
     plan: TopStripPlan,
     ring_row: bool,
     /// Ordered style-pill control ids: captures the pill's morph state
@@ -313,13 +324,13 @@ struct StructureKey {
     style_pill: Vec<String>,
     /// The smoothing meter and stepper share their control id, so the
     /// stroke-controls style is keyed on its own.
-    stroke_controls: crate::config::ToolbarStrokeControls,
+    stroke_controls: ToolbarStrokeControls,
     /// Presets-island structure: the display toggle, slot count, and the
     /// saved slots. A change here (toggled visibility, a saved/cleared slot)
     /// rebuilds the island; the applied-slot highlight rides an updater.
     show_presets: bool,
     preset_slot_count: usize,
-    presets: Vec<Option<crate::ui::toolbar::PresetSlotSnapshot>>,
+    presets: Vec<Option<PresetSlotSnapshot>>,
 }
 
 impl StructureKey {
@@ -356,7 +367,7 @@ fn effective_scale(snapshot: &ToolbarSnapshot) -> f64 {
     }
 }
 
-fn top_default_width(engine: &crate::ui_text::UiTextEngine, snapshot: &ToolbarSnapshot) -> i32 {
+fn top_default_width(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> i32 {
     top_toolbar_size(engine, snapshot).0.min(i32::MAX as u32) as i32
 }
 
@@ -397,7 +408,7 @@ fn set_island_widget_id(_widget: &impl IsA<gtk4::Widget>, _island: model::TopToo
 }
 
 pub(in crate::toolbar_gtk) struct TopBar {
-    ui_text: crate::ui_text::UiTextEngine,
+    ui_text: UiTextEngine,
     pub(in crate::toolbar_gtk) window: gtk4::Window,
     feedback: FeedbackSender,
     root: gtk4::Box,
@@ -414,7 +425,7 @@ pub(in crate::toolbar_gtk) struct TopBar {
     /// The style pill's Pen feel panel, keyed on the sections it shows.
     feel: PopoverOwner<Vec<model::StrokeSetting>>,
     /// The style pill's arrow style menu, keyed on the current style.
-    arrow_style: PopoverOwner<crate::draw::ArrowStyle>,
+    arrow_style: PopoverOwner<ArrowStyle>,
     drag_active: Rc<Cell<bool>>,
     drag_blocked: Rc<Cell<bool>>,
     move_drag: Option<gtk4::GestureDrag>,
@@ -474,7 +485,7 @@ impl TopBar {
         // Mapping must not give the first focusable slider keyboard ownership.
         // Tab navigation can still focus it explicitly afterwards.
         window.connect_map(|window| {
-            gtk4::prelude::GtkWindowExt::set_focus(window, gtk4::Widget::NONE);
+            GtkWindowExt::set_focus(window, gtk4::Widget::NONE);
         });
 
         // Report top-window hover to the backend: GTK runs on its own
@@ -495,7 +506,7 @@ impl TopBar {
         install_key_relay(&window, &feedback);
 
         Self {
-            ui_text: crate::ui_text::UiTextEngine::default(),
+            ui_text: UiTextEngine::default(),
             window,
             feedback,
             root,
@@ -539,18 +550,18 @@ impl TopBar {
         if entering_capture_suppression && let Some(cancel) = self.move_drag_cancel.as_ref() {
             cancel();
         }
-        let presentation = super::toolbar_surface_presentation(
-            update.top_visible,
-            update.capture_suppressed,
-            super::drag_visual_should_be_hidden(
+        let presentation = super::toolbar_surface_presentation(ToolbarSurfaceState {
+            configured_visible: update.top_visible,
+            capture_suppressed: update.capture_suppressed,
+            drag_visual_hidden: super::drag_visual_should_be_hidden(
                 update.drag_preview,
                 GtkToolbarKind::Top,
                 self.drag_active.get(),
                 self.offset_seq.get(),
                 update.top_offset_seq,
             ),
-            self.mapped_before_capture,
-        );
+            mapped_before_capture: self.mapped_before_capture,
+        });
         if !presentation.window_visible {
             // Suppress the dismissal echoes a hide-triggered popover close
             // would send, so an open picker survives a hide/show cycle
@@ -566,7 +577,7 @@ impl TopBar {
             if let Some(generation) = update.capture_suppression_generation {
                 super::log_capture_surface_state(
                     generation,
-                    super::CaptureSurfaceLog {
+                    &super::CaptureSurfaceLog {
                         name: "top",
                         configured_visible: update.top_visible,
                         mapped_before_capture: self.mapped_before_capture,
@@ -630,7 +641,7 @@ impl TopBar {
         if let Some(generation) = update.capture_suppression_generation {
             super::log_capture_surface_state(
                 generation,
-                super::CaptureSurfaceLog {
+                &super::CaptureSurfaceLog {
                     name: "top",
                     configured_visible: update.top_visible,
                     mapped_before_capture: self.mapped_before_capture,
@@ -657,7 +668,7 @@ impl TopBar {
     /// flight or the echo is older than what this bar already sent.
     fn apply_offsets(&self, offsets: (f64, f64), echo_seq: u64) {
         if self.drag_active.get() || echo_seq < self.offset_seq.get() {
-            crate::toolbar_gtk::drag_debug_log(format!(
+            toolbar_gtk::drag_debug_log(format!(
                 "top echo rejected echo_seq={echo_seq} local_seq={} active={} backend=({:.3},{:.3}) local=({:.3},{:.3})",
                 self.offset_seq.get(),
                 self.drag_active.get(),
@@ -673,7 +684,7 @@ impl TopBar {
         self.offsets.set((x, y));
         self.window.set_margin(Edge::Left, left);
         self.window.set_margin(Edge::Top, top);
-        crate::toolbar_gtk::drag_debug_log(format!(
+        toolbar_gtk::drag_debug_log(format!(
             "top echo applied echo_seq={echo_seq} backend=({:.3},{:.3}) stored=({x:.3},{y:.3}) margin=({left},{top}) size={}x{}",
             offsets.0,
             offsets.1,

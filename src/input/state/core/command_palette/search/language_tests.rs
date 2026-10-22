@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+
+use crate::config::{KeybindingsConfig, Shortcut};
+use crate::{config, test_env};
+
 use super::*;
 use crate::config::action_meta::{action_description, action_label};
 use crate::domain::Language;
@@ -5,16 +10,16 @@ use crate::input::state::test_support::make_test_input_state;
 
 #[test]
 fn cached_results_follow_the_active_language() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::cached_results_follow_the_active_language"
         ),
         || {
             let mut state = make_test_input_state();
-            state.set_action_bindings(std::collections::HashMap::new());
+            state.set_action_bindings(HashMap::new());
             state.command_palette.query = "撤销".to_string();
-            crate::i18n::set_language(Language::English);
+            i18n::set_language(Language::English);
             assert!(
                 !state
                     .filtered_commands()
@@ -22,7 +27,7 @@ fn cached_results_follow_the_active_language() {
                     .any(|entry| entry.action == Action::Undo)
             );
 
-            crate::i18n::set_language(Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             assert_eq!(
                 state.filtered_commands().first().map(|entry| entry.action),
                 Some(Action::Undo)
@@ -33,20 +38,20 @@ fn cached_results_follow_the_active_language() {
 
 #[test]
 fn chinese_palette_search_matches_labels_categories_and_mixed_terms() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::chinese_palette_search_matches_labels_categories_and_mixed_terms"
         ),
         || {
-            crate::i18n::set_language(Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             let mut state = make_test_input_state();
-            let mut bindings = crate::config::KeybindingsConfig::default()
+            let mut bindings = KeybindingsConfig::default()
                 .build_action_bindings()
                 .expect("default bindings");
             bindings.insert(
                 Action::ClearCanvas,
-                vec![crate::config::Shortcut::parse("Ctrl+Alt+ArrowLeft").expect("shortcut")],
+                vec![Shortcut::parse("Ctrl+Alt+ArrowLeft").expect("shortcut")],
             );
             state.set_action_bindings(bindings);
 
@@ -92,16 +97,16 @@ fn chinese_palette_search_matches_labels_categories_and_mixed_terms() {
 
 #[test]
 fn english_search_keeps_its_category_keys_and_optional_short_label_scores() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::english_search_keeps_its_category_keys_and_optional_short_label_scores"
         ),
         || {
-            let help = crate::config::action_meta(Action::ToggleHelp).expect("help metadata");
-            let next = crate::config::action_meta(Action::BoardNext).expect("board metadata");
+            let help = config::action_meta(Action::ToggleHelp).expect("help metadata");
+            let next = config::action_meta(Action::BoardNext).expect("board metadata");
             for language in [Language::English, Language::SimplifiedChinese] {
-                crate::i18n::set_language(language);
+                i18n::set_language(language);
                 assert!(help.short_label.is_none());
                 assert_eq!(action_meta_token_score(help, "help"), 75);
                 assert_eq!(action_meta_query_bonus(help, "help"), 150);
@@ -113,9 +118,9 @@ fn english_search_keeps_its_category_keys_and_optional_short_label_scores() {
             assert_eq!(action_meta_token_score(next, "下一步"), 100);
             assert_eq!(action_meta_query_bonus(next, "下一步"), 100);
 
-            crate::i18n::set_language(Language::English);
+            i18n::set_language(Language::English);
             let mut state = make_test_input_state();
-            state.set_action_bindings(std::collections::HashMap::new());
+            state.set_action_bindings(HashMap::new());
             for (query, excluded) in [
                 ("interface", Action::ToggleHelp),
                 ("boards", Action::BoardNext),
@@ -127,7 +132,7 @@ fn english_search_keeps_its_category_keys_and_optional_short_label_scores() {
                         .iter()
                         .any(|entry| entry.action == excluded)
                 );
-                let meta = crate::config::action_meta(excluded).expect("metadata");
+                let meta = config::action_meta(excluded).expect("metadata");
                 assert_eq!(action_meta_token_score(meta, query), 0);
                 assert_eq!(action_meta_query_bonus(meta, query), 0);
             }

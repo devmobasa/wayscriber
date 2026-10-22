@@ -169,6 +169,8 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
+
     use super::*;
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
@@ -193,7 +195,7 @@ mod tests {
                     );
                 } else {
                     state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
-                    state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), None);
+                    state.activate_eyedropper_with(&TextMeasurer::default(), None);
                 }
 
                 assert!(state.handle_capture_zoom_action(action));

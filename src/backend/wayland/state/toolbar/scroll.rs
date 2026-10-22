@@ -1,9 +1,13 @@
 use smithay_client_toolkit::seat::pointer::AxisScroll;
 use wayland_client::protocol::wl_surface;
 
-use super::*;
+use crate::ui::toolbar::model::StylePillSlider;
+
+use super::super::WaylandState;
+use super::geometry;
 use crate::backend::wayland::toolbar::layout::top_popover_scroll_bounds;
 use crate::ui::toolbar::model::StrokeSetting;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 /// Wheel step for the top-strip Canvas/Session/Settings popovers, in pre-scale
 /// spec units.
@@ -150,13 +154,11 @@ impl WaylandState {
         &self,
         surface: &wl_surface::WlSurface,
         position: (f64, f64),
-    ) -> Option<crate::ui::toolbar::model::StylePillSlider> {
+    ) -> Option<StylePillSlider> {
         self.toolbar
             .top_hit_at(surface, position)
             .or_else(|| self.inline_toolbar_hit_at(position))
-            .and_then(|(intent, _)| {
-                crate::ui::toolbar::model::StylePillSlider::for_wheel(&intent.0)
-            })
+            .and_then(|(intent, _)| StylePillSlider::for_wheel(&intent.0))
     }
 
     /// The meter setting whose bar is under the pointer, on the toolbar

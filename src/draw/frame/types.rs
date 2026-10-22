@@ -110,6 +110,7 @@ pub struct ImageBoundsSnapshot {
 }
 
 impl ImageBoundsSnapshot {
+    #[must_use]
     pub fn from_shape(shape: &Shape, locked: bool) -> Option<Self> {
         match shape {
             Shape::Image { x, y, w, h, .. } => Some(Self {
@@ -123,6 +124,7 @@ impl ImageBoundsSnapshot {
         }
     }
 
+    #[must_use]
     pub fn bounding_box(&self) -> Option<Rect> {
         let min_x = if self.w < 0 {
             self.x.saturating_add(self.w)
@@ -175,6 +177,7 @@ pub enum UndoAction {
 }
 
 impl UndoAction {
+    #[must_use]
     pub fn modify_from_snapshots(
         shape_id: ShapeId,
         before: ShapeSnapshot,
@@ -216,6 +219,7 @@ pub struct HistoryTrimStats {
 }
 
 impl HistoryTrimStats {
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.undo_removed == 0 && self.redo_removed == 0
     }

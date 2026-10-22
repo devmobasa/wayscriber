@@ -1,7 +1,12 @@
-use super::*;
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::helpers::{drag_log, surface_id, toolbar_pointer_lock_enabled};
 use crate::env_vars::TOOLBAR_POINTER_LOCK_ENV;
+use log::warn;
+use smithay_client_toolkit::globals::ProvidesBoundGlobal;
 use smithay_client_toolkit::seat::pointer::PointerData;
-use wayland_client::{Proxy, protocol::wl_surface};
+use wayland_client::protocol::wl_surface;
+use wayland_client::{Proxy, QueueHandle};
+use wayland_protocols::wp::pointer_constraints::zv1::client::zwp_pointer_constraints_v1;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn pointer_lock_active(&self) -> bool {

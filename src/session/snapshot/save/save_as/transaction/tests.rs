@@ -1,3 +1,7 @@
+use std::slice;
+
+use crate::test_temp;
+
 use super::*;
 use anyhow::anyhow;
 use std::cell::{Cell, RefCell};
@@ -17,7 +21,7 @@ fn staging_directories(parent: &Path) -> Vec<PathBuf> {
 
 #[test]
 fn primary_rename_failure_restores_quarantined_sidecars() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let session = temp.path().join("target.wayscriber-session");
     let tmp = temp.path().join("target.tmp");
     let backup = temp.path().join("target.wayscriber-session.bak");
@@ -31,7 +35,7 @@ fn primary_rename_failure_restores_quarantined_sidecars() {
         &tmp,
         &session,
         &[backup.clone(), recovery.clone()],
-        |_, _| Err(std::io::Error::other("injected primary rename failure")),
+        |_, _| Err(io::Error::other("injected primary rename failure")),
         || -> Result<()> { panic!("sync must not run before primary replacement") },
         |_| -> Result<()> { panic!("cleanup must not run before primary replacement") },
     )
@@ -53,7 +57,7 @@ fn primary_rename_failure_restores_quarantined_sidecars() {
 
 #[test]
 fn successful_commit_removes_quarantined_sidecars() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let session = temp.path().join("target.wayscriber-session");
     let tmp = temp.path().join("target.tmp");
     let backup = temp.path().join("target.wayscriber-session.bak");
@@ -78,7 +82,7 @@ fn successful_commit_removes_quarantined_sidecars() {
 
 #[test]
 fn primary_sync_failure_retains_quarantine_and_skips_cleanup() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let session = temp.path().join("target.wayscriber-session");
     let tmp = temp.path().join("target.tmp");
     let recovery = temp.path().join("target.wayscriber-session.recovery");
@@ -90,7 +94,7 @@ fn primary_sync_failure_retains_quarantine_and_skips_cleanup() {
     let err = commit_save_as_target_with(
         &tmp,
         &session,
-        std::slice::from_ref(&recovery),
+        slice::from_ref(&recovery),
         |source, target| fs::rename(source, target),
         || Err(anyhow!("injected primary sync failure")),
         |_| {
@@ -123,7 +127,7 @@ fn primary_sync_failure_retains_quarantine_and_skips_cleanup() {
 
 #[test]
 fn postcommit_cleanup_failure_keeps_recovery_bytes_quarantined() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     let session = temp.path().join("target.wayscriber-session");
     let tmp = temp.path().join("target.tmp");
     let recovery = temp.path().join("target.wayscriber-session.recovery");
@@ -135,7 +139,7 @@ fn postcommit_cleanup_failure_keeps_recovery_bytes_quarantined() {
     commit_save_as_target_with(
         &tmp,
         &session,
-        std::slice::from_ref(&recovery),
+        slice::from_ref(&recovery),
         |source, target| fs::rename(source, target),
         || Ok(()),
         |quarantine| {

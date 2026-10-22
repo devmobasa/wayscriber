@@ -19,6 +19,7 @@ pub const SIZE_RING_ARC_START: f64 = 0.75 * PI;
 pub const SIZE_RING_ARC_SPAN: f64 = 1.5 * PI;
 
 /// Angle (raw atan2 space) for a thickness value, clamped to the gauge span.
+#[must_use]
 pub fn size_ring_angle_for_value(value: f64) -> f64 {
     let frac = ((value - MIN_STROKE_THICKNESS) / (MAX_STROKE_THICKNESS - MIN_STROKE_THICKNESS))
         .clamp(0.0, 1.0);
@@ -28,6 +29,7 @@ pub fn size_ring_angle_for_value(value: f64) -> f64 {
 /// Thickness value for an angle (raw atan2 space): the exact inverse of
 /// [`size_ring_angle_for_value`] within the span. Angles in the bottom gap
 /// snap to the nearest end so drags past the ends pin to min/max.
+#[must_use]
 pub fn size_ring_value_for_angle(angle: f64) -> f64 {
     let rel = normalize_rel(angle);
     let rel = if rel <= SIZE_RING_ARC_SPAN {

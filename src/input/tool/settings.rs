@@ -11,6 +11,7 @@ pub struct ToolDrawingSettings {
 }
 
 impl ToolDrawingSettings {
+    #[must_use]
     pub fn new(color: Color, thickness: f64) -> Self {
         Self { color, thickness }
     }
@@ -30,6 +31,7 @@ pub struct PerToolDrawingSettings {
 }
 
 impl PerToolDrawingSettings {
+    #[must_use]
     pub fn new(color: Color, thickness: f64) -> Self {
         let settings = ToolDrawingSettings::new(color, thickness);
         Self {
@@ -44,19 +46,21 @@ impl PerToolDrawingSettings {
         }
     }
 
+    #[must_use]
     pub fn settings_tool(tool: Tool) -> Tool {
         tool.settings_tool()
     }
 
+    #[must_use]
     pub fn get(&self, tool: Tool) -> &ToolDrawingSettings {
-        self.get_slot(tool.settings_slot())
+        self.slot(tool.settings_slot())
     }
 
     pub fn get_mut(&mut self, tool: Tool) -> &mut ToolDrawingSettings {
-        self.get_slot_mut(tool.settings_slot())
+        self.slot_mut(tool.settings_slot())
     }
 
-    pub(crate) fn get_slot(&self, slot: ToolSettingsSlot) -> &ToolDrawingSettings {
+    pub(crate) fn slot(&self, slot: ToolSettingsSlot) -> &ToolDrawingSettings {
         match slot {
             ToolSettingsSlot::Pen => &self.pen,
             ToolSettingsSlot::Line => &self.line,
@@ -69,7 +73,7 @@ impl PerToolDrawingSettings {
         }
     }
 
-    pub(crate) fn get_slot_mut(&mut self, slot: ToolSettingsSlot) -> &mut ToolDrawingSettings {
+    pub(crate) fn slot_mut(&mut self, slot: ToolSettingsSlot) -> &mut ToolDrawingSettings {
         match slot {
             ToolSettingsSlot::Pen => &mut self.pen,
             ToolSettingsSlot::Line => &mut self.line,
@@ -82,9 +86,10 @@ impl PerToolDrawingSettings {
         }
     }
 
+    #[must_use]
     pub fn clamp_thicknesses(mut self, min: f64, max: f64) -> Self {
         for slot in ToolSettingsSlot::ALL {
-            let settings = self.get_slot_mut(slot);
+            let settings = self.slot_mut(slot);
             settings.thickness = settings.thickness.clamp(min, max);
         }
         self

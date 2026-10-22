@@ -1,13 +1,19 @@
+#[cfg(feature = "tray")]
+use std::env;
+
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "tray")]
 use ksni::TrayMethods;
 use log::{debug, info, warn};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+#[cfg(feature = "tray")]
+use tokio::runtime::Runtime;
+#[cfg(feature = "tray")]
+use tokio::time;
 #[cfg(feature = "tray")]
 use zbus::{Connection, Proxy};
 
@@ -59,7 +65,7 @@ pub(crate) fn start_system_tray(
     tray_status: Arc<TrayStatusShared>,
 ) -> Result<TrayRuntime> {
     let configurator_binary =
-        std::env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
+        env::var(CONFIGURATOR_ENV).unwrap_or_else(|_| "wayscriber-configurator".to_string());
     let icon_style = load_tray_settings_from_config();
 
     let tray_quit = quit.clone();
@@ -67,7 +73,7 @@ pub(crate) fn start_system_tray(
         TrayControl {
             visibility,
             action,
-            quit: quit.clone(),
+            quit,
         },
         configurator_binary,
         icon_style,
@@ -79,7 +85,7 @@ pub(crate) fn start_system_tray(
 
     let runtime = TrayRuntime::start(
         move |worker| {
-            let rt = match tokio::runtime::Runtime::new() {
+            let rt = match Runtime::new() {
                 Ok(runtime) => runtime,
                 Err(e) => {
                     warn!("Failed to create Tokio runtime for system tray: {}", e);
@@ -121,7 +127,7 @@ pub(crate) fn start_system_tray(
                             let _ = handle.shutdown().await;
                             break;
                         }
-                        () = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+                        () = time::sleep(time::Duration::from_millis(100)) => {
                             let revision = tray_status.revision();
                             if revision != last_revision {
                                 if handle.update(|_| {}).await.is_none() {
@@ -159,7 +165,10 @@ pub(crate) fn start_system_tray(
     info!("Tray feature disabled; skipping system tray startup");
     TrayRuntime::start(
         |worker| {
-            debug_assert!(!worker.is_cancelled());
+            debug_assert!(
+                !worker.is_cancelled(),
+                "the stub tray worker reports readiness before startup can time out"
+            );
             worker.report_readiness(Ok(()));
         },
         TRAY_START_TIMEOUT,
@@ -189,7 +198,7 @@ impl TrayWorker {
     #[cfg(feature = "tray")]
     async fn cancelled(&self) {
         while !self.is_cancelled() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            time::sleep(Duration::from_millis(10)).await;
         }
     }
 }

@@ -1,6 +1,7 @@
+use crate::input::boards::BoardAppearance;
+
 use super::super::base::InputState;
-use crate::draw::Color;
-use crate::draw::TextMeasurer;
+use crate::draw::{Color, TextMeasurer};
 use crate::i18n::{tr, trf};
 use crate::input::BoardBackground;
 use crate::input::boards::PendingBoardRuntimeUiAction;
@@ -24,7 +25,7 @@ impl InputState {
         true
     }
 
-    pub(crate) fn set_board_name(&mut self, index: usize, name: String) -> bool {
+    pub(crate) fn set_board_name(&mut self, index: usize, name: &str) -> bool {
         let Some(board) = self.boards.board_state_mut(index) else {
             return false;
         };
@@ -57,9 +58,9 @@ impl InputState {
             );
             return false;
         }
-        let mut appearance = crate::input::boards::BoardAppearance::from_spec(&board.spec);
+        let mut appearance = BoardAppearance::from_spec(&board.spec);
         appearance.background = BoardBackground::Solid(color);
-        self.apply_board_appearance_value(index, appearance)
+        self.apply_board_appearance_value(index, &appearance)
     }
 
     pub(crate) fn request_board_pin_toggle(&mut self, index: usize) -> bool {

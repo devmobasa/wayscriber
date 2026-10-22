@@ -1,5 +1,15 @@
-use super::*;
+use crate::config::ToolbarLayoutMode;
+use crate::draw::Color;
+use crate::ui::toolbar::PresetSlotSnapshot;
+
+use super::super::{SemanticToolIcon, TopUtilityButton, default_drag_hint};
+use crate::config::{Action, ToolbarItemId, action_label, action_short_label};
 use crate::i18n::{tr, trf};
+use crate::input::Tool;
+use crate::label_format::format_binding_label;
+use crate::ui::toolbar::bindings::tool_tooltip_label;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopToolbarControlId {
@@ -99,11 +109,11 @@ impl TopToolbarIcon {
     /// The density glyph for a layout preset. Total on purpose: the GTK
     /// factory renders the layout button from the mode alone, and this
     /// mapping spares it unwrapping the generic `icon()` Option.
-    pub(crate) fn for_layout_mode(mode: crate::config::ToolbarLayoutMode) -> Self {
+    pub(crate) fn for_layout_mode(mode: ToolbarLayoutMode) -> Self {
         match mode {
-            crate::config::ToolbarLayoutMode::Simple => Self::LayoutSimple,
-            crate::config::ToolbarLayoutMode::Regular => Self::LayoutRegular,
-            crate::config::ToolbarLayoutMode::Advanced => Self::LayoutAdvanced,
+            ToolbarLayoutMode::Simple => Self::LayoutSimple,
+            ToolbarLayoutMode::Regular => Self::LayoutRegular,
+            ToolbarLayoutMode::Advanced => Self::LayoutAdvanced,
         }
     }
 }
@@ -148,10 +158,7 @@ pub(super) fn utility_accessible_label(utility: TopToolbarUtility) -> &'static s
 
 /// The filled preset saved in slot `index` (0-based), if any. Both frontends
 /// read the same accessor so their per-slot rendering cannot drift.
-pub(crate) fn preset_slot(
-    snapshot: &ToolbarSnapshot,
-    index: usize,
-) -> Option<&crate::ui::toolbar::PresetSlotSnapshot> {
+pub(crate) fn preset_slot(snapshot: &ToolbarSnapshot, index: usize) -> Option<&PresetSlotSnapshot> {
     snapshot.presets.get(index).and_then(Option::as_ref)
 }
 
@@ -190,9 +197,9 @@ fn preset_summary(snapshot: &ToolbarSnapshot, index: usize) -> Option<String> {
     })
 }
 
-fn preset_color_label(snapshot: &ToolbarSnapshot, color: crate::draw::Color) -> String {
+fn preset_color_label(snapshot: &ToolbarSnapshot, color: Color) -> String {
     const TOLERANCE: f64 = 0.5 / 255.0;
-    let matches = |entry: &crate::draw::Color| {
+    let matches = |entry: &Color| {
         (entry.r - color.r).abs() <= TOLERANCE
             && (entry.g - color.g).abs() <= TOLERANCE
             && (entry.b - color.b).abs() <= TOLERANCE

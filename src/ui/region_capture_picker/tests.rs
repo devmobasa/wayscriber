@@ -1,3 +1,6 @@
+use crate::ui::theme::overlay;
+use crate::ui::{RegionAction, RegionResizeHandles};
+
 use super::layout::{
     PointerPanelLayout, covered_by_action_bar, pointer_panel_layout, selection_badge_layout,
 };
@@ -79,7 +82,7 @@ fn the_shared_legend_paints_across_the_top_of_any_selector() {
         "the strip is tall enough for its readable text"
     );
     assert_eq!(alpha(400, 300), 0, "and nowhere else");
-    const { assert!(super::legend::LEGEND_FONT_SIZE >= crate::ui::theme::overlay::FONT_SIZE_MIN_TEXT) };
+    const { assert!(super::legend::LEGEND_FONT_SIZE >= overlay::FONT_SIZE_MIN_TEXT) };
 }
 
 #[test]
@@ -413,7 +416,7 @@ fn review_visual_composes_the_action_bar_after_the_scrim() {
         start: (100.0, 100.0),
         end: (300.0, 200.0),
     };
-    let bar = crate::ui::RegionActionBar::place(selection, (800, 600));
+    let bar = ui::RegionActionBar::place(selection, (800, 600));
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 800, 600).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     render_region_capture_picker(
@@ -432,7 +435,7 @@ fn review_visual_composes_the_action_bar_after_the_scrim() {
             show_legend: false,
             loupe: None,
             action_bar: Some(bar),
-            hovered_action: Some(crate::ui::RegionAction::Both),
+            hovered_action: Some(RegionAction::Both),
             include_drawings: true,
             cut: Default::default(),
             window: RegionCaptureWindowVisual::disabled(),
@@ -641,7 +644,7 @@ fn review_paints_grips_where_targeting_paints_corner_arms() {
                 // the two frames can be compared pixel for pixel.
                 show_scrim: false,
                 review,
-                resize_handles: review.then(|| crate::ui::RegionResizeHandles::place(selection)),
+                resize_handles: review.then(|| RegionResizeHandles::place(selection)),
                 hovered_handle: None,
                 show_legend: false,
                 loupe: None,
@@ -692,7 +695,7 @@ fn capture_loupe_reuses_the_pixel_loupe_renderer_when_enabled() {
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 200, 200).unwrap();
     let ctx = cairo::Context::new(&surface).unwrap();
     render_region_capture_loupe(&ctx, (200, 200), visual, |_x, _y| {
-        Some(crate::draw::Color::new(1.0, 0.0, 0.0, 1.0))
+        Some(Color::new(1.0, 0.0, 0.0, 1.0))
     });
     drop(ctx);
     surface.flush();
@@ -708,9 +711,12 @@ fn accepted_cut_preview_paints_before_the_scrim_hole() {
         2,
         1,
         8,
-        [0x33, 0x22, 0x11, 0xFF, 0xCC, 0xBB, 0xAA, 0xFF].to_vec(),
+        [0x33, 0x22, 0x11, 0xff, 0xcc, 0xbb, 0xaa, 0xff].to_vec(),
     )
     .unwrap();
+    // SAFETY: `pixels` holds exactly stride * height = 8 bytes and outlives
+    // `created`, which is dropped below without being drawn on, so Cairo never
+    // writes through the pointer cast from the shared slice.
     let created = unsafe {
         cairo::ImageSurface::create_for_data_unsafe(
             pixels.data().as_ptr() as *mut u8,
@@ -773,12 +779,12 @@ fn accepted_cut_preview_paints_before_the_scrim_hole() {
     assert!(alpha(2, 2) > 0, "vacated source is dimmed by the scrim");
     assert_eq!(
         &data[18 * stride + 18 * 4..18 * stride + 18 * 4 + 4],
-        &[0x33, 0x22, 0x11, 0xFF],
+        &[0x33, 0x22, 0x11, 0xff],
         "first source pixel fills the left half of the displayed output"
     );
     assert_eq!(
         &data[18 * stride + 34 * 4..18 * stride + 34 * 4 + 4],
-        &[0xCC, 0xBB, 0xAA, 0xFF],
+        &[0xcc, 0xbb, 0xaa, 0xff],
         "second source pixel fills the right half of the displayed output"
     );
 }

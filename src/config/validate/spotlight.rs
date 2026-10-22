@@ -1,3 +1,7 @@
+use crate::draw::{
+    MAX_SPOTLIGHT_MAGNIFICATION, MIN_SPOTLIGHT_MAGNIFICATION, normalize_spotlight_magnification,
+};
+
 use super::Config;
 use crate::config::SpotlightConfig;
 
@@ -45,18 +49,17 @@ impl Config {
                 defaults.magnification
             );
             self.spotlight.magnification = defaults.magnification;
-        } else if !(crate::draw::MIN_SPOTLIGHT_MAGNIFICATION
-            ..=crate::draw::MAX_SPOTLIGHT_MAGNIFICATION)
+        } else if !(MIN_SPOTLIGHT_MAGNIFICATION..=MAX_SPOTLIGHT_MAGNIFICATION)
             .contains(&self.spotlight.magnification)
         {
             log::warn!(
                 "Invalid spotlight magnification {:.2}, clamping to {:.1}-{:.1} range",
                 self.spotlight.magnification,
-                crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
-                crate::draw::MAX_SPOTLIGHT_MAGNIFICATION
+                MIN_SPOTLIGHT_MAGNIFICATION,
+                MAX_SPOTLIGHT_MAGNIFICATION
             );
             self.spotlight.magnification =
-                crate::draw::normalize_spotlight_magnification(self.spotlight.magnification);
+                normalize_spotlight_magnification(self.spotlight.magnification);
         }
     }
 }

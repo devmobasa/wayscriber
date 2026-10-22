@@ -1,3 +1,9 @@
+use crate::backend::wayland::toolbar::view::{WidgetKind, top};
+use crate::config::{ToolbarItemOrderGroup, ToolbarLayoutMode, toolbar_item_ids};
+use crate::input::Tool;
+use crate::input::state::test_support::TestInputStateBuilder;
+use crate::ui::toolbar::model::{TopStripPlan, TopUtilityButton};
+
 use super::*;
 use crate::draw::FontDescriptor;
 use crate::input::InputState;
@@ -5,7 +11,7 @@ use crate::input::state::TopMenuState;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot};
 
 fn create_test_input_state() -> InputState {
-    crate::input::state::test_support::TestInputStateBuilder::default()
+    TestInputStateBuilder::default()
         .thickness(3.0)
         .eraser_size(12.0)
         .font_descriptor(FontDescriptor {
@@ -33,17 +39,11 @@ fn top_size_respects_icon_mode() {
     // pin and minimize. Height adds the contextual
     // style pill under the 58px island band (6px gap + 40px pill) while a
     // drawing tool is active.
-    assert_eq!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot),
-        (1410, 104)
-    );
+    assert_eq!(top_size(&UiTextEngine::default(), &snapshot), (1410, 104));
 
     state.set_toolbar_use_icons(false);
     let snapshot = snapshot_from_state(&state);
-    assert_eq!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).1,
-        106
-    );
+    assert_eq!(top_size(&UiTextEngine::default(), &snapshot).1, 106);
 }
 
 #[test]
@@ -54,50 +54,30 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
 
     // Unconstrained: presets shown, the pill's full swatch row available,
     // nothing dropped into the overflow.
-    let full = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let full = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(!full.drop_presets);
-    assert_eq!(
-        full.swatch_count,
-        crate::ui::toolbar::model::TopStripPlan::MAX_QUICK_COLORS
-    );
+    assert_eq!(full.swatch_count, TopStripPlan::MAX_QUICK_COLORS);
     assert!(full.dropped_tools.is_empty() && full.dropped_utilities.is_empty());
-    let full_width = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0;
+    let full_width = top_size(&UiTextEngine::default(), &snapshot).0;
 
     // Slightly narrow: the non-essential presets island yields first, before
     // any tool or utility is dropped (M7-C2).
     snapshot.top_viewport_max = Some(full_width as f64 - 60.0);
-    let degraded = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let degraded = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(degraded.drop_presets);
     assert!(degraded.dropped_tools.is_empty() && degraded.dropped_utilities.is_empty());
-    assert!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0 as f64
-            <= full_width as f64 - 60.0
-    );
+    assert!(top_size(&UiTextEngine::default(), &snapshot).0 as f64 <= full_width as f64 - 60.0);
 
     // Very narrow: droppable items move into the overflow menu; the protected
     // core (Pen, Eraser, Undo/Redo, Clear) stays. Colors and presets have
     // already left the strip.
     snapshot.top_viewport_max = Some(700.0);
-    let tight = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let tight = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(tight.drop_presets);
     assert!(!tight.dropped_utilities.is_empty());
-    assert!(top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0 as f64 <= 700.0);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    assert!(top_size(&UiTextEngine::default(), &snapshot).0 as f64 <= 700.0);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     for id in [
         "top.tool.pen",
         "top.tool.eraser",
@@ -115,13 +95,8 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
 
     // Opening the overflow reveals Clear first, then the dropped items.
     snapshot.top_overflow_open = true;
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let overflow_ids: Vec<&str> = tree
         .nodes()
         .iter()
@@ -147,20 +122,14 @@ fn overflow_contains_only_visible_items_and_is_structural() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(true);
     let mut items = state.toolbar_items().clone();
-    items.set_hidden(crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
-    items.set_hidden(
-        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
-        true,
-    );
-    items.set_hidden(crate::config::toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
+    items.set_hidden(toolbar_item_ids::TOP_UTILITY_HIGHLIGHT, true);
+    items.set_hidden(toolbar_item_ids::TOP_UTILITY_SCREENSHOT, true);
+    items.set_hidden(toolbar_item_ids::TOP_CHROME_OVERFLOW, true);
     state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = Some(700.0);
 
-    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(
         !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty(),
         "the 700px budget must force items into the overflow: {plan:?}"
@@ -168,22 +137,17 @@ fn overflow_contains_only_visible_items_and_is_structural() {
     assert!(
         !plan
             .dropped_utilities
-            .contains(&crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+            .contains(&TopUtilityButton::Screenshot)
     );
     assert!(
         !plan
             .dropped_utilities
-            .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight)
+            .contains(&TopUtilityButton::Highlight)
     );
 
     snapshot.top_overflow_open = true;
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     assert!(tree.node_by_id(&"top.chrome.overflow".into()).is_some());
     assert!(
         tree.node_by_id(&"top.overflow.top.utility.screenshot".into())
@@ -202,7 +166,7 @@ fn top_strip_fits_480_pixels_in_icon_and_text_modes() {
         state.set_toolbar_use_icons(use_icons);
         let mut snapshot = snapshot_from_state(&state);
         snapshot.top_viewport_max = Some(480.0);
-        let (width, _) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+        let (width, _) = top_size(&UiTextEngine::default(), &snapshot);
         assert!(
             width <= 480,
             "{} mode planned width {width} exceeds 480",
@@ -218,14 +182,11 @@ fn compact_top_strip_moves_shape_pen_to_the_overflow_before_other_pens() {
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = Some(320.0);
 
-    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
 
     assert!(plan.compact);
-    assert!(plan.dropped_tools.contains(&crate::input::Tool::LiveShape));
-    assert!(!plan.dropped_tools.contains(&crate::input::Tool::Pen));
+    assert!(plan.dropped_tools.contains(&Tool::LiveShape));
+    assert!(!plan.dropped_tools.contains(&Tool::Pen));
 }
 
 #[test]
@@ -238,9 +199,9 @@ fn compact_top_strip_respects_budget_without_the_old_floor() {
     for budget in [376, 340, 320] {
         snapshot.top_viewport_max = Some(budget as f64);
         assert!(
-            top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0 <= budget,
+            top_size(&UiTextEngine::default(), &snapshot).0 <= budget,
             "planned width {} exceeds {budget}",
-            top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0
+            top_size(&UiTextEngine::default(), &snapshot).0
         );
     }
 }
@@ -250,37 +211,31 @@ fn reordered_overflow_items_keep_visual_order() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(true);
     let mut items = state.toolbar_items().clone();
-    items.set_hidden(
-        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
-        false,
-    );
+    items.set_hidden(toolbar_item_ids::TOP_UTILITY_SCREENSHOT, false);
     items.move_item_to_index(
-        crate::config::ToolbarItemOrderGroup::TopControls,
-        crate::config::toolbar_item_ids::TOP_UTILITY_HIGHLIGHT,
+        ToolbarItemOrderGroup::TopControls,
+        toolbar_item_ids::TOP_UTILITY_HIGHLIGHT,
         0,
     );
     items.move_item_to_index(
-        crate::config::ToolbarItemOrderGroup::TopControls,
-        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
+        ToolbarItemOrderGroup::TopControls,
+        toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
         1,
     );
     state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = Some(560.0);
 
-    let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-    );
+    let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     let highlight = plan
         .dropped_utilities
         .iter()
-        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Highlight)
+        .position(|item| *item == TopUtilityButton::Highlight)
         .expect("highlight dropped");
     let screenshot = plan
         .dropped_utilities
         .iter()
-        .position(|item| *item == crate::ui::toolbar::model::TopUtilityButton::Screenshot)
+        .position(|item| *item == TopUtilityButton::Screenshot)
         .expect("screenshot dropped");
     assert!(highlight < screenshot);
 }
@@ -289,7 +244,7 @@ fn reordered_overflow_items_keep_visual_order() {
 fn shapes_popover_hosts_the_relocated_tool_options() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(true);
-    state.set_tool_override(Some(crate::input::Tool::RegularPolygon));
+    state.set_tool_override(Some(Tool::RegularPolygon));
     state.test_set_toolbar_menu_state(
         TopMenuState::ShapePicker,
         state.toolbar_top_popover_scroll(),
@@ -297,23 +252,15 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.shape_picker_open);
 
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert!(h > 58, "open popover grows the surface: {h}");
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
 
     // The grid renders inside popover chrome with a caret.
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("shapes popover panel");
-    assert!(matches!(
-        panel.kind,
-        crate::backend::wayland::toolbar::view::WidgetKind::Popover { .. }
-    ));
+    assert!(matches!(panel.kind, WidgetKind::Popover { .. }));
 
     // The old mini-checkbox lane's controls live inside the popover now.
     let fill = tree
@@ -344,14 +291,9 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     // is gone. The pill carries its own Fill toggle for shape tools.
     state.test_set_toolbar_menu_state(TopMenuState::Closed, state.toolbar_top_popover_scroll());
     let snapshot = snapshot_from_state(&state);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(h, 104);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
 }
 
@@ -361,24 +303,16 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
     state.set_toolbar_use_icons(true);
     let snapshot = snapshot_from_state(&state);
     // Band (58) plus the contextual style pill (6 + 40) — no ring lane yet.
-    assert_eq!(
-        top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).1,
-        104
-    );
+    assert_eq!(top_size(&UiTextEngine::default(), &snapshot).1, 104);
 
     state.set_highlight_tool(true);
     let snapshot = snapshot_from_state(&state);
     assert!(snapshot.highlight_tool_active);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     // The highlight tool has no style properties, so the pill yields and
     // only the ring lane grows the 58px band.
     assert!(h > 58, "ring row grows the bar: {h}");
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     assert!(
         tree.node_by_id(&"top.island.style".into()).is_none(),
         "no style pill while the highlight tool is active"
@@ -402,13 +336,8 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
         state.toolbar_top_popover_scroll(),
     );
     let snapshot = snapshot_from_state(&state);
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring row");
@@ -422,37 +351,26 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
         state.toolbar_top_popover_scroll(),
     );
     let mut items = state.toolbar_items().clone();
-    items.set_hidden(
-        crate::config::toolbar_item_ids::TOP_UTILITY_SCREENSHOT,
-        false,
-    );
+    items.set_hidden(toolbar_item_ids::TOP_UTILITY_SCREENSHOT, false);
     state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
         snapshot.top_viewport_max = Some(budget as f64);
-        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-        );
+        let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
         let has_dropped_items =
             !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty();
         (has_dropped_items
             && !plan
                 .dropped_utilities
-                .contains(&crate::ui::toolbar::model::TopUtilityButton::Highlight))
+                .contains(&TopUtilityButton::Highlight))
         .then_some(budget as f64)
     });
     assert!(
         snapshot.top_viewport_max.is_some(),
         "overflow budget retaining highlight"
     );
-    let (w, h) = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
-    let tree = crate::backend::wayland::toolbar::view::top::build_top_view(
-        &crate::ui_text::UiTextEngine::default(),
-        &snapshot,
-        w as f64,
-        h as f64,
-    );
+    let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
+    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring row");
@@ -474,12 +392,12 @@ fn top_size_scales_with_toolbar_scale() {
     state.set_toolbar_use_icons(true);
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.0);
     let snapshot = snapshot_from_state(&state);
-    let base_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let base_size = top_size(&UiTextEngine::default(), &snapshot);
 
     // Scale 1.5x should increase size proportionally
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.5);
     let snapshot = snapshot_from_state(&state);
-    let scaled_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let scaled_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(
         scaled_size.0,
         (base_size.0 as f64 * 1.5).ceil() as u32,
@@ -494,7 +412,7 @@ fn top_size_scales_with_toolbar_scale() {
     // Scale 0.75x should decrease size
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.75);
     let snapshot = snapshot_from_state(&state);
-    let small_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let small_size = top_size(&UiTextEngine::default(), &snapshot);
     assert!(
         small_size.0 < base_size.0,
         "Scaled down width should be smaller"
@@ -511,18 +429,18 @@ fn scale_size_handles_non_finite_values() {
     state.set_toolbar_use_icons(true);
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 1.0);
     let snapshot = snapshot_from_state(&state);
-    let base_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let base_size = top_size(&UiTextEngine::default(), &snapshot);
 
     // NaN should fall back to 1.0
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::NAN);
     let snapshot = snapshot_from_state(&state);
-    let nan_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let nan_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(nan_size, base_size, "NaN scale should fall back to 1.0");
 
     // Infinity should fall back to 1.0
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::INFINITY);
     let snapshot = snapshot_from_state(&state);
-    let inf_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let inf_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(
         inf_size, base_size,
         "Infinity scale should fall back to 1.0"
@@ -531,7 +449,7 @@ fn scale_size_handles_non_finite_values() {
     // Negative infinity should fall back to 1.0
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), f64::NEG_INFINITY);
     let snapshot = snapshot_from_state(&state);
-    let neg_inf_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let neg_inf_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(
         neg_inf_size, base_size,
         "Neg infinity scale should fall back to 1.0"
@@ -546,21 +464,21 @@ fn scale_size_clamps_extreme_values() {
     // Test upper bound clamping (max 3.0)
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 10.0);
     let snapshot = snapshot_from_state(&state);
-    let huge_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let huge_size = top_size(&UiTextEngine::default(), &snapshot);
 
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 3.0);
     let snapshot = snapshot_from_state(&state);
-    let max_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let max_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(huge_size, max_size, "Scale > 3.0 should clamp to 3.0");
 
     // Test lower bound clamping (min 0.5)
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.1);
     let snapshot = snapshot_from_state(&state);
-    let tiny_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let tiny_size = top_size(&UiTextEngine::default(), &snapshot);
 
     state.test_set_toolbar_appearance(state.toolbar_use_icons(), 0.5);
     let snapshot = snapshot_from_state(&state);
-    let min_size = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot);
+    let min_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(tiny_size, min_size, "Scale < 0.5 should clamp to 0.5");
 }
 
@@ -569,18 +487,15 @@ fn a_narrowing_strip_moves_the_laser_to_the_overflow_before_any_other_tool() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(true);
     let mut snapshot = snapshot_from_state(&state);
-    let full_width = top_size(&crate::ui_text::UiTextEngine::default(), &snapshot).0;
+    let full_width = top_size(&UiTextEngine::default(), &snapshot).0;
 
     let first_dropped = (200..full_width).rev().find_map(|budget| {
         snapshot.top_viewport_max = Some(f64::from(budget));
-        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(
-            &crate::ui_text::UiTextEngine::default(),
-            &snapshot,
-        );
+        let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
         (!plan.dropped_tools.is_empty()).then_some(plan.dropped_tools)
     });
 
-    assert_eq!(first_dropped, Some(vec![crate::input::Tool::Laser]));
+    assert_eq!(first_dropped, Some(vec![Tool::Laser]));
 }
 
 /// Advanced's inline shapes widen the strip; under width pressure they yield
@@ -592,10 +507,10 @@ fn advanced_inline_shapes_yield_before_arrow_and_line() {
     let mut state = create_test_input_state();
     state.set_toolbar_use_icons(true);
     let mut regular = snapshot_from_state(&state);
-    regular.layout_mode = crate::config::ToolbarLayoutMode::Regular;
+    regular.layout_mode = ToolbarLayoutMode::Regular;
     let mut advanced = regular.clone();
-    advanced.layout_mode = crate::config::ToolbarLayoutMode::Advanced;
-    let engine = crate::ui_text::UiTextEngine::default();
+    advanced.layout_mode = ToolbarLayoutMode::Advanced;
+    let engine = UiTextEngine::default();
 
     let regular_width = top_size(&engine, &regular).0;
     let advanced_width = top_size(&engine, &advanced).0;
@@ -605,7 +520,7 @@ fn advanced_inline_shapes_yield_before_arrow_and_line() {
     let mut saw_arrow_drop = false;
     for budget in (500..advanced_width).step_by(20) {
         advanced.top_viewport_max = Some(budget as f64);
-        let plan = crate::backend::wayland::toolbar::view::top::plan_top_strip(&engine, &advanced);
+        let plan = top::plan_top_strip(&engine, &advanced);
         if plan.dropped_tools.contains(&Tool::Arrow) {
             saw_arrow_drop = true;
             for tool in advanced_shapes {

@@ -1,7 +1,11 @@
+use std::env;
 use std::ffi::OsStr;
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Result, anyhow, bail};
+
+use crate::{env_vars, update_check};
 
 use super::wire::{HelperKind, MAX_ARGUMENT_BYTES, MAX_ARGUMENTS, MAX_INPUT_BYTES, OsWire};
 
@@ -39,7 +43,7 @@ pub(super) fn validate(
         bail!("broker request exceeds manifest bounds");
     }
     let program = program.clone().into_os();
-    let basename = std::path::Path::new(&program)
+    let basename = Path::new(&program)
         .file_name()
         .and_then(OsStr::to_str)
         .ok_or_else(|| anyhow!("broker program has no UTF-8 basename"))?
@@ -63,11 +67,10 @@ pub(super) fn validate(
         HelperKind::SessionKdialog => basename == "kdialog",
         HelperKind::Gsettings => basename == "gsettings",
         HelperKind::Systemctl => basename == "systemctl",
-        HelperKind::Configurator => std::env::var_os(crate::env_vars::CONFIGURATOR_ENV)
-            .map_or_else(
-                || basename.contains("configurator"),
-                |configured| configured == program,
-            ),
+        HelperKind::Configurator => env::var_os(env_vars::CONFIGURATOR_ENV).map_or_else(
+            || basename.contains("configurator"),
+            |configured| configured == program,
+        ),
         HelperKind::DesktopOpen => matches!(basename.as_str(), "xdg-open" | "open"),
         HelperKind::UpdateFetcher => matches!(basename.as_str(), "curl" | "wget"),
         #[cfg(test)]
@@ -89,7 +92,7 @@ pub(super) fn validate(
     }
     validate_arguments(kind, &basename, arguments)?;
     for (name, _) in environment {
-        let name = std::str::from_utf8(&name.0)?;
+        let name = str::from_utf8(&name.0)?;
         if !matches!(
             name,
             "WAYSCRIBER_NO_DETACH"
@@ -178,10 +181,8 @@ fn validate_arguments(kind: HelperKind, basename: &str, arguments: &[OsWire]) ->
             if target.0.starts_with(b"-") {
                 bail!("desktop opener target must not be an option");
             }
-            match std::str::from_utf8(&target.0) {
-                Ok(target)
-                    if looks_like_uri(target) && !crate::update_check::is_trusted_url(target) =>
-                {
+            match str::from_utf8(&target.0) {
+                Ok(target) if looks_like_uri(target) && !update_check::is_trusted_url(target) => {
                     bail!("desktop opener URL is not a trusted Wayscriber HTTPS URL");
                 }
                 // xdg-open parses schemes bytewise. Undecodable targets that
@@ -282,14 +283,14 @@ fn looks_like_uri_bytes(value: &[u8]) -> bool {
 /// and curl. A wayscriber started anywhere in those trees then took itself
 /// for a daemon child, or took the daemon's `--language`.
 const INTERNAL_PROCESS_MARKERS: [&str; 8] = [
-    crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
-    crate::env_vars::DETACHED_ENV,
+    env_vars::OVERLAY_CHILD_GENERATION_ENV,
+    env_vars::DETACHED_ENV,
     crate::RESUME_SESSION_ENV,
-    crate::env_vars::DAEMON_WATCHDOG_FD_ENV,
-    crate::env_vars::OVERLAY_SESSION_REPORTS_ENV,
-    crate::env_vars::OVERLAY_HOME_SESSION_ENV,
-    crate::env_vars::OVERLAY_PREFERRED_SESSION_ENV,
-    crate::env_vars::OVERLAY_LANGUAGE_ENV,
+    env_vars::DAEMON_WATCHDOG_FD_ENV,
+    env_vars::OVERLAY_SESSION_REPORTS_ENV,
+    env_vars::OVERLAY_HOME_SESSION_ENV,
+    env_vars::OVERLAY_PREFERRED_SESSION_ENV,
+    env_vars::OVERLAY_LANGUAGE_ENV,
 ];
 
 /// Whether `kind` relaunches wayscriber itself, the only helpers that keep

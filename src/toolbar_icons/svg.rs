@@ -5,6 +5,8 @@
 //! Every public renderer accepts the same `(ctx, x, y, size)` contract used by
 //! Wayscriber's existing Cairo toolbar icon entry points.
 
+use std::f64::consts;
+
 use cairo::Context;
 use std::f64::consts::PI;
 
@@ -485,10 +487,10 @@ fn draw_spotlight(ctx: &Context) {
     rounded_rect(ctx, 3.0, 4.0, 18.0, 16.0, 3.0);
     stroke(ctx);
     ctx.new_sub_path();
-    ctx.arc(12.0, 12.0, 4.6, 0.0, std::f64::consts::TAU);
+    ctx.arc(12.0, 12.0, 4.6, 0.0, consts::TAU);
     stroke(ctx);
     ctx.new_sub_path();
-    ctx.arc(12.0, 12.0, 1.8, 0.0, std::f64::consts::TAU);
+    ctx.arc(12.0, 12.0, 1.8, 0.0, consts::TAU);
     fill(ctx);
 }
 

@@ -1,5 +1,7 @@
-use cairo::Context as CairoContext;
-use cairo::FontWeight;
+use cairo::{Context as CairoContext, FontWeight};
+
+use crate::draw::TextMeasurer;
+use crate::ui::theme::overlay;
 
 use super::super::super::base::InputState;
 use super::super::metrics::{
@@ -89,11 +91,7 @@ fn measure_panel(
         .map(|text| width(VALUE_FONT, FontWeight::Normal, text))
         .fold(0.0, f64::max);
     let empty_width = if panel.entries.is_empty() {
-        width(
-            BODY_FONT,
-            FontWeight::Normal,
-            crate::ui::theme::overlay::empty_properties(),
-        )
+        width(BODY_FONT, FontWeight::Normal, overlay::empty_properties())
     } else {
         0.0
     };
@@ -156,7 +154,7 @@ impl InputState {
     ) {
         self.update_properties_panel_layout_with_resources(
             &UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             ctx,
             screen_width,
             screen_height,
@@ -166,7 +164,7 @@ impl InputState {
     pub(crate) fn update_properties_panel_layout_with_resources(
         &mut self,
         engine: &UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         ctx: &CairoContext,
         screen_width: u32,
         screen_height: u32,

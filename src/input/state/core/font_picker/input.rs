@@ -2,6 +2,9 @@
 
 use std::time::{Duration, Instant};
 
+use crate::draw::TextMeasurer;
+use crate::util::Rect;
+
 use super::InputState;
 use super::layout::{font_picker_layout, font_picker_row_at};
 use crate::input::events::Key;
@@ -27,7 +30,7 @@ impl InputState {
     /// toggle is `Tab` rather than a letter.
     pub(crate) fn handle_font_picker_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
         text: Option<&str>,
     ) -> bool {
@@ -119,9 +122,7 @@ impl InputState {
     }
 
     /// The panel's rectangle, grown to cover the shadow it casts.
-    pub(in crate::input::state::core) fn font_picker_panel_bounds(
-        &self,
-    ) -> Option<crate::util::Rect> {
+    pub(in crate::input::state::core) fn font_picker_panel_bounds(&self) -> Option<Rect> {
         const SHADOW: f64 = 4.0;
         let (screen_width, screen_height) = self.view.screen_size();
         let layout = font_picker_layout(
@@ -129,7 +130,7 @@ impl InputState {
             screen_height,
             self.font_picker_families().len(),
         );
-        crate::util::Rect::new(
+        Rect::new(
             (layout.panel_x - SHADOW).floor() as i32,
             (layout.panel_y - SHADOW).floor() as i32,
             (layout.panel_width + SHADOW * 2.0).ceil() as i32,
@@ -293,7 +294,7 @@ impl InputState {
     /// from a modal means everywhere else in the overlay.
     pub(crate) fn font_picker_press_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: f64,
         y: f64,
     ) -> bool {

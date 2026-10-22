@@ -1,6 +1,28 @@
 //! Popup color controls and their labels/tooltips.
 
-use super::*;
+use std::f64::consts;
+
+use crate::draw;
+use crate::draw::color;
+use crate::ui::theme::popup;
+use crate::ui::tooltip;
+
+use super::super::constants;
+use super::super::constants::{
+    ACCENT_BRIGHT, ACCENT_PRIMARY, BG_INPUT_SELECTION, INPUT_BG, INPUT_BORDER_FOCUSED, INPUT_CARET,
+    RADIUS_MD, RADIUS_SM, RADIUS_STD, TEXT_PRIMARY,
+};
+use super::{
+    BUTTON_HOVER_GLOW, BUTTON_SECONDARY_BG, BUTTON_SECONDARY_BG_HOVER, BUTTON_SECONDARY_BORDER,
+    BUTTON_SECONDARY_BORDER_HOVER, EYEDROPPER_BG, GRADIENT_BORDER, HEX_INVALID_BORDER,
+    HEX_INVALID_GLOW, INDICATOR_OUTLINE, INDICATOR_RING, INPUT_BORDER_IDLE, RECENT_SWATCH_SIZE,
+    SWATCH_BORDER_ON_DARK, SWATCH_BORDER_ON_LIGHT, TOOLTIP_POINTER_OFFSET, TOOLTIP_SCREEN_MARGIN,
+};
+use crate::draw::Color;
+use crate::ui::primitives::{
+    checkerboard_behind, draw_alpha_checkerboard, draw_rounded_rect, text_extents_for_with_engine,
+};
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 /// Draw the HSV color gradient.
 /// Draw the saturation (x) by value (y) square for one hue.
@@ -10,7 +32,7 @@ use super::*;
 /// axes are real: unlike the previous hue-by-value gradient, every point here
 /// maps to the colour actually produced by clicking it.
 pub(super) fn draw_sat_val_square(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64, hue: f64) {
-    let full = crate::draw::color::hsv_to_rgb(hue, 1.0, 1.0);
+    let full = color::hsv_to_rgb(hue, 1.0, 1.0);
 
     let sat_grad = cairo::LinearGradient::new(x, y, x + w, y);
     sat_grad.add_color_stop_rgba(0.0, 1.0, 1.0, 1.0, 1.0);
@@ -37,7 +59,7 @@ pub(super) fn draw_hue_bar(ctx: &cairo::Context, x: f64, y: f64, w: f64, h: f64)
     let hue_grad = cairo::LinearGradient::new(x, y, x + w, y);
     for step in 0..=6 {
         let t = f64::from(step) / 6.0;
-        let color = crate::draw::color::hsv_to_rgb(t, 1.0, 1.0);
+        let color = color::hsv_to_rgb(t, 1.0, 1.0);
         hue_grad.add_color_stop_rgba(t, color.r, color.g, color.b, 1.0);
     }
     ctx.rectangle(x, y, w, h);
@@ -122,18 +144,18 @@ pub(super) fn draw_color_indicator(ctx: &cairo::Context, x: f64, y: f64, color: 
 
     // Outer white ring
     constants::set_color(ctx, INDICATOR_RING);
-    ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius + 2.0, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     // Inner color circle
     ctx.set_source_rgba(color.r, color.g, color.b, 1.0);
-    ctx.arc(x, y, radius, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     // Dark outline
     constants::set_color(ctx, INDICATOR_OUTLINE);
     ctx.set_line_width(1.0);
-    ctx.arc(x, y, radius + 2.0, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius + 2.0, 0.0, consts::PI * 2.0);
     let _ = ctx.stroke();
 }
 
@@ -151,7 +173,7 @@ pub(super) fn draw_preview_swatch(ctx: &cairo::Context, x: f64, y: f64, size: f6
     let _ = ctx.fill();
 
     // Border
-    let luminance = crate::draw::perceived_luminance(color.r, color.g, color.b);
+    let luminance = draw::perceived_luminance(color.r, color.g, color.b);
     if luminance < 0.3 {
         constants::set_color(ctx, SWATCH_BORDER_ON_DARK);
     } else {
@@ -272,7 +294,7 @@ pub(super) fn draw_action_button(
         constants::set_color(ctx, EYEDROPPER_BG);
     }
     let _ = ctx.fill_preserve();
-    constants::set_color(ctx, crate::ui::theme::popup::border_modal());
+    constants::set_color(ctx, popup::border_modal());
     ctx.set_line_width(1.0);
     let _ = ctx.stroke();
     constants::set_color(ctx, TEXT_PRIMARY);
@@ -304,7 +326,7 @@ pub(super) fn draw_action_tooltip(
         return;
     };
 
-    crate::ui::tooltip::draw_tooltip(engine, ctx, text, rect);
+    tooltip::draw_tooltip(engine, ctx, text, rect);
 }
 
 pub(super) fn action_tooltip_geometry(
@@ -315,7 +337,7 @@ pub(super) fn action_tooltip_geometry(
     screen_width: f64,
     screen_height: f64,
 ) -> Option<(f64, f64, f64, f64)> {
-    let (width, height) = crate::ui::tooltip::tooltip_size(engine, text)?;
+    let (width, height) = tooltip::tooltip_size(engine, text)?;
     let max_x = (screen_width - width - TOOLTIP_SCREEN_MARGIN).max(TOOLTIP_SCREEN_MARGIN);
     let x = (anchor_x + TOOLTIP_POINTER_OFFSET).clamp(TOOLTIP_SCREEN_MARGIN, max_x);
     let above_y = anchor_y - height - TOOLTIP_POINTER_OFFSET;

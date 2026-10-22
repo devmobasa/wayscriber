@@ -2,7 +2,12 @@
 //! and, with `stroke_controls = "stepper"`, pen smoothing and Shape Pen
 //! detection.
 
-use super::*;
+use crate::{config, draw};
+
+use super::{StylePillControl, StylePillStep, selection_entry};
+use crate::i18n::{tr, trf};
+use crate::input::SelectionPropertyKind;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 impl StylePillControl {
     /// The −/+ halves of a stepper, in reading order.
@@ -84,7 +89,7 @@ fn pen_smoothing_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
             id: "top.style.pen-smoothing.plus",
             label: "+",
             event: ToolbarEvent::SetPenSmoothing(
-                level.saturating_add(1).min(crate::draw::MAX_PEN_SMOOTHING),
+                level.saturating_add(1).min(draw::MAX_PEN_SMOOTHING),
             ),
             tooltip: tr("More smoothing").to_string(),
         },
@@ -107,7 +112,7 @@ fn shape_sensitivity_steps(snapshot: &ToolbarSnapshot) -> [StylePillStep; 2] {
             event: ToolbarEvent::SetShapeRecognitionSensitivity(
                 level
                     .saturating_add(1)
-                    .min(crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
+                    .min(config::MAX_SHAPE_RECOGNITION_SENSITIVITY),
             ),
             tooltip: tr("Recognize rougher strokes").to_string(),
         },

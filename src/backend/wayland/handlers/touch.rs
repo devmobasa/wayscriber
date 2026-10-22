@@ -1,9 +1,7 @@
 use log::debug;
 use smithay_client_toolkit::seat::touch::TouchHandler;
-use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_surface, wl_touch},
-};
+use wayland_client::protocol::{wl_surface, wl_touch};
+use wayland_client::{Connection, QueueHandle};
 
 use crate::backend::wayland::state::{
     PerfInputSource, RegionReviewPress, TouchTarget, WaylandState,

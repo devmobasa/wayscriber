@@ -1,4 +1,4 @@
-use super::*;
+use super::WaylandState;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn inline_toolbars_render_active(&self) -> bool {

@@ -1,9 +1,17 @@
 use std::fmt::Debug;
 use std::fs;
+use std::os::unix;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+
+use crate::config::keybindings;
+use crate::draw::color;
+use crate::input as input_module;
+use crate::input::state::{PressureThicknessEditMode, PressureThicknessEntryMode};
+use crate::input::tool;
+use crate::{config, draw, test_temp};
 
 use super::{
     Action, BoardBackground, BoardSpec, Color, DragBindableTool, DragTool, EraserMode, Tool,
@@ -351,35 +359,35 @@ fn color_serialization_matches_established_contract() {
 
 #[test]
 fn established_public_paths_reexport_domain_types() {
-    let action: crate::config::Action = Action::Exit;
+    let action: config::Action = Action::Exit;
     let _: Action = action;
-    let keybinding_action: crate::config::keybindings::Action = Action::Undo;
+    let keybinding_action: keybindings::Action = Action::Undo;
     let _: Action = keybinding_action;
 
-    let tool: crate::input::Tool = Tool::Pen;
+    let tool: input_module::Tool = Tool::Pen;
     let _: Tool = tool;
-    let nested_tool: crate::input::tool::Tool = Tool::Line;
+    let nested_tool: tool::Tool = Tool::Line;
     let _: Tool = nested_tool;
-    let drag_tool: crate::input::tool::DragTool = DragTool::Pen;
+    let drag_tool: tool::DragTool = DragTool::Pen;
     let _: DragTool = drag_tool;
-    let drag_bindable: crate::input::tool::DragBindableTool = DragBindableTool::Rect;
+    let drag_bindable: tool::DragBindableTool = DragBindableTool::Rect;
     let _: DragBindableTool = drag_bindable;
-    let eraser_mode: crate::input::EraserMode = EraserMode::Brush;
+    let eraser_mode: input_module::EraserMode = EraserMode::Brush;
     let _: EraserMode = eraser_mode;
 
-    let color: crate::draw::Color = Color {
+    let color: draw::Color = Color {
         r: 1.0,
         g: 0.0,
         b: 0.0,
         a: 1.0,
     };
     let _: Color = color;
-    let nested_color: crate::draw::color::Color = crate::draw::color::RED;
+    let nested_color: color::Color = color::RED;
     let _: Color = nested_color;
 
-    let background: crate::input::BoardBackground = BoardBackground::Transparent;
+    let background: input_module::BoardBackground = BoardBackground::Transparent;
     let _: BoardBackground = background;
-    let board: crate::input::BoardSpec = BoardSpec {
+    let board: input_module::BoardSpec = BoardSpec {
         id: "board".to_string(),
         name: "Board".to_string(),
         background: BoardBackground::Transparent,
@@ -440,7 +448,7 @@ fn production_domain_sources_have_no_upward_crate_dependencies() {
 
 #[test]
 fn nested_domain_sources_are_checked_for_upward_dependencies() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let nested = temp.path().join("nested/deeper");
     fs::create_dir_all(&nested).unwrap();
     let source = nested.join("value.rs");
@@ -454,20 +462,20 @@ fn nested_domain_sources_are_checked_for_upward_dependencies() {
     fs::create_dir(&tests).unwrap();
     fs::write(tests.join("fixture.rs"), "use crate::config::Config;\n").unwrap();
     #[cfg(unix)]
-    std::os::unix::fs::symlink(temp.path(), nested.join("cycle")).unwrap();
+    unix::fs::symlink(temp.path(), nested.join("cycle")).unwrap();
 
     assert_eq!(check_domain_sources(temp.path()).unwrap(), 1);
 
     #[cfg(unix)]
     {
-        let linked = crate::test_temp::tempdir().unwrap();
+        let linked = test_temp::tempdir().unwrap();
         fs::write(
             linked.path().join("source.rs"),
             "use crate::config::Config;\n",
         )
         .unwrap();
         let alias = nested.join("alias.rs");
-        std::os::unix::fs::symlink(linked.path().join("source.rs"), &alias).unwrap();
+        unix::fs::symlink(linked.path().join("source.rs"), &alias).unwrap();
 
         assert_eq!(check_domain_sources(temp.path()).unwrap_err(), alias);
     }
@@ -511,8 +519,8 @@ fn pressure_preferences_preserve_public_paths_and_serialized_names() {
         (Entry::PressureOnly, "pressure_only"),
         (Entry::AnyPressure, "any_pressure"),
     ]);
-    let legacy_edit: crate::input::state::PressureThicknessEditMode = Edit::Scale;
-    let legacy_entry: crate::input::state::PressureThicknessEntryMode = Entry::AnyPressure;
+    let legacy_edit: PressureThicknessEditMode = Edit::Scale;
+    let legacy_entry: PressureThicknessEntryMode = Entry::AnyPressure;
     assert_eq!(legacy_edit, Edit::Scale);
     assert_eq!(legacy_entry, Entry::AnyPressure);
 }

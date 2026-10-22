@@ -7,16 +7,19 @@
 use std::ffi::OsStr;
 use std::time::Duration;
 
+use crate::process_broker;
+use crate::process_broker::HelperKind;
+
 pub(crate) enum ClipboardTextError {
     Empty,
     Other(String),
 }
 
 pub(crate) fn copy_text_via_command(text: &str) -> Result<(), String> {
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.publish(
-                crate::process_broker::HelperKind::WlCopy,
+                HelperKind::WlCopy,
                 OsStr::new("wl-copy"),
                 [OsStr::new("--type"), OsStr::new("text/plain;charset=utf-8")],
                 text.as_bytes().to_vec(),
@@ -39,10 +42,10 @@ pub(crate) fn copy_text_via_command(text: &str) -> Result<(), String> {
 }
 
 pub(crate) fn read_clipboard_text_via_command() -> Result<String, ClipboardTextError> {
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.run(
-                crate::process_broker::HelperKind::WlPaste,
+                HelperKind::WlPaste,
                 OsStr::new("wl-paste"),
                 clipboard_text_read_args(),
                 Vec::new(),

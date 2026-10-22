@@ -1,7 +1,9 @@
+use crate::daemon::protocol_v2::{DaemonRuntimeRecordV2, ProtocolToken};
+use crate::{test_env, test_temp};
+
 use super::*;
 use crate::paths::daemon_pid_file;
-use std::env;
-use std::fs;
+use std::{env, fs};
 
 #[test]
 fn empty_toggle_request_reports_empty() {
@@ -78,11 +80,9 @@ fn session_file_request_rejects_relative_path() {
 
 #[test]
 fn admitted_indeterminate_v2_result_warns_callers_not_to_retry() {
-    let error = finish_v2_command(
-        crate::daemon::protocol_v2::TerminalCommandResult::AdmittedIndeterminate(
-            "final control publication failed".into(),
-        ),
-    )
+    let error = finish_v2_command(TerminalCommandResult::AdmittedIndeterminate(
+        "final control publication failed".into(),
+    ))
     .unwrap_err();
 
     assert!(
@@ -95,7 +95,7 @@ fn admitted_indeterminate_v2_result_warns_callers_not_to_retry() {
 
 #[test]
 fn daemon_toggle_response_round_trips_error_and_is_removed_after_wait() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
         daemon_token: "daemon-token".into(),
         request: DaemonToggleRequest::default(),
@@ -117,7 +117,7 @@ fn daemon_toggle_response_round_trips_error_and_is_removed_after_wait() {
 
 #[test]
 fn daemon_toggle_response_round_trips_success_and_is_removed_after_wait() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
         daemon_token: "daemon-token".into(),
         request: DaemonToggleRequest::default(),
@@ -142,7 +142,7 @@ fn daemon_toggle_response_wait_covers_request_age_and_overlay_stop_grace() {
 
 #[test]
 fn daemon_toggle_response_wait_error_marks_existing_request_canceled() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
         daemon_token: "daemon-token".into(),
         request: DaemonToggleRequest::default(),
@@ -168,7 +168,7 @@ fn daemon_toggle_response_wait_error_marks_existing_request_canceled() {
 
 #[test]
 fn daemon_toggle_response_wait_error_does_not_create_missing_cancel_request() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
         daemon_token: "daemon-token".into(),
         request: DaemonToggleRequest::default(),
@@ -190,7 +190,7 @@ fn daemon_toggle_response_wait_error_does_not_create_missing_cancel_request() {
 
 #[test]
 fn daemon_toggle_response_parse_error_marks_existing_request_canceled() {
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let command = DaemonToggleCommand {
         daemon_token: "daemon-token".into(),
         request: DaemonToggleRequest::default(),
@@ -216,9 +216,10 @@ fn daemon_toggle_response_parse_error_marks_existing_request_canceled() {
 
 #[test]
 fn daemon_pid_file_round_trips_runtime_info() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -230,17 +231,21 @@ fn daemon_pid_file_round_trips_runtime_info() {
             .contains("wayscriber daemon is not running")
     );
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -264,17 +269,21 @@ fn stale_cleanup_removes_matching_runtime_while_lock_is_free() {
     assert!(!daemon_pid_file().exists());
     assert!(!daemon_command_dir().exists());
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn stale_cleanup_removes_only_legacy_commands_and_preserves_versioned_state() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -318,17 +327,21 @@ fn stale_cleanup_removes_only_legacy_commands_and_preserves_versioned_state() {
         b"not-a-canonical-v1-request"
     );
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn stale_cleanup_preserves_mismatched_runtime() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -355,17 +368,21 @@ fn stale_cleanup_preserves_mismatched_runtime() {
     assert_eq!(read_daemon_runtime_file().unwrap(), current);
     assert!(daemon_command_dir().exists());
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn take_daemon_toggle_request_round_trips_payload() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -402,17 +419,21 @@ fn take_daemon_toggle_request_round_trips_payload() {
     assert!(!batch.saw_command_files);
     assert!(batch.commands.is_empty());
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -443,17 +464,21 @@ fn write_daemon_toggle_request_queues_multiple_files_without_leaking_temp_files(
     assert!(entries.iter().all(|name| name.ends_with(".json")));
     assert!(!entries.iter().any(|name| name.ends_with(".tmp")));
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -484,17 +509,21 @@ fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
             .unwrap_or(true)
     );
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_mismatched_token() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -515,17 +544,21 @@ fn take_daemon_toggle_request_ignores_mismatched_token() {
             .is_empty()
     );
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_stale_payload() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -547,17 +580,21 @@ fn take_daemon_toggle_request_ignores_stale_payload() {
     assert!(batch.saw_command_files);
     assert!(batch.commands.is_empty());
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 #[test]
 fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_RUNTIME_DIR_ENV, tmp.path());
     }
@@ -579,19 +616,22 @@ fn take_daemon_toggle_request_ignores_canceled_payload_but_marks_typed_signal() 
     assert!(batch.saw_command_files);
     assert!(batch.commands.is_empty());
 
-    match prev {
-        Some(value) => unsafe { env::set_var(XDG_RUNTIME_DIR_ENV, value) },
-        None => unsafe { env::remove_var(XDG_RUNTIME_DIR_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev {
+            Some(value) => env::set_var(XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(XDG_RUNTIME_DIR_ENV),
+        }
     }
 }
 
 fn with_client_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
-    let tmp = crate::test_temp::tempdir().unwrap();
-    crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), run)
+    let tmp = test_temp::tempdir().unwrap();
+    test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(tmp.path().as_os_str()), run)
 }
 
 fn hold_daemon_lock() -> fs::File {
-    let path = crate::paths::daemon_lock_file();
+    let path = paths::daemon_lock_file();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let lock = fs::OpenOptions::new()
         .create(true)
@@ -600,7 +640,7 @@ fn hold_daemon_lock() -> fs::File {
         .truncate(false)
         .open(&path)
         .unwrap();
-    crate::session::try_lock_exclusive(&lock).unwrap();
+    session::try_lock_exclusive(&lock).unwrap();
     lock
 }
 
@@ -616,9 +656,9 @@ fn client_without_a_daemon_reports_that_it_is_not_running() {
 #[test]
 fn client_clears_a_v2_record_whose_daemon_released_its_lock() {
     with_client_runtime_dir(|| {
-        let token = crate::daemon::protocol_v2::ProtocolToken::generate().unwrap();
-        let runtime = crate::daemon::protocol_v2::DaemonRuntimeRecordV2::current(token).unwrap();
-        crate::daemon::protocol_v2::write_runtime_record_v2(&daemon_pid_file(), &runtime).unwrap();
+        let token = ProtocolToken::generate().unwrap();
+        let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
+        protocol_v2::write_runtime_record_v2(&daemon_pid_file(), &runtime).unwrap();
 
         let error = send_daemon_toggle_request(&DaemonToggleRequest::default()).unwrap_err();
 

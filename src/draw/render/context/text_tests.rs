@@ -1,3 +1,5 @@
+use crate::draw;
+
 use super::{RenderCaches, RenderCtx};
 use crate::draw::{
     ArrowLabel, ArrowStyle, FontDescriptor, Frame, RED, Shape, StepMarkerLabel, TextMeasurer,
@@ -78,10 +80,10 @@ fn pixels(
         for shape in &frame.shapes {
             if legacy {
                 render.render_shape_with_halo(&shape.shape, halo);
-                crate::draw::render_selection_halo(&ctx, shape);
+                draw::render_selection_halo(&ctx, shape);
             } else {
                 render.render_shape_with_halo_with_measurer(measurer, &shape.shape, halo);
-                crate::draw::render_selection_halo_with_measurer(measurer, &ctx, shape);
+                draw::render_selection_halo_with_measurer(measurer, &ctx, shape);
             }
         }
         assert_eq!(ctx.matrix(), before);

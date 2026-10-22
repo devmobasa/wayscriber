@@ -30,7 +30,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Input source"),
             tr("\"Overlay only\" shows what Wayscriber itself receives. \"System-wide\" also shows input that goes to other apps; it needs a build with the input-monitor feature and read access to /dev/input (usually `input` group membership), and it sees every keystroke on the seat - including passwords typed elsewhere."),
             modes,
-            mode_labels,
+            &mode_labels,
             |app| app.draft.input_hud_mode,
             Message::InputHudModeChanged,
         )
@@ -38,7 +38,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Screen position"),
             "",
             positions,
-            position_labels,
+            &position_labels,
             |app| app.draft.input_hud_position,
             Message::InputHudPositionChanged,
         )

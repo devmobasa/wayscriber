@@ -1,4 +1,5 @@
-use smithay_client_toolkit::{compositor::CompositorState, shell::wlr_layer::LayerSurface};
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
 use wayland_client::protocol::wl_surface;
 
 use super::structs::ToolbarSurfaceManager;

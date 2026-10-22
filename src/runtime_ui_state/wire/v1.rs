@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use toml::{Table, Value};
 
+use crate::config::{StatusBarItem, ToolbarLayoutMode, ToolbarSectionFlag};
+
 use super::{RuntimeUiWireError, preserve_value, restore_value};
 use crate::config::{
     ToolbarItemId, ToolbarItemOrderGroup, toolbar_item_definitions, toolbar_item_order_group,
@@ -106,7 +108,7 @@ fn decode_toolbar(
     decode_id_map(
         toolbar.remove("sections"),
         |id| {
-            crate::config::ToolbarSectionFlag::ALL
+            ToolbarSectionFlag::ALL
                 .into_iter()
                 .find(|flag| flag.item_id().as_str() == id)
                 .map(InteractionSeedTarget::SectionVisibility)
@@ -116,10 +118,7 @@ fn decode_toolbar(
     )?;
     decode_id_map(
         toolbar.remove("status_bar_items"),
-        |id| {
-            crate::config::StatusBarItem::from_config_id(id)
-                .map(InteractionSeedTarget::StatusBarItem)
-        },
+        |id| StatusBarItem::from_config_id(id).map(InteractionSeedTarget::StatusBarItem),
         &mut wire.model,
         &mut wire.passthrough,
     )?;
@@ -608,7 +607,7 @@ fn item_belongs_to_group(id: ToolbarItemId, group: ToolbarItemOrderGroup) -> boo
 
 /// The wire spelling of a layout preset. Independent of the config's serde
 /// naming so a rename there cannot silently reinterpret a stored value.
-fn layout_mode_wire_id(mode: crate::config::ToolbarLayoutMode) -> &'static str {
+fn layout_mode_wire_id(mode: ToolbarLayoutMode) -> &'static str {
     use crate::config::ToolbarLayoutMode as Mode;
     match mode {
         Mode::Simple => "simple",
@@ -617,7 +616,7 @@ fn layout_mode_wire_id(mode: crate::config::ToolbarLayoutMode) -> &'static str {
     }
 }
 
-fn layout_mode_from_wire_id(value: &str) -> Option<crate::config::ToolbarLayoutMode> {
+fn layout_mode_from_wire_id(value: &str) -> Option<ToolbarLayoutMode> {
     use crate::config::ToolbarLayoutMode as Mode;
     match value {
         "simple" => Some(Mode::Simple),

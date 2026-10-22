@@ -1,4 +1,7 @@
-use super::super::*;
+use crate::ui;
+use crate::ui::ShapeMeasureBadge;
+
+use super::super::WaylandState;
 use crate::ui::theme;
 
 impl WaylandState {
@@ -6,13 +9,13 @@ impl WaylandState {
         &self,
         width: u32,
         height: u32,
-    ) -> Option<crate::ui::ShapeMeasureBadge> {
+    ) -> Option<ShapeMeasureBadge> {
         let pointer = self.pointer.position();
         let world = self.canvas_world_coords(pointer.0 as f64, pointer.1 as f64);
         let readout = self
             .input_state
             .provisional_shape_readout(world.0, world.1)?;
-        crate::ui::measure_shape_badge(
+        ui::measure_shape_badge(
             self.render.ui_text(),
             self.config.ui.show_shape_size_readout,
             readout,
@@ -29,7 +32,7 @@ impl WaylandState {
         let (x, y, badge_width, badge_height) = badge.bounds;
         let _ = ctx.save();
 
-        crate::ui::draw_pill(
+        ui::draw_pill(
             ctx,
             x,
             y,
@@ -46,12 +49,7 @@ impl WaylandState {
         ctx.clip();
         self.render
             .ui_text()
-            .layout(
-                ctx,
-                crate::ui::shape_measure_badge_text_style(),
-                &badge.text,
-                None,
-            )
+            .layout(ctx, ui::shape_measure_badge_text_style(), &badge.text, None)
             .show_at_baseline(ctx, badge.baseline.0, badge.baseline.1);
 
         let _ = ctx.restore();

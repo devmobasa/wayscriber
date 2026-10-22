@@ -1,4 +1,7 @@
-use super::super::super::*;
+use crate::backend::wayland::state::WaylandState;
+use crate::draw::shape;
+use crate::input::{DrawingState, EraserMode, Tool};
+use crate::{draw, ui};
 use std::collections::HashSet;
 
 impl WaylandState {
@@ -8,7 +11,7 @@ impl WaylandState {
             let frame = self.input_state.boards.active_frame();
             for drawn in &frame.shapes {
                 if selected.contains(&drawn.id) {
-                    crate::draw::render_selection_halo_with_measurer(
+                    draw::render_selection_halo_with_measurer(
                         self.render.text_measurer(),
                         ctx,
                         drawn,
@@ -30,7 +33,7 @@ impl WaylandState {
                 .input_state
                 .selection_bounds_with(self.render.text_measurer())
         {
-            crate::draw::render_selection_handles(ctx, &bounds);
+            draw::render_selection_handles(ctx, &bounds);
         }
 
         self.render_spotlight_magnification_control(ctx);
@@ -74,7 +77,7 @@ impl WaylandState {
         let Some(handle) = self.input_state.selected_arrow_bend_handle() else {
             return;
         };
-        crate::ui::render_arrow_bend_handle(ctx, handle.rect);
+        ui::render_arrow_bend_handle(ctx, handle.rect);
     }
 
     /// Draws the magnification slider above a selected loupe.
@@ -100,13 +103,13 @@ impl WaylandState {
         // inline status is: a 1x loupe is an ordinary bright opening that needs
         // no pixel source, so "1x - Freeze screen to preview" would be advice
         // about a problem the user does not have.
-        let unavailable = crate::draw::spotlight_magnification_is_active(control.magnification)
+        let unavailable = draw::spotlight_magnification_is_active(control.magnification)
             .then(|| {
                 self.current_spotlight_magnifier_source()
                     .unavailable_reason()
             })
             .flatten();
-        crate::ui::render_spotlight_magnification_control(
+        ui::render_spotlight_magnification_control(
             self.render.ui_text(),
             ctx,
             control.track,
@@ -142,7 +145,7 @@ impl WaylandState {
                 } = &self.input_state.state
                 {
                     // Preview the integer path the committed stroke erases with.
-                    let rounded = crate::draw::shape::quantize_path(points);
+                    let rounded = shape::quantize_path(points);
                     let sampled = self.input_state.sample_eraser_path_points(&rounded);
                     self.input_state.hit_test_all_for_points_cached_with(
                         self.render.text_measurer(),
@@ -165,7 +168,7 @@ impl WaylandState {
                 match ids.len() {
                     1 => {
                         if let Some(drawn) = frame.shape(ids[0]) {
-                            crate::draw::render_selection_halo_with_measurer(
+                            draw::render_selection_halo_with_measurer(
                                 self.render.text_measurer(),
                                 ctx,
                                 drawn,
@@ -202,7 +205,7 @@ impl WaylandState {
                         }
                         for &index in &indices[..count] {
                             if let Some(drawn) = frame.shapes.get(index) {
-                                crate::draw::render_selection_halo_with_measurer(
+                                draw::render_selection_halo_with_measurer(
                                     self.render.text_measurer(),
                                     ctx,
                                     drawn,
@@ -214,7 +217,7 @@ impl WaylandState {
                         let hover_ids: HashSet<_> = ids.into_iter().collect();
                         for drawn in &frame.shapes {
                             if hover_ids.contains(&drawn.id) {
-                                crate::draw::render_selection_halo_with_measurer(
+                                draw::render_selection_halo_with_measurer(
                                     self.render.text_measurer(),
                                     ctx,
                                     drawn,

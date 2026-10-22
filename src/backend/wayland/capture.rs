@@ -3,14 +3,16 @@
 //! Keeps the capture manager and in-progress flag together so the main
 //! Wayland loop can coordinate capture requests and results.
 
-use crate::{
-    capture::{
-        CaptureManager, CaptureRequest, CaptureRequestId, DesktopBackdropCaptureRequest,
-        ImageOperationKind, file::FileSaveConfig,
-    },
-    config::Action,
-    input::state::BoardPasteTarget,
+use std::fmt::{Debug, Formatter};
+use std::{fmt, mem};
+
+use crate::capture::file::FileSaveConfig;
+use crate::capture::{
+    CaptureManager, CaptureRequest, CaptureRequestId, DesktopBackdropCaptureRequest,
+    ImageOperationKind,
 };
+use crate::config::Action;
+use crate::input::state::BoardPasteTarget;
 
 use super::state::RegionCaptureIntent;
 
@@ -27,8 +29,8 @@ pub(in crate::backend::wayland) enum CapturePreflightRequest {
     DesktopBackdrop(DesktopBackdropCaptureRequest),
 }
 
-impl std::fmt::Debug for CapturePreflightRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for CapturePreflightRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Screenshot(request) => f.debug_tuple("Screenshot").field(request).finish(),
             Self::DesktopBackdrop(request) => {
@@ -224,12 +226,19 @@ impl CaptureState {
             return None;
         };
         let RegionCapturePhase::Reserved(intent) =
-            std::mem::replace(&mut self.region, RegionCapturePhase::Idle)
+            mem::replace(&mut self.region, RegionCapturePhase::Idle)
         else {
             unreachable!("region phase changed after reservation check");
         };
-        debug_assert!(self.in_progress);
-        debug_assert!(self.accepted_id.is_none());
+        debug_assert!(
+            self.in_progress,
+            "a reserved region picker must hold the capture lifecycle"
+        );
+        debug_assert!(
+            self.accepted_id.is_none(),
+            "a reserved region picker has no accepted manager request, got {:?}",
+            self.accepted_id
+        );
         Some(intent)
     }
 
@@ -245,12 +254,19 @@ impl CaptureState {
         };
         let submission_intent = intent.clone();
         let RegionCapturePhase::Reserved(intent) =
-            std::mem::replace(&mut self.region, RegionCapturePhase::Idle)
+            mem::replace(&mut self.region, RegionCapturePhase::Idle)
         else {
             unreachable!("region phase changed after reservation check");
         };
-        debug_assert!(self.in_progress);
-        debug_assert!(self.accepted_id.is_none());
+        debug_assert!(
+            self.in_progress,
+            "a reserved region picker must hold the capture lifecycle"
+        );
+        debug_assert!(
+            self.accepted_id.is_none(),
+            "a region submission starts before the manager accepts it, got {:?}",
+            self.accepted_id
+        );
         self.region = RegionCapturePhase::Submitting(intent);
         Some(submission_intent)
     }
@@ -360,13 +376,16 @@ impl CaptureState {
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::frozen::FrozenImage;
+    use crate::capture::DesktopBackdropGeometry;
+    use crate::input::state::test_support;
+    use crate::util::Rect;
+
     use super::*;
-    use crate::{
-        backend::ExitAfterCaptureMode,
-        backend::wayland::state::RegionPickerOptions,
-        capture::types::{CaptureDestination, CaptureType},
-        input::state::RegionPurposeTag,
-    };
+    use crate::backend::ExitAfterCaptureMode;
+    use crate::backend::wayland::state::RegionPickerOptions;
+    use crate::capture::types::{CaptureDestination, CaptureType};
+    use crate::input::state::RegionPurposeTag;
 
     fn region_intent(action: Action) -> RegionCaptureIntent {
         RegionCaptureIntent::new(
@@ -393,7 +412,7 @@ mod tests {
             board_id: "transparent".to_string(),
             page_index: 0,
             page_generation: 1,
-            world_bounds: crate::util::Rect::new(10, 20, 30, 40).unwrap(),
+            world_bounds: Rect::new(10, 20, 30, 40).unwrap(),
         }
     }
 
@@ -642,7 +661,7 @@ mod tests {
         use wayland_client::protocol::wl_output;
 
         let mut source = FrozenState::new(None);
-        let mut backdrop = crate::capture::DesktopBackdropGeometry {
+        let mut backdrop = DesktopBackdropGeometry {
             logical_x: 0,
             logical_y: 0,
             logical_width: 2,
@@ -668,7 +687,7 @@ mod tests {
         source.set_active_output(None, Some(7));
         source.set_active_geometry(Some(geometry.clone()));
         source.set_pending_output_image(
-            crate::backend::wayland::frozen::FrozenImage {
+            FrozenImage {
                 width: 2,
                 height: 1,
                 stride: 8,
@@ -677,7 +696,7 @@ mod tests {
             7,
             geometry.clone(),
         );
-        let mut input = crate::input::state::test_support::make_test_input_state();
+        let mut input = test_support::make_test_input_state();
         assert!(source.activate_pending_image(2, 1, &mut input).unwrap());
         let context = CaptureLayoutContext::for_desktop(7, &source);
         let direct_provenance = source.image_provenance().unwrap();

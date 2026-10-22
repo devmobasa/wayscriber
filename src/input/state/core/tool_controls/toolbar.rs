@@ -1,3 +1,16 @@
+#[cfg(test)]
+use crate::config::ToolbarItemsConfig;
+#[cfg(test)]
+use crate::config::ToolbarModeOverrides;
+use crate::config::{
+    ResolvedToolbarItems, ToolbarConfig, ToolbarLayoutMode, ToolbarSectionVisibility,
+    ToolbarStrokeControls,
+};
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
+use crate::ui::toolbar::ToolbarItemCustomizeGroup;
+use crate::ui_text::UiTextEngine;
+
 use super::super::base::InputState;
 use crate::config::{
     RadialMenuMouseBinding, ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting,
@@ -13,15 +26,15 @@ pub(crate) const CLEAR_UNDO_TOAST_MS: u64 = 2000;
 impl InputState {
     /// Sets toolbar visibility without changing its persisted pin.
     pub fn set_toolbar_visible(&mut self, visible: bool) -> bool {
-        let engine = crate::ui_text::UiTextEngine::default();
-        let measurer = crate::draw::TextMeasurer::default();
+        let engine = UiTextEngine::default();
+        let measurer = TextMeasurer::default();
         self.set_toolbar_visible_with_resources(&engine, &measurer, visible)
     }
 
     pub(crate) fn set_toolbar_visible_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         visible: bool,
     ) -> bool {
         if !self.toolbar.set_visible(visible) {
@@ -36,8 +49,8 @@ impl InputState {
     /// toolbar hidden by a transient chrome owner.
     pub(crate) fn derive_toolbar_visibility_from_pins_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
     ) {
         let visible = self.toolbar.top_pinned();
         if self.modes.retarget_visibility_from_pin(visible) {
@@ -118,21 +131,21 @@ impl InputState {
         self.toolbar.scale()
     }
 
-    pub(crate) fn toolbar_layout_mode(&self) -> crate::config::ToolbarLayoutMode {
+    pub(crate) fn toolbar_layout_mode(&self) -> ToolbarLayoutMode {
         self.toolbar.layout_mode()
     }
 
     #[cfg(test)]
-    pub(crate) fn toolbar_mode_overrides(&self) -> &crate::config::ToolbarModeOverrides {
+    pub(crate) fn toolbar_mode_overrides(&self) -> &ToolbarModeOverrides {
         self.toolbar.mode_overrides()
     }
 
     #[cfg(test)]
-    pub(crate) fn toolbar_items(&self) -> &crate::config::ToolbarItemsConfig {
+    pub(crate) fn toolbar_items(&self) -> &ToolbarItemsConfig {
         self.toolbar.items()
     }
 
-    pub(crate) fn resolved_toolbar_items(&self) -> &crate::config::ResolvedToolbarItems {
+    pub(crate) fn resolved_toolbar_items(&self) -> &ResolvedToolbarItems {
         self.toolbar.resolved_items()
     }
 
@@ -140,9 +153,7 @@ impl InputState {
         self.toolbar.customize_items_open()
     }
 
-    pub(crate) fn toolbar_customize_items_group(
-        &self,
-    ) -> Option<crate::ui::toolbar::ToolbarItemCustomizeGroup> {
+    pub(crate) fn toolbar_customize_items_group(&self) -> Option<ToolbarItemCustomizeGroup> {
         self.toolbar.customize_items_group()
     }
 
@@ -171,7 +182,7 @@ impl InputState {
     }
 
     /// How the style pill shows pen smoothing and Shape Pen sensitivity.
-    pub(crate) fn toolbar_stroke_controls(&self) -> crate::config::ToolbarStrokeControls {
+    pub(crate) fn toolbar_stroke_controls(&self) -> ToolbarStrokeControls {
         self.toolbar.stroke_controls()
     }
 
@@ -198,8 +209,8 @@ impl InputState {
         self.toolbar.set_use_icons(use_icons);
     }
 
-    pub fn init_toolbar_from_config(&mut self, config: &crate::config::ToolbarConfig) {
-        let legacy = crate::config::ToolbarSectionVisibility {
+    pub fn init_toolbar_from_config(&mut self, config: &ToolbarConfig) {
+        let legacy = ToolbarSectionVisibility {
             show_actions_section: self.ui_visibility.show_actions_section,
             show_actions_advanced: self.ui_visibility.show_actions_advanced,
             show_zoom_actions: self.ui_visibility.show_zoom_actions,
@@ -239,8 +250,8 @@ impl InputState {
 
     pub(crate) fn set_top_display_mode_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         mode: TopDisplayMode,
     ) {
         self.toolbar.set_top_display_mode(mode);
@@ -249,15 +260,15 @@ impl InputState {
     }
 
     pub fn cycle_top_toolbar_display(&mut self) -> TopDisplayMode {
-        let engine = crate::ui_text::UiTextEngine::default();
-        let measurer = crate::draw::TextMeasurer::default();
+        let engine = UiTextEngine::default();
+        let measurer = TextMeasurer::default();
         self.cycle_top_toolbar_display_with_resources(&engine, &measurer)
     }
 
     pub(crate) fn cycle_top_toolbar_display_with_resources(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
     ) -> TopDisplayMode {
         let current = self.top_display_state();
         let next = self.toolbar.cycle_top_display_mode(current);
@@ -396,7 +407,7 @@ impl InputState {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_set_toolbar_items(&mut self, items: crate::config::ToolbarItemsConfig) {
+    pub(crate) fn test_set_toolbar_items(&mut self, items: ToolbarItemsConfig) {
         self.toolbar.override_items_for_test(items);
         self.refresh_section_visibility();
     }
@@ -404,8 +415,8 @@ impl InputState {
     #[cfg(all(test, feature = "toolbar-gtk"))]
     pub(crate) fn test_set_toolbar_layout(
         &mut self,
-        mode: crate::config::ToolbarLayoutMode,
-        overrides: crate::config::ToolbarModeOverrides,
+        mode: ToolbarLayoutMode,
+        overrides: ToolbarModeOverrides,
     ) {
         self.toolbar.override_layout_for_test(mode, overrides);
         self.refresh_section_visibility();
@@ -415,7 +426,7 @@ impl InputState {
     pub(crate) fn test_set_toolbar_customization(
         &mut self,
         items_open: bool,
-        group: Option<crate::ui::toolbar::ToolbarItemCustomizeGroup>,
+        group: Option<ToolbarItemCustomizeGroup>,
         status_bar_contents_open: bool,
     ) {
         self.toolbar
@@ -423,61 +434,49 @@ impl InputState {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_set_toolbar_stroke_controls(
-        &mut self,
-        style: crate::config::ToolbarStrokeControls,
-    ) {
+    pub(crate) fn test_set_toolbar_stroke_controls(&mut self, style: ToolbarStrokeControls) {
         self.toolbar.override_stroke_controls_for_test(style);
     }
 
     /// Wrapper for undo that preserves existing action plumbing.
     pub fn toolbar_undo(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_undo_with_resources(crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
         });
     }
 
-    pub(crate) fn toolbar_undo_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    pub(crate) fn toolbar_undo_with_resources(&mut self, resources: InputTextResources<'_>) {
         self.handle_action_with_resources(resources, Action::Undo);
     }
 
     /// Wrapper for redo that preserves existing action plumbing.
     pub fn toolbar_redo(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_redo_with_resources(crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
         });
     }
 
-    pub(crate) fn toolbar_redo_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    pub(crate) fn toolbar_redo_with_resources(&mut self, resources: InputTextResources<'_>) {
         self.handle_action_with_resources(resources, Action::Redo);
     }
 
     /// Wrapper for clear that preserves existing action plumbing.
     pub fn toolbar_clear(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_clear_with_resources(crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
         });
     }
 
-    pub(crate) fn toolbar_clear_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-    ) {
+    pub(crate) fn toolbar_clear_with_resources(&mut self, resources: InputTextResources<'_>) {
         self.handle_action_with_resources(resources, Action::ClearCanvas);
     }
 
@@ -485,8 +484,8 @@ impl InputState {
     /// were removed without a locked-shape warning, offers a short toast with
     /// an "Undo?" chip. The keyboard action and Shift+click stay instant.
     pub fn toolbar_clear_with_undo_toast(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_clear_with_undo_toast_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -497,7 +496,7 @@ impl InputState {
 
     pub(crate) fn toolbar_clear_with_undo_toast_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) {
         let (has_locked, has_unlocked) = {
             let frame = self.boards.active_frame();
@@ -522,8 +521,8 @@ impl InputState {
 
     /// Wrapper for entering text mode.
     pub fn toolbar_enter_text_mode(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_enter_text_mode_with_resources(crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
@@ -532,15 +531,15 @@ impl InputState {
 
     pub(crate) fn toolbar_enter_text_mode_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) {
         self.handle_action_with_resources(resources, Action::EnterTextMode);
     }
 
     /// Wrapper for entering sticky note mode.
     pub fn toolbar_enter_sticky_note_mode(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.toolbar_enter_sticky_note_mode_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -551,7 +550,7 @@ impl InputState {
 
     pub(crate) fn toolbar_enter_sticky_note_mode_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) {
         self.handle_action_with_resources(resources, Action::EnterStickyNoteMode);
     }
@@ -559,19 +558,24 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
+    use crate::config::{
+        ToolbarConfig, ToolbarItemsConfig, ToolbarLayoutMode, ToolbarSectionFlag, UiConfig,
+        toolbar_item_ids as ids,
+    };
+    use crate::input::state::UiVisibility;
     use crate::input::state::test_support::make_test_input_state;
+    use crate::ui::toolbar::ToolbarEvent;
 
     #[test]
     fn init_folds_legacy_section_booleans_into_explicit_overrides() {
         let mut state = make_test_input_state();
         // A legacy Regular config where zoom actions were turned off and
         // everything else matches the baseline.
-        let config = crate::config::ToolbarConfig {
+        let config = ToolbarConfig {
             show_zoom_actions: false,
             ..Default::default()
         };
-        state.ui_visibility = crate::input::state::UiVisibility::from(&crate::config::UiConfig {
+        state.ui_visibility = UiVisibility::from(&UiConfig {
             toolbar: config.clone(),
             ..Default::default()
         });
@@ -582,10 +586,10 @@ mod tests {
         assert!(state.ui_visibility.show_presets);
         // ...and the disagreement is now an explicit override that
         // survives mode switches.
-        let zoom_id = crate::config::ToolbarSectionFlag::ZoomActions.item_id();
+        let zoom_id = ToolbarSectionFlag::ZoomActions.item_id();
         assert!(state.resolved_toolbar_items().hidden.contains(&zoom_id));
-        state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetToolbarLayoutMode(
-            crate::config::ToolbarLayoutMode::Advanced,
+        state.apply_toolbar_event(ToolbarEvent::SetToolbarLayoutMode(
+            ToolbarLayoutMode::Advanced,
         ));
         assert!(!state.ui_visibility.show_zoom_actions);
     }
@@ -593,7 +597,7 @@ mod tests {
     #[test]
     fn factory_visibility_reset_changes_only_the_centralized_eligible_set() {
         let mut state = make_test_input_state();
-        let section = crate::config::ToolbarSectionFlag::Actions.item_id();
+        let section = ToolbarSectionFlag::Actions.item_id();
         let mut items = ToolbarItemsConfig::default();
         items.set_hidden(ids::TOP_UTILITY_SCREENSHOT, true);
         items.set_hidden(ids::TOP_UTILITY_OCR, false);

@@ -181,6 +181,7 @@ impl ColorPickerPopupLayoutOptions {
         show_eyedropper: true,
     };
 
+    #[must_use]
     pub fn for_target(target: ColorPickerTarget, show_default_button: bool) -> Self {
         Self {
             show_default_button,
@@ -280,6 +281,7 @@ impl ColorPickerPopupLayout {
     /// Compute the layout for given screen dimensions. `show_default_button`
     /// comes from the popup's target: recoloring a slot with a built-in color
     /// adds a third button to the bottom row.
+    #[must_use]
     pub fn compute(
         screen_width: u32,
         screen_height: u32,
@@ -403,11 +405,13 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the saturation/value square.
+    #[must_use]
     pub fn point_in_sv(&self, x: f64, y: f64) -> bool {
         x >= self.sv_x && x <= self.sv_x + self.sv_w && y >= self.sv_y && y <= self.sv_y + self.sv_h
     }
 
     /// Check if a point is within the hue bar.
+    #[must_use]
     pub fn point_in_hue(&self, x: f64, y: f64) -> bool {
         x >= self.hue_x
             && x <= self.hue_x + self.hue_w
@@ -416,6 +420,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Saturation/value the square would yield for a pointer position.
+    #[must_use]
     pub fn sv_from_point(&self, x: f64, y: f64) -> (f64, f64) {
         let saturation = ((x - self.sv_x) / self.sv_w).clamp(0.0, 1.0);
         let value = 1.0 - ((y - self.sv_y) / self.sv_h).clamp(0.0, 1.0);
@@ -423,11 +428,13 @@ impl ColorPickerPopupLayout {
     }
 
     /// Hue the bar would yield for a pointer position.
+    #[must_use]
     pub fn hue_from_point(&self, x: f64) -> f64 {
         ((x - self.hue_x) / self.hue_w).clamp(0.0, 1.0)
     }
 
     /// Check if a point is within the alpha bar.
+    #[must_use]
     pub fn point_in_alpha(&self, x: f64, y: f64) -> bool {
         self.alpha_h > 0.0
             && x >= self.alpha_x
@@ -437,11 +444,13 @@ impl ColorPickerPopupLayout {
     }
 
     /// Alpha the bar would yield for a pointer position.
+    #[must_use]
     pub fn alpha_from_point(&self, x: f64) -> f64 {
         ((x - self.alpha_x) / self.alpha_w).clamp(0.0, 1.0)
     }
 
     /// Top-left of the recent-color swatch at `index`.
+    #[must_use]
     pub fn recent_swatch_origin(&self, index: usize) -> (f64, f64) {
         let x = self.recents_x + index as f64 * (RECENT_SWATCH_SIZE + RECENT_SWATCH_GAP);
         (x, self.recents_y)
@@ -449,6 +458,7 @@ impl ColorPickerPopupLayout {
 
     /// Index of the recent-color swatch under a point, if any. `count` bounds
     /// the search so an empty tail is not clickable.
+    #[must_use]
     pub fn recent_swatch_at(&self, x: f64, y: f64, count: usize) -> Option<usize> {
         if y < self.recents_y || y > self.recents_y + RECENT_SWATCH_SIZE {
             return None;
@@ -460,6 +470,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the hex input field.
+    #[must_use]
     pub fn point_in_hex_input(&self, x: f64, y: f64) -> bool {
         x >= self.hex_input_x
             && x <= self.hex_input_x + self.hex_input_w
@@ -468,6 +479,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the OK button.
+    #[must_use]
     pub fn point_in_ok_button(&self, x: f64, y: f64) -> bool {
         x >= self.ok_btn_x
             && x <= self.ok_btn_x + self.btn_width
@@ -476,6 +488,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the copy-hex button.
+    #[must_use]
     pub fn point_in_copy_button(&self, x: f64, y: f64) -> bool {
         x >= self.copy_btn_x
             && x <= self.copy_btn_x + self.action_btn_size
@@ -484,6 +497,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the paste-hex button.
+    #[must_use]
     pub fn point_in_paste_button(&self, x: f64, y: f64) -> bool {
         x >= self.paste_btn_x
             && x <= self.paste_btn_x + self.action_btn_size
@@ -492,6 +506,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the screen eyedropper button.
+    #[must_use]
     pub fn point_in_eyedropper_button(&self, x: f64, y: f64) -> bool {
         self.eyedropper_enabled
             && x >= self.eyedropper_btn_x
@@ -502,6 +517,7 @@ impl ColorPickerPopupLayout {
 
     /// Check if a point is within the "Default" button. Always false when the
     /// popup is not recoloring a slot with a built-in color.
+    #[must_use]
     pub fn point_in_default_button(&self, x: f64, y: f64) -> bool {
         let Some((btn_x, btn_y)) = self.default_btn else {
             return false;
@@ -510,6 +526,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the Cancel button.
+    #[must_use]
     pub fn point_in_cancel_button(&self, x: f64, y: f64) -> bool {
         x >= self.cancel_btn_x
             && x <= self.cancel_btn_x + self.btn_width
@@ -570,6 +587,7 @@ impl ColorPickerPopupLayout {
     }
 
     /// Check if a point is within the popup panel.
+    #[must_use]
     pub fn point_in_panel(&self, x: f64, y: f64) -> bool {
         x >= self.origin_x
             && x <= self.origin_x + self.width
@@ -583,6 +601,7 @@ impl ColorPickerPopupLayout {
     /// `recent_count` is the number of recent colors actually shown, the same
     /// count rendering and activation use. Passing the maximum instead would
     /// promise a clickable swatch over the empty positions of a fresh session.
+    #[must_use]
     pub fn cursor_hint_at(&self, x: f64, y: f64, recent_count: usize) -> ColorPickerCursorHint {
         if self.point_in_hex_input(x, y) {
             ColorPickerCursorHint::Text
@@ -624,6 +643,7 @@ pub use crate::draw::color::{hsv_to_rgb, rgb_to_hsv};
 pub const HEX_INPUT_MAX_CHARS: usize = 9;
 
 /// Convert a color to hex string (e.g., "#FF8040").
+#[must_use]
 pub fn color_to_hex(color: Color) -> String {
     let alpha = (color.a.clamp(0.0, 1.0) * 255.0).round() as u8;
     let rgb = format!(
@@ -642,6 +662,7 @@ pub fn color_to_hex(color: Color) -> String {
 }
 
 /// Parse a hex color string (e.g., "#FF8040" or "FF8040").
+#[must_use]
 pub fn parse_hex_color(value: &str) -> Option<Color> {
     let mut hex = value.trim().trim_start_matches("0x");
     if hex.starts_with('#') {

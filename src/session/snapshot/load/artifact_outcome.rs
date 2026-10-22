@@ -1,6 +1,16 @@
 //! What one artifact's load result means: a snapshot, an empty session, a
 //! preserved unreadable copy, or a refusal to continue.
-use super::*;
+use std::error;
+
+use super::super::compression::ExpandedSessionTooLarge;
+use super::corrupt::quarantine_corrupt_artifact;
+use super::{LoadSnapshotOutcome, LoadedSnapshot, NewerVersionPreservationFailed};
+use crate::session::options::SessionOptions;
+use crate::session::primary::is_non_regular_session_artifact;
+use anyhow::Result;
+use log::{debug, info, warn};
+use std::fmt;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub(crate) struct CorruptArtifactPreservationFailed {
@@ -20,7 +30,7 @@ impl fmt::Display for CorruptArtifactPreservationFailed {
     }
 }
 
-impl std::error::Error for CorruptArtifactPreservationFailed {}
+impl error::Error for CorruptArtifactPreservationFailed {}
 
 #[derive(Clone, Copy)]
 pub(super) enum CorruptLoadAction {

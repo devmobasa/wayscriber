@@ -1,3 +1,7 @@
+use std::thread;
+
+use crate::process_broker::BrokerOutput;
+
 use super::{
     CLIPBOARD_FINGERPRINT_BYTES, CLIPBOARD_FINGERPRINT_TIMEOUT, CLIPBOARD_PUBLISH_COMMAND_TIMEOUT,
     ClipboardPrefixRead, ClipboardReadError, image,
@@ -169,9 +173,7 @@ fn read_clipboard_mime_prefix_with_runner(
     })
 }
 
-fn clipboard_output(
-    output: crate::process_broker::BrokerOutput,
-) -> Result<crate::process_broker::BrokerOutput, ClipboardReadError> {
+fn clipboard_output(output: BrokerOutput) -> Result<BrokerOutput, ClipboardReadError> {
     if output.status == 0 {
         return Ok(output);
     }
@@ -200,7 +202,7 @@ where
     R: Read + Send + 'static,
 {
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
+    thread::spawn(move || {
         let _ = tx.send(read_limited(reader, limit));
     });
     rx.recv_timeout(timeout)

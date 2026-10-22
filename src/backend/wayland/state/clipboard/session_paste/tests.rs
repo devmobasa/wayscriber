@@ -1,7 +1,8 @@
 use super::*;
 use crate::draw::Color;
 use crate::input::BOARD_ID_TRANSPARENT;
-use crate::input::state::{PasteAnchor, test_support::make_test_input_state};
+use crate::input::state::PasteAnchor;
+use crate::input::state::test_support::make_test_input_state;
 use crate::session::{CompressionMode, SnapshotPayloadEstimate, SnapshotSaveEstimate};
 use crate::util::Rect;
 use std::path::PathBuf;

@@ -3,7 +3,27 @@
 //! Owns the ordered strip layout and width-degradation presentation while
 //! delegating individual controls to the control factory methods.
 
-use super::*;
+use std::ptr;
+
+use gtk4::accessible::Property;
+
+use crate::toolbar_icons;
+use crate::toolbar_icons::MicroChipStyle;
+
+use super::{
+    COMPACT_BUTTON, COMPACT_CHROME, COMPACT_GAP, COMPACT_ISLAND_GAP, DIVIDER_SPAN, GAP,
+    HANDLE_SIZE, ICON_BUTTON, ICON_SIZE, ISLAND_GAP, MICRO_SIZE, MINIMIZED_SIZE, PIN_BUTTON_GAP,
+    PIN_BUTTON_SIZE, TEXT_BUTTON_H, TEXT_BUTTON_W, TopBar, effective_scale, set_control_widget_id,
+    set_island_widget_id, set_semantic_widget_id, top_default_width,
+};
+use crate::toolbar_gtk::icons::IconWidget;
+use crate::toolbar_gtk::widgets::{send_event, sized_button};
+use crate::toolbar_icons::top_toolbar_icon_painter;
+use crate::ui::toolbar::model::TopStripPlan;
+use crate::ui::toolbar::{ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Micro-chip ring state: `(ring color, spec-unit ring width)`.
 type MicroRing = ((f64, f64, f64, f64), f64);
@@ -38,7 +58,7 @@ impl TopBar {
         set_control_widget_id(&restore, control);
         restore.add_css_class("restore-tab");
         let accessible_label = control.accessible_label(snapshot);
-        restore.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        restore.update_property(&[Property::Label(&accessible_label)]);
         restore.set_tooltip_text(Some(&control.tooltip(snapshot)));
         // Glyph plus a short caption, so the tab reads as a button to bring
         // the tools back rather than a stray sliver.
@@ -84,10 +104,10 @@ impl TopBar {
         set_control_widget_id(&chip, control);
         chip.add_css_class("swatch");
         let accessible_label = control.accessible_label(snapshot);
-        chip.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+        chip.update_property(&[Property::Label(&accessible_label)]);
         chip.set_tooltip_text(Some(&control.tooltip(snapshot)));
 
-        let painter = Rc::new(Cell::new(crate::toolbar_icons::top_toolbar_icon_painter(
+        let painter = Rc::new(Cell::new(toolbar_icons::top_toolbar_icon_painter(
             model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
         )));
         let ring: Rc<Cell<MicroRing>> = Rc::new(Cell::new((
@@ -115,13 +135,13 @@ impl TopBar {
             let chip_size = (width.min(height) as f64).max(1.0);
             let x = (width as f64 - chip_size) / 2.0;
             let y = (height as f64 - chip_size) / 2.0;
-            crate::toolbar_icons::draw_micro_chip(
+            toolbar_icons::draw_micro_chip(
                 ctx,
                 x,
                 y,
                 chip_size,
                 draw_painter.get(),
-                &crate::toolbar_icons::MicroChipStyle {
+                &MicroChipStyle {
                     ring_color,
                     // Ring width is in spec units; scale with the chip.
                     ring_width: ring_width * (chip_size / MICRO_SIZE),
@@ -162,11 +182,11 @@ impl TopBar {
         // Live state: tool glyph, ring color, and ring width track the
         // snapshot without rebuilding the chip.
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-            let next_painter = crate::toolbar_icons::top_toolbar_icon_painter(
+            let next_painter = toolbar_icons::top_toolbar_icon_painter(
                 model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(snapshot.active_tool)),
             );
             let mut dirty = false;
-            if !std::ptr::fn_addr_eq(painter.get(), next_painter) {
+            if !ptr::fn_addr_eq(painter.get(), next_painter) {
                 painter.set(next_painter);
                 dirty = true;
             }
@@ -299,9 +319,7 @@ impl TopBar {
                         grip.area.add_css_class("drag-handle");
                         let accessible_label = control.accessible_label(snapshot);
                         grip.area
-                            .update_property(&[gtk4::accessible::Property::Label(
-                                &accessible_label,
-                            )]);
+                            .update_property(&[Property::Label(&accessible_label)]);
                         grip.area.set_tooltip_text(Some(&control.tooltip(snapshot)));
                         grip.area.set_valign(gtk4::Align::Center);
                         grip.area.set_cursor_from_name(Some("grab"));
@@ -451,7 +469,7 @@ impl TopBar {
         // engine snaps under reduced motion). Continuous opacity, driven
         // per-update, so open popovers and hover state survive. `apply`
         // handles the fully hidden frame and input passthrough.
-        let fade_outer = outer.clone();
+        let fade_outer = outer;
         self.updaters.borrow_mut().push(Box::new(move |snapshot| {
             fade_outer.set_opacity(snapshot.top_fade.clamp(0.0, 1.0));
         }));
@@ -463,7 +481,7 @@ impl TopBar {
             let ring = gtk4::CheckButton::with_label(&control.label(snapshot));
             set_control_widget_id(&ring, control);
             let accessible_label = control.accessible_label(snapshot);
-            ring.update_property(&[gtk4::accessible::Property::Label(&accessible_label)]);
+            ring.update_property(&[Property::Label(&accessible_label)]);
             ring.add_css_class("mini");
             // The root is transparent behind the pills, so the contextual
             // ring row carries its own small pill background. It uses the

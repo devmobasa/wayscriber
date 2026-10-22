@@ -1,10 +1,24 @@
+use std::iter;
+
+use wayscriber::domain::Language;
+
 use crate::app::state::ConfiguratorApp;
 use crate::models::{KeybindingsTabId, SearchQuery, TabId, UiTabId, keybinding_tab};
 use wayscriber::config::{
     PERFORMANCE_FIELD_METADATA, PerformanceFieldGroup, action_meta, toolbar_item_definitions,
 };
 
-use super::terms::*;
+#[cfg(feature = "tablet-input")]
+use super::terms::TABLET_TERMS;
+use super::terms::{
+    ARROW_TERMS, BOARD_GENERAL_TERMS, CAPTURE_FILE_TERMS, CAPTURE_PDF_IDENTITY_TERMS,
+    CAPTURE_PDF_TERMS, CAPTURE_REGION_TERMS, DAEMON_LIGHT_TERMS, DAEMON_SERVICE_TERMS,
+    DAEMON_SHORTCUT_TERMS, DAEMON_STATUS_TERMS, DRAWING_COLOR_TERMS, DRAWING_DEFAULT_TERMS,
+    DRAWING_DRAG_TERMS, DRAWING_FONT_TERMS, DRAWING_LASER_TERMS, HISTORY_CUSTOM_TERMS,
+    HISTORY_MAIN_TERMS, PRESET_CONTROL_TERMS, RENDER_PROFILE_GENERAL_TERMS, SESSION_CATALOG_TERMS,
+    SESSION_PERSISTENCE_TERMS, UI_GENERAL_TERMS, tab_aliases, tab_scope_aliases, ui_tab_aliases,
+    ui_tab_terms,
+};
 use super::types::{AppSearchSummary, SearchArea, TabSearchSummary};
 
 pub(super) fn build_search_summary(app: &ConfiguratorApp) -> AppSearchSummary {
@@ -167,10 +181,10 @@ fn performance_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
     ] {
         let mut parts = vec![identity];
         parts.extend(area.section_titles());
-        for metadata in PERFORMANCE_FIELD_METADATA
+        let group_fields = PERFORMANCE_FIELD_METADATA
             .iter()
-            .filter(|metadata| metadata.group == group)
-        {
+            .filter(|metadata| metadata.group == group);
+        for metadata in group_fields {
             parts.extend([metadata.path, metadata.label, metadata.help]);
             parts.extend_from_slice(metadata.search_terms);
         }
@@ -187,7 +201,7 @@ fn ui_matches(query: &SearchQuery, summary: &mut TabSearchSummary) {
         .iter()
         .copied()
         .chain(
-            wayscriber::domain::Language::ALL
+            Language::ALL
                 .into_iter()
                 .flat_map(|language| [language.native_name(), language.word_for_language()])
                 .flatten(),
@@ -468,7 +482,7 @@ impl ScopedSearchQuery for SearchQuery {
                 .chain(parts.iter().copied()),
         ) || tab_scope_aliases(tab)
             .iter()
-            .any(|alias| self.matches_parts(std::iter::once(*alias).chain(parts.iter().copied())))
+            .any(|alias| self.matches_parts(iter::once(*alias).chain(parts.iter().copied())))
     }
 
     fn matches_any_raw_text(&self, values: &[&str]) -> bool {

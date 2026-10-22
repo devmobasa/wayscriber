@@ -1,3 +1,9 @@
+use std::path::PathBuf;
+
+use crate::backend::wayland::runtime_operation::RuntimeOperationSubmitError;
+use crate::capture::file;
+use crate::notification;
+
 use super::WaylandState;
 use crate::backend::wayland::RuntimeOperationPoll;
 use crate::backend::wayland::state::clipboard_runtime::ClipboardRuntime;
@@ -27,7 +33,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn finish_clipboard_fallback_saves(&mut self) {
         if let Err(error) = finish_fallback_saves(&mut self.input_state, &mut self.clipboard) {
             log::error!("Failed to finish accepted image save before exit: {error}");
-            crate::notification::send_notification_async(
+            notification::send_notification_async(
                 &self.tokio_handle,
                 "Failed to Save Image".into(),
                 error,
@@ -44,10 +50,7 @@ fn submit_save(
 ) -> Result<(), String> {
     if let Err(failure) = clipboard.submit_fallback_save(request, save_image) {
         let (error, id) = failure.into_parts();
-        let message = if matches!(
-            error,
-            crate::backend::wayland::runtime_operation::RuntimeOperationSubmitError::Busy { .. }
-        ) {
+        let message = if matches!(error, RuntimeOperationSubmitError::Busy { .. }) {
             "Another image is being saved. Try again in a moment."
         } else {
             "Could not start the image save. Try again."
@@ -81,16 +84,14 @@ fn finish_fallback_saves(
     result
 }
 
-fn save_image(
-    request: std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>,
-) -> Result<std::path::PathBuf, String> {
-    crate::capture::file::save_screenshot(&request.image_data, &request.save_config)
+fn save_image(request: &ClipboardFallbackSaveRequest) -> Result<PathBuf, String> {
+    file::save_screenshot(&request.image_data, &request.save_config)
         .map_err(|error| request.operation.format_error(&error))
 }
 
 fn apply_completion(
     input: &mut InputState,
-    completion: RuntimeOperationPoll<u64, Result<std::path::PathBuf, String>>,
+    completion: RuntimeOperationPoll<u64, Result<PathBuf, String>>,
 ) -> Result<(), String> {
     let (id, outcome) = match completion {
         RuntimeOperationPoll::Idle | RuntimeOperationPoll::Pending { .. } => return Ok(()),
@@ -117,19 +118,28 @@ fn apply_completion(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+    use std::sync::mpsc;
+    use std::sync::mpsc::RecvTimeoutError;
+    use std::{fs, thread};
+
+    use crate::input::state::{HelperLaunchRequest, test_support};
+    use crate::test_temp;
+
     use super::*;
     use crate::backend::wayland::state::clipboard_runtime::ClipboardRuntime;
     use crate::backend::wayland::{RuntimeOperationIdSource, RuntimeWakeSource};
-    use crate::capture::{ImageOperationKind, file::FileSaveConfig};
+    use crate::capture::ImageOperationKind;
+    use crate::capture::file::FileSaveConfig;
     use crate::input::state::{InputEffect, InputEffectDrain, PendingBackendAction};
     use std::time::Duration;
 
     fn queue_image(
         input: &mut InputState,
-        path: &std::path::Path,
+        path: &Path,
         bytes: Vec<u8>,
         exit: bool,
-    ) -> std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest> {
+    ) -> Arc<ClipboardFallbackSaveRequest> {
         input.set_clipboard_fallback(
             bytes,
             FileSaveConfig {
@@ -160,9 +170,9 @@ mod tests {
 
     #[test]
     fn teardown_starts_a_save_accepted_in_the_exit_dispatch_batch() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let temp = test_temp::tempdir().unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         input.set_clipboard_fallback(
             vec![4, 5, 6],
@@ -176,14 +186,13 @@ mod tests {
         );
         input.save_pending_clipboard_to_file();
         assert!(input.has_pending_backend_actions());
-        let unrelated =
-            PendingBackendAction::HelperLaunch(crate::input::state::HelperLaunchRequest::About);
+        let unrelated = PendingBackendAction::HelperLaunch(HelperLaunchRequest::About);
         input.set_pending_backend_action(unrelated.clone());
         input.request_explicit_exit();
 
         finish_fallback_saves(&mut input, &mut runtime).unwrap();
 
-        let paths: Vec<_> = std::fs::read_dir(temp.path())
+        let paths: Vec<_> = fs::read_dir(temp.path())
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();
@@ -192,7 +201,7 @@ mod tests {
             1,
             "accepted save must run even when Exit skips the runtime drain"
         );
-        assert_eq!(std::fs::read(&paths[0]).unwrap(), [4, 5, 6]);
+        assert_eq!(fs::read(&paths[0]).unwrap(), [4, 5, 6]);
         assert_eq!(input.last_capture_path(), Some(paths[0].as_path()));
         assert!(matches!(
             runtime.poll_fallback_save(),
@@ -202,14 +211,14 @@ mod tests {
         assert_eq!(input.take_pending_backend_action(), Some(unrelated));
         assert!(!input.has_pending_backend_actions());
         finish_fallback_saves(&mut input, &mut runtime).unwrap();
-        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
     }
 
     #[test]
     fn teardown_preserves_queued_image_ownership_when_the_fallback_changes() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let temp = test_temp::tempdir().unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         for (name, bytes) in [("first", vec![1, 2]), ("second", vec![3, 4])] {
             input.set_clipboard_fallback(
@@ -228,12 +237,12 @@ mod tests {
         finish_fallback_saves(&mut input, &mut runtime).unwrap();
 
         for (name, bytes) in [("first", vec![1, 2]), ("second", vec![3, 4])] {
-            let paths: Vec<_> = std::fs::read_dir(temp.path().join(name))
+            let paths: Vec<_> = fs::read_dir(temp.path().join(name))
                 .unwrap()
                 .map(|entry| entry.unwrap().path())
                 .collect();
             assert_eq!(paths.len(), 1);
-            assert_eq!(std::fs::read(&paths[0]).unwrap(), bytes);
+            assert_eq!(fs::read(&paths[0]).unwrap(), bytes);
         }
         assert_eq!(
             input.last_capture_path().unwrap().parent(),
@@ -255,17 +264,17 @@ mod tests {
             (false, "Failed to save canvas export"),
             (true, "held writer failed"),
         ] {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let path = if panics {
                 temp.path().to_path_buf()
             } else {
                 temp.path().join("not-a-directory")
             };
             if !panics {
-                std::fs::write(&path, b"obstruction").unwrap();
+                fs::write(&path, b"obstruction").unwrap();
             }
-            let mut input = crate::input::state::test_support::make_test_input_state();
-            let wake = RuntimeWakeSource::new().unwrap();
+            let mut input = test_support::make_test_input_state();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
             let request = queue_image(&mut input, &path, vec![7, 8], true);
             runtime
@@ -279,7 +288,7 @@ mod tests {
 
             assert!(error.contains(expected));
             if !panics {
-                assert_eq!(std::fs::read(&path).unwrap(), b"obstruction");
+                assert_eq!(fs::read(&path).unwrap(), b"obstruction");
             }
             assert!(!input.should_exit);
             assert!(input.last_capture_path().is_none());
@@ -291,11 +300,11 @@ mod tests {
 
     #[test]
     fn teardown_failure_does_not_discard_a_newer_accepted_save() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let blocked = temp.path().join("not-a-directory");
-        std::fs::write(&blocked, b"obstruction").unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        fs::write(&blocked, b"obstruction").unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         let first = queue_image(&mut input, &blocked, vec![1], true);
         runtime.submit_fallback_save(first, save_image).unwrap();
@@ -314,10 +323,10 @@ mod tests {
         let error = finish_fallback_saves(&mut input, &mut runtime).unwrap_err();
 
         assert!(error.contains("Failed to save canvas export"));
-        assert_eq!(std::fs::read(&blocked).unwrap(), b"obstruction");
+        assert_eq!(fs::read(&blocked).unwrap(), b"obstruction");
         let saved = input.last_capture_path().unwrap();
         assert_eq!(saved.parent(), Some(temp.path().join("newer").as_path()));
-        assert_eq!(std::fs::read(saved).unwrap(), [2]);
+        assert_eq!(fs::read(saved).unwrap(), [2]);
         assert!(!input.should_exit);
         assert!(matches!(
             runtime.poll_fallback_save(),
@@ -327,14 +336,14 @@ mod tests {
 
     #[test]
     fn teardown_waits_for_an_already_started_image_writer() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let directory = temp.path().to_path_buf();
-        let (release, wait) = std::sync::mpsc::channel();
-        let (started_tx, started_rx) = std::sync::mpsc::channel();
-        let (finished_tx, finished_rx) = std::sync::mpsc::channel();
-        let teardown = std::thread::spawn(move || {
-            let mut input = crate::input::state::test_support::make_test_input_state();
-            let wake = RuntimeWakeSource::new().unwrap();
+        let (release, wait) = mpsc::channel();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let teardown = thread::spawn(move || {
+            let mut input = test_support::make_test_input_state();
+            let wake = RuntimeWakeSource::try_new().unwrap();
             let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
             let request = queue_image(&mut input, &directory, vec![8, 9, 10], true);
             runtime
@@ -359,40 +368,38 @@ mod tests {
         teardown.join().unwrap();
 
         assert!(
-            matches!(premature, Err(std::sync::mpsc::RecvTimeoutError::Timeout)),
+            matches!(premature, Err(RecvTimeoutError::Timeout)),
             "teardown returned while its accepted writer was held"
         );
         result.unwrap();
-        let paths: Vec<_> = std::fs::read_dir(temp.path())
+        let paths: Vec<_> = fs::read_dir(temp.path())
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();
         assert_eq!(paths.len(), 1);
-        assert_eq!(std::fs::read(&paths[0]).unwrap(), [8, 9, 10]);
+        assert_eq!(fs::read(&paths[0]).unwrap(), [8, 9, 10]);
     }
 
     #[test]
     fn fallback_worker_saves_real_bytes_and_only_then_requests_exit() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let temp = test_temp::tempdir().unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         let request = queue_image(&mut input, temp.path(), vec![1, 2, 3], true);
-        runtime
-            .submit_fallback_save(request.clone(), save_image)
-            .unwrap();
+        runtime.submit_fallback_save(request, save_image).unwrap();
         assert!(!input.should_exit);
 
         assert!(wake.wait_readable(Some(Duration::from_secs(2))).unwrap());
         apply_completion(&mut input, runtime.poll_fallback_save()).unwrap();
-        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1);
-        let path = std::fs::read_dir(temp.path())
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
+        let path = fs::read_dir(temp.path())
             .unwrap()
             .next()
             .unwrap()
             .unwrap()
             .path();
-        assert_eq!(std::fs::read(path).unwrap(), [1, 2, 3]);
+        assert_eq!(fs::read(path).unwrap(), [1, 2, 3]);
         assert!(input.should_exit);
         assert!(input.take_explicit_exit_requested());
         assert!(!input.take_explicit_exit_requested());
@@ -407,16 +414,14 @@ mod tests {
 
     #[test]
     fn failed_save_retains_bytes_for_retry_and_canvas_error_wording() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let blocked = temp.path().join("not-a-directory");
-        std::fs::write(&blocked, b"file").unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        fs::write(&blocked, b"file").unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         let request = queue_image(&mut input, &blocked, vec![7, 8, 9], false);
-        runtime
-            .submit_fallback_save(request.clone(), save_image)
-            .unwrap();
+        runtime.submit_fallback_save(request, save_image).unwrap();
         assert!(wake.wait_readable(Some(Duration::from_secs(2))).unwrap());
         assert!(apply_completion(&mut input, runtime.poll_fallback_save()).is_err());
         assert!(
@@ -434,20 +439,20 @@ mod tests {
                 .to_lowercase()
                 .contains("screenshot")
         );
-        std::fs::remove_file(&blocked).unwrap();
+        fs::remove_file(&blocked).unwrap();
         input.save_pending_clipboard_to_file();
         let retry = take_save_request(&mut input);
         assert_eq!(&*retry.image_data, &[7, 8, 9]);
         runtime.submit_fallback_save(retry, save_image).unwrap();
         assert!(wake.wait_readable(Some(Duration::from_secs(2))).unwrap());
         apply_completion(&mut input, runtime.poll_fallback_save()).unwrap();
-        let saved = std::fs::read_dir(&blocked)
+        let saved = fs::read_dir(&blocked)
             .unwrap()
             .next()
             .unwrap()
             .unwrap()
             .path();
-        assert_eq!(std::fs::read(saved).unwrap(), [7, 8, 9]);
+        assert_eq!(fs::read(saved).unwrap(), [7, 8, 9]);
         input.save_pending_clipboard_to_file();
         assert!(
             !input
@@ -459,12 +464,12 @@ mod tests {
 
     #[test]
     fn slow_save_is_single_flight_and_stale_completion_preserves_newer_image() {
-        let temp = crate::test_temp::tempdir().unwrap();
-        let mut input = crate::input::state::test_support::make_test_input_state();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let temp = test_temp::tempdir().unwrap();
+        let mut input = test_support::make_test_input_state();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let mut runtime = ClipboardRuntime::new(RuntimeOperationIdSource::new(), wake.handle());
         let first = queue_image(&mut input, temp.path(), vec![1], true);
-        let (release, wait) = std::sync::mpsc::channel();
+        let (release, wait) = mpsc::channel();
         runtime
             .submit_fallback_save(first, move |request| {
                 wait.recv().unwrap();

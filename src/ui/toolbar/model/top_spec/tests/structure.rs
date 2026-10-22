@@ -1,3 +1,5 @@
+use crate::config::TopDisplayMode;
+
 use super::*;
 
 #[test]
@@ -154,7 +156,7 @@ fn minimized_spec_contains_only_the_non_hideable_restore_control() {
 #[test]
 fn micro_spec_contains_only_the_non_hideable_micro_chip_control() {
     let mut snapshot = snapshot();
-    snapshot.top_display_mode = crate::config::TopDisplayMode::Micro;
+    snapshot.top_display_mode = TopDisplayMode::Micro;
     snapshot
         .resolved_toolbar_items
         .hidden
@@ -171,7 +173,7 @@ fn micro_spec_contains_only_the_non_hideable_micro_chip_control() {
     };
     assert_eq!(
         chip.event(&snapshot),
-        ToolbarEvent::SetTopDisplayMode(crate::config::TopDisplayMode::Full)
+        ToolbarEvent::SetTopDisplayMode(TopDisplayMode::Full)
     );
     assert_eq!(chip.role(), TopToolbarControlRole::Restore);
     assert_eq!(
@@ -385,7 +387,7 @@ fn assert_collapsed_strips_have_no_overflow() {
             .is_empty()
     );
     let mut micro = self::snapshot();
-    micro.top_display_mode = crate::config::TopDisplayMode::Micro;
+    micro.top_display_mode = TopDisplayMode::Micro;
     assert!(
         TopToolbarSpec::build(&micro, &TopStripPlan::unconstrained())
             .overflow()

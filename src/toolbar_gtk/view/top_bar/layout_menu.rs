@@ -3,9 +3,16 @@
 //! Rows come from the shared `model::layout_menu_entries`, so this menu lists
 //! the same presets with the same wording as the built-in one.
 
+use gtk4::accessible::Property;
+
 use crate::i18n::trf;
 
-use super::*;
+use super::{TopBar, set_semantic_widget_id};
+use crate::toolbar_gtk::widgets::{
+    install_click_modifier_capture, send_event, set_active_class, sized_button,
+};
+use crate::ui::toolbar::{ToolbarSnapshot, model};
+use gtk4::prelude::*;
 
 impl TopBar {
     /// Keep the layout menu's content and open state in line with the
@@ -54,7 +61,7 @@ impl TopBar {
             &format!("top.layout.{}", model::layout_mode_id(entry.mode)),
         );
         row.set_tooltip_text(Some(&trf("Switch to the {} layout", &[&entry.label])));
-        row.update_property(&[gtk4::accessible::Property::Label(&trf(
+        row.update_property(&[Property::Label(&trf(
             "{} layout: {}",
             &[&entry.label, &entry.description],
         ))]);

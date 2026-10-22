@@ -21,6 +21,7 @@ impl BoardGridKind {
         Self::IsometricDots,
     ];
 
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::None => "None",
@@ -48,6 +49,7 @@ impl Default for BoardGrid {
 }
 
 impl BoardGrid {
+    #[must_use]
     pub fn new(kind: BoardGridKind, spacing: i64) -> Self {
         Self {
             kind,
@@ -58,11 +60,13 @@ impl BoardGrid {
         }
     }
 
+    #[must_use]
     pub fn spacing(self) -> u16 {
         self.spacing
     }
 
     /// Disable decoration without discarding its spacing.
+    #[must_use]
     pub fn disabled(self) -> Self {
         Self {
             kind: BoardGridKind::None,

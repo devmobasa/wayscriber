@@ -1,4 +1,6 @@
 use std::ffi::{OsStr, OsString};
+use std::os::fd::OwnedFd;
+use std::os::unix::ffi::OsStrExt;
 
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
@@ -166,7 +168,7 @@ pub(super) enum BlobWire {
 
 pub(super) struct BrokerWireResponse {
     pub(super) outcome: BrokerOutcome,
-    pub(super) descriptors: Vec<std::os::fd::OwnedFd>,
+    pub(super) descriptors: Vec<OwnedFd>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,7 +177,7 @@ pub(super) struct OsWire(pub(super) Vec<u8>);
 
 impl OsWire {
     pub(super) fn from_os(value: &OsStr) -> Result<Self> {
-        let bytes = std::os::unix::ffi::OsStrExt::as_bytes(value);
+        let bytes = OsStrExt::as_bytes(value);
         if bytes.len() > MAX_ARGUMENT_BYTES || bytes.contains(&0) {
             bail!("broker argument is oversized or contains NUL");
         }

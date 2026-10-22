@@ -113,7 +113,7 @@ fn recovery_inspection_is_split_phase_and_reload_is_staged_while_io_is_held() {
     assert!(matches!(command.operation, RecoveryIoOperation::Inspect));
 
     assert!(matches!(
-        controller.update_seeds(test_seeds(false, true)),
+        controller.update_seeds(&test_seeds(false, true)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let result = controller.submit_persistence_recovery_io(RecoveryIoCompletion {
@@ -415,7 +415,7 @@ fn startup_invalid_authority_begins_with_a_recoverable_barrier() {
     let (mut controller, incident) = RuntimeUiStateController::new_startup_unhealthy(
         test_seeds(false, false),
         invalid,
-        RuntimeStateIoError::new("malformed runtime state"),
+        &RuntimeStateIoError::new("malformed runtime state"),
         Vec::new(),
         RuntimeStateFailurePathEffect::Known(RuntimeStateObservedPathEffect::Untouched),
     );
@@ -508,12 +508,12 @@ fn startup_reconciles_stale_overrides_and_queues_pruning() {
         InteractionSeedValue::ItemOrder(vec![item_ids::TOP_TOOL_MARKER, item_ids::TOP_TOOL_PEN]);
     let mut source = controller();
     let permit = source
-        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .begin_mutation(&RuntimeUiMutationScope::one(target.clone()))
         .unwrap();
     assert!(matches!(
         source.commit(
             permit,
-            RuntimeUiMutationValues::one(target.clone(), stale_value).unwrap(),
+            &RuntimeUiMutationValues::one(target.clone(), stale_value).unwrap(),
         ),
         CommitResult::Accepted { .. }
     ));

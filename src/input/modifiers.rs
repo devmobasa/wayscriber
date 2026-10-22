@@ -1,10 +1,11 @@
 //! Keyboard modifier state tracking.
 
-use crate::config::{DragButtonConfig, MouseDragToolsConfig, enums::ColorSpec};
+use crate::config::enums::ColorSpec;
+use crate::config::{ChordModifiers, DragButtonConfig, MouseDragToolsConfig};
 use crate::domain::Color;
 
-use super::tool::DragTool;
-use super::{events::MouseButton, tool::Tool};
+use super::events::MouseButton;
+use super::tool::{DragTool, Tool};
 
 /// Active drag modifier combination used for tool mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,6 +18,7 @@ pub enum DragModifier {
 }
 
 impl DragModifier {
+    #[must_use]
     pub fn is_active(self) -> bool {
         !matches!(self, Self::None)
     }
@@ -30,10 +32,12 @@ pub struct DragBinding {
 }
 
 impl DragBinding {
+    #[must_use]
     pub fn new(tool: DragTool, color: Option<Color>) -> Self {
         Self { tool, color }
     }
 
+    #[must_use]
     pub fn from_tool(tool: Tool) -> Self {
         Self {
             tool: DragTool::from_tool(tool).unwrap_or(DragTool::Default),
@@ -41,6 +45,7 @@ impl DragBinding {
         }
     }
 
+    #[must_use]
     pub fn button_default() -> Self {
         Self {
             tool: DragTool::Default,
@@ -60,6 +65,7 @@ pub struct DragButtonBindings {
 }
 
 impl DragButtonBindings {
+    #[must_use]
     pub fn legacy_left() -> Self {
         Self {
             drag: DragBinding::from_tool(Tool::Pen),
@@ -70,6 +76,7 @@ impl DragButtonBindings {
         }
     }
 
+    #[must_use]
     pub fn button_default() -> Self {
         Self {
             drag: DragBinding::button_default(),
@@ -80,6 +87,7 @@ impl DragButtonBindings {
         }
     }
 
+    #[must_use]
     pub fn binding_for_modifier(self, modifier: DragModifier) -> DragBinding {
         match modifier {
             DragModifier::None => self.drag,
@@ -90,6 +98,7 @@ impl DragButtonBindings {
         }
     }
 
+    #[must_use]
     pub fn from_config(config: &DragButtonConfig) -> Self {
         Self {
             drag: DragBinding::new(
@@ -150,6 +159,7 @@ impl Default for DragToolBindings {
 }
 
 impl DragToolBindings {
+    #[must_use]
     pub fn tool_for_modifier(self, modifier: DragModifier) -> Tool {
         self.binding_for_button_modifier(MouseButton::Left, modifier)
             .tool
@@ -157,6 +167,7 @@ impl DragToolBindings {
             .unwrap_or(Tool::Select)
     }
 
+    #[must_use]
     pub fn binding_for_button_modifier(
         self,
         button: MouseButton,
@@ -170,6 +181,7 @@ impl DragToolBindings {
         .binding_for_modifier(modifier)
     }
 
+    #[must_use]
     pub fn from_config(config: &MouseDragToolsConfig) -> Self {
         Self {
             left: DragButtonBindings::from_config(&config.left),
@@ -178,6 +190,7 @@ impl DragToolBindings {
         }
     }
 
+    #[must_use]
     pub fn to_config(self) -> MouseDragToolsConfig {
         MouseDragToolsConfig::from_buttons(
             self.left.to_config(),
@@ -214,6 +227,7 @@ impl Default for Modifiers {
 
 impl Modifiers {
     /// Creates a new Modifiers instance with all keys released.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             shift: false,
@@ -232,6 +246,7 @@ impl Modifiers {
     /// 3. Shift → Line
     /// 4. Tab → Ellipse
     /// 5. None
+    #[must_use]
     pub fn active_drag_modifier(&self) -> DragModifier {
         if self.ctrl && self.shift {
             DragModifier::CtrlShift
@@ -246,13 +261,27 @@ impl Modifiers {
         }
     }
 
+    /// The held modifiers a keybinding can carry. Tab is a drag-tool
+    /// modifier only, so it is left out.
+    #[must_use]
+    pub fn chord_modifiers(self) -> ChordModifiers {
+        ChordModifiers {
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            logo: self.logo,
+        }
+    }
+
     /// Ctrl, Shift, Alt, and Super — the modifiers a keybinding can carry.
     /// Tab is a drag-tool modifier only.
+    #[must_use]
     pub fn has_shortcut_modifier(self) -> bool {
         self.ctrl || self.shift || self.alt || self.logo
     }
 
     /// Determines which drawing tool is active based on current modifier state and drag mapping.
+    #[must_use]
     pub fn current_tool_with_bindings(&self, bindings: DragToolBindings) -> Tool {
         bindings.tool_for_modifier(self.active_drag_modifier())
     }

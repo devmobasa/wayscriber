@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use crate::config::{
-    Action, StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode,
+    Action, StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup, ToolbarLayoutMode, TopDisplayMode,
 };
-use crate::draw::{Color, FontDescriptor};
+use crate::draw::{ArrowStyle, Color, FontDescriptor};
 use crate::i18n::tr;
-use crate::input::{EraserMode, Tool};
+use crate::input::{EraserMode, SelectionPropertyKind, Tool};
 
 use super::ToolbarSnapshot;
 
@@ -21,6 +21,7 @@ pub enum ToolbarItemCustomizeGroup {
 }
 
 impl ToolbarItemCustomizeGroup {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::TopTools => tr("Top tools"),
@@ -46,6 +47,7 @@ pub enum PrecisionEntryTarget {
 }
 
 impl PrecisionEntryTarget {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Thickness => tr("Thickness"),
@@ -53,6 +55,7 @@ impl PrecisionEntryTarget {
         }
     }
 
+    #[must_use]
     pub fn unit(self) -> &'static str {
         match self {
             Self::Thickness => "px",
@@ -112,7 +115,7 @@ pub enum ToolbarEvent {
     CycleArrowStyle,
     /// Use `style` for the next arrow; chosen from the arrow style menu,
     /// which it closes.
-    SetArrowStyle(crate::draw::ArrowStyle),
+    SetArrowStyle(ArrowStyle),
     ResetArrowLabelCounter,
     ResetStepMarkerCounter,
     SetUndoDelay(f64),
@@ -225,7 +228,7 @@ pub enum ToolbarEvent {
     SetTopMinimized(bool),
     /// Set the top strip's display form (full strip / micro chip / hidden).
     /// The micro chip's click emits `SetTopDisplayMode(Full)`.
-    SetTopDisplayMode(crate::config::TopDisplayMode),
+    SetTopDisplayMode(TopDisplayMode),
     /// Deprecated alias for `SetTopMinimized(true)`; kept so external
     /// callers and old code paths keep working.
     #[allow(dead_code)]
@@ -261,7 +264,7 @@ pub enum ToolbarEvent {
     /// as the overlay properties popup; cycle controls use `direction = 1`,
     /// steppers -1/+1.
     AdjustSelectionProperty {
-        kind: crate::input::SelectionPropertyKind,
+        kind: SelectionPropertyKind,
         direction: i32,
     },
     /// Pick a color from the displayed desktop image.
@@ -356,12 +359,14 @@ pub enum ToolbarEvent {
 }
 
 impl ToolbarEvent {
+    #[must_use]
     pub fn action(&self) -> Option<Action> {
         super::model::action_for_event(self)
     }
 
     /// Events that permanently discard user content; rendered with the
     /// destructive (red-accent) button treatment.
+    #[must_use]
     pub fn is_destructive(&self) -> bool {
         matches!(
             self,
@@ -378,6 +383,7 @@ impl ToolbarEvent {
         )
     }
 
+    #[must_use]
     pub fn short_label(&self, snapshot: &ToolbarSnapshot, fallback: &'static str) -> &'static str {
         super::model::short_label_for_event(
             self,
@@ -387,6 +393,7 @@ impl ToolbarEvent {
         )
     }
 
+    #[must_use]
     pub fn tooltip_label(
         &self,
         snapshot: &ToolbarSnapshot,

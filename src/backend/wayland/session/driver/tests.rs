@@ -1,28 +1,38 @@
+use std::fs::File;
+use std::os::unix;
+use std::path::Path;
+use std::{fs, io, thread};
+
+use flate2::write::GzEncoder;
+
 use super::*;
 use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
 
 mod lifecycle_regressions;
 mod output;
+use crate::backend::wayland::backend::event_loop::session_save::record_autosave_failure;
+use crate::backend::wayland::runtime_ui_state::{
+    RuntimeUiSeedRefresh, SeedRefreshContext, ToolbarRuntimeState, refresh_runtime_ui_config_seeds,
+};
+use crate::backend::wayland::session::persistence::SubmitError;
+use crate::backend::wayland::session::tests::{
+    EnvGuard, add_line, loaded_line_x2, named_options, sample_snapshot, test_input_state,
+};
 use crate::backend::wayland::session::{
     PersistenceOperation, RequestId, SaveStrategy, SessionState,
-    persistence::SubmitError,
-    tests::{EnvGuard, add_line, loaded_line_x2, named_options, sample_snapshot, test_input_state},
 };
-use crate::backend::wayland::{
-    backend::event_loop::session_save::record_autosave_failure,
-    runtime_ui_state::{
-        RuntimeUiSeedRefresh, SeedRefreshContext, ToolbarRuntimeState,
-        refresh_runtime_ui_config_seeds,
-    },
-    state::{ToolbarChrome, ToolbarDrag},
-    toolbar::ToolbarSurfaceManager,
-};
-use crate::{config::Config, draw::TextMeasurer, input::InputState, session as stored_session};
+use crate::backend::wayland::state::{ToolbarChrome, ToolbarDrag};
+use crate::backend::wayland::toolbar::ToolbarSurfaceManager;
+use crate::config::Config;
+use crate::draw::{Shape, TextMeasurer};
+use crate::input::InputState;
+use crate::ui_text::UiTextEngine;
+use crate::{session as stored_session, test_temp};
 
-pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
-    pub input: &'a mut InputState,
-    measurer: &'a TextMeasurer,
-    pub session: &'a mut SessionState,
+pub(in crate::backend::wayland::session) struct CommandRuntime<'state> {
+    pub input: &'state mut InputState,
+    measurer: &'state TextMeasurer,
+    pub session: &'state mut SessionState,
     pub persistence: PersistenceController,
     pending: Option<SessionCommandTransaction>,
     config: Config,
@@ -36,7 +46,7 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     /// terminal reports published before it.
     pub committed_targets: Vec<(Option<stored_session::SessionTarget>, usize)>,
     ui: Option<ToolbarRuntimeState>,
-    ui_engine: crate::ui_text::UiTextEngine,
+    ui_engine: UiTextEngine,
     chrome: ToolbarChrome,
     drag: ToolbarDrag,
     toolbar: ToolbarSurfaceManager,
@@ -44,11 +54,11 @@ pub(in crate::backend::wayland::session) struct CommandRuntime<'a> {
     autosave_failures: usize,
 }
 
-impl<'a> CommandRuntime<'a> {
+impl<'state> CommandRuntime<'state> {
     pub fn new(
-        input: &'a mut InputState,
-        measurer: &'a TextMeasurer,
-        session: &'a mut SessionState,
+        input: &'state mut InputState,
+        measurer: &'state TextMeasurer,
+        session: &'state mut SessionState,
         persistence: PersistenceController,
     ) -> Self {
         Self {
@@ -64,7 +74,7 @@ impl<'a> CommandRuntime<'a> {
             queued_failures: Vec::new(),
             committed_targets: Vec::new(),
             ui: None,
-            ui_engine: crate::ui_text::UiTextEngine::default(),
+            ui_engine: UiTextEngine::default(),
             chrome: ToolbarChrome::new(true, (0.0, 0.0)),
             drag: ToolbarDrag::new(),
             toolbar: ToolbarSurfaceManager::new(),
@@ -82,8 +92,8 @@ impl<'a> CommandRuntime<'a> {
             .ok_or_else(|| anyhow!("command did not publish a terminal report"))
     }
 
-    fn enable_ui_runtime(&mut self, path: &std::path::Path) {
-        let wake = RuntimeWakeSource::new().unwrap();
+    fn enable_ui_runtime(&mut self, path: &Path) {
+        let wake = RuntimeWakeSource::try_new().unwrap();
         self.ui = Some(
             ToolbarRuntimeState::start(&self.config, self.input, path, wake.handle()).unwrap(),
         );
@@ -232,7 +242,7 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
         Guard::ClearConfig,
         Guard::ToolsConfig,
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = named_options(temp.path(), "current");
         let mut input = test_input_state();
         let mut session = SessionState::new(Some(options.clone()));
@@ -316,7 +326,7 @@ fn admission_rejects_each_guard_without_submitting_or_retargeting() {
 
 #[test]
 fn explicit_command_waits_for_autosave_receipt_and_survives_dispatch_work() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "current");
     let mut input = test_input_state();
     let mut session = SessionState::new(Some(options.clone()));
@@ -364,7 +374,7 @@ fn live_completion_gate_rejects_a_different_request_identity() {
     let (persistence, worker) = PersistenceController::controlled_for_test();
     let mut runtime = CommandRuntime::new(&mut input, &measurer, &mut session, persistence);
     // No active session makes Inspect complete inline; use a disk-bound command instead.
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "current");
     *runtime.session = SessionState::new(Some(options));
 
@@ -382,7 +392,7 @@ fn live_completion_gate_rejects_a_different_request_identity() {
 
 #[test]
 fn advance_observes_live_edits_and_finalizes_stale_destructive_work() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "clear");
     stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
     let mut input = test_input_state();
@@ -409,7 +419,7 @@ fn advance_observes_live_edits_and_finalizes_stale_destructive_work() {
 
 #[test]
 fn deferred_submission_rejection_is_terminal() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "current");
     let mut input = test_input_state();
     let mut session = SessionState::new(Some(options.clone()));
@@ -462,7 +472,7 @@ impl CatalogOutcome {
         self,
         runtime: &CommandRuntime<'_>,
         target: &stored_session::SessionOptions,
-        root: &std::path::Path,
+        root: &Path,
     ) {
         assert!(runtime.pending.is_none());
         assert!(runtime.errors.is_empty());
@@ -477,7 +487,7 @@ impl CatalogOutcome {
         assert_eq!(runtime.input.boards.active_frame().shapes.len(), 1);
         assert!(matches!(
             runtime.input.boards.active_frame().shapes[0].shape,
-            crate::draw::Shape::Line { x2: 42, .. }
+            Shape::Line { x2: 42, .. }
         ));
         assert_eq!(loaded_line_x2(target), 42);
         // Catalog I/O failure leaves the worker usable; rejected transport marks it unhealthy.
@@ -489,9 +499,9 @@ impl CatalogOutcome {
                 assert!(
                     format!("{error:#}").contains("failed to create session catalog directory")
                 );
-                assert!(error.downcast_ref::<std::io::Error>().is_some());
+                assert!(error.downcast_ref::<io::Error>().is_some());
                 assert_eq!(
-                    std::fs::read(root.join("wayscriber")).unwrap(),
+                    fs::read(root.join("wayscriber")).unwrap(),
                     b"catalog blocked"
                 );
             }
@@ -499,7 +509,7 @@ impl CatalogOutcome {
                 let entries = stored_session::catalog::recent_sessions().unwrap();
                 assert_eq!(entries.len(), 1);
                 assert!(stored_session::catalog::session_paths_match(
-                    std::path::Path::new(&entries[0].path),
+                    Path::new(&entries[0].path),
                     &target.session_file_path()
                 ));
                 assert!(entries[0].last_opened_at_millis.is_some());
@@ -525,14 +535,14 @@ fn open_refreshes_consumer_seeds_before_catalog_work_and_at_completion() {
         CatalogOutcome::Failure,
         CatalogOutcome::Rejected,
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "target");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
         let _env = EnvGuard::set_xdg_data_home(temp.path());
         if catalog == CatalogOutcome::Failure {
             // A regular file blocks catalog directory creation, without relying on uid or modes.
-            std::fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
+            fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
         }
 
         let mut input = test_input_state();
@@ -612,13 +622,13 @@ fn committed_open_announces_its_target_before_the_terminal_report() {
         CatalogOutcome::Failure,
         CatalogOutcome::Rejected,
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "target");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
         let _env = EnvGuard::set_xdg_data_home(temp.path());
         if catalog == CatalogOutcome::Failure {
-            std::fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
+            fs::write(temp.path().join("wayscriber"), b"catalog blocked").unwrap();
         }
         let mut input = test_input_state();
         let mut session = SessionState::new(Some(current));
@@ -661,7 +671,7 @@ fn committed_open_announces_its_target_before_the_terminal_report() {
 
 #[test]
 fn committed_save_as_announces_its_target_before_the_terminal_report() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "target");
     let mut input = test_input_state();
@@ -690,15 +700,12 @@ fn committed_save_as_announces_its_target_before_the_terminal_report() {
         runtime.reports.as_slice(),
         [SessionCommandReport::SaveAs(_)]
     ));
-    assert_eq!(
-        runtime.committed_targets,
-        [(Some(target.target.clone()), 0)]
-    );
+    assert_eq!(runtime.committed_targets, [(Some(target.target), 0)]);
 }
 
 #[test]
 fn failed_open_and_save_as_announce_nothing() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let existing = named_options(temp.path(), "existing");
     stored_session::save_snapshot(&sample_snapshot(), &existing).unwrap();
@@ -728,7 +735,7 @@ fn failed_open_and_save_as_announce_nothing() {
     }
 }
 
-fn configured_home(base: &std::path::Path) -> stored_session::SessionOptions {
+fn configured_home(base: &Path) -> stored_session::SessionOptions {
     let mut options = stored_session::SessionOptions::new(base.join("configured"), "home");
     options.persist_transparent = true;
     options
@@ -736,7 +743,7 @@ fn configured_home(base: &std::path::Path) -> stored_session::SessionOptions {
 
 #[test]
 fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let home = configured_home(temp.path());
     stored_session::save_snapshot(&sample_snapshot(), &home).unwrap();
@@ -772,53 +779,45 @@ fn returning_home_saves_the_current_session_then_loads_home_like_a_launch() {
     assert!(!runtime.session.is_dirty() && !runtime.input.is_session_dirty());
     let shapes = &runtime.input.boards.active_frame().shapes;
     assert_eq!(shapes.len(), 1);
-    assert!(matches!(
-        shapes[0].shape,
-        crate::draw::Shape::Line { x2: 42, .. }
-    ));
+    assert!(matches!(shapes[0].shape, Shape::Line { x2: 42, .. }));
     // The commit was announced before the terminal report.
     assert_eq!(
         runtime.committed_targets.last(),
-        Some(&(Some(home.target.clone()), 0))
+        Some(&(Some(home.target), 0))
     );
 }
 
 /// A home whose session file a save could not replace, of the kind `case`
 /// names, and the error that names it.
-fn unsaveable_home(
-    base: &std::path::Path,
-    case: &str,
-) -> (stored_session::SessionOptions, &'static str) {
+fn unsaveable_home(base: &Path, case: &str) -> (stored_session::SessionOptions, &'static str) {
     let configured = configured_home(base);
     let saved = named_options(base, "saved");
     stored_session::save_snapshot(&sample_snapshot(), &saved).unwrap();
     match case {
         // A launch would start on an empty canvas here.
         "configured directory" => {
-            std::fs::create_dir_all(configured.session_file_path()).unwrap();
+            fs::create_dir_all(configured.session_file_path()).unwrap();
             (configured, "is a directory")
         }
         // A launch would restore the recovery copy, then fail every save.
         "configured directory beside a recovery copy" => {
-            std::fs::create_dir_all(configured.session_file_path()).unwrap();
-            std::fs::copy(saved.session_file_path(), configured.recovery_file_path()).unwrap();
+            fs::create_dir_all(configured.session_file_path()).unwrap();
+            fs::copy(saved.session_file_path(), configured.recovery_file_path()).unwrap();
             (configured, "is a directory")
         }
         // A launch would follow the link, then fail every save.
         "configured symlink" => {
-            std::fs::create_dir_all(&configured.base_dir).unwrap();
-            std::os::unix::fs::symlink(saved.session_file_path(), configured.session_file_path())
-                .unwrap();
+            fs::create_dir_all(&configured.base_dir).unwrap();
+            unix::fs::symlink(saved.session_file_path(), configured.session_file_path()).unwrap();
             (configured, "is a symlink")
         }
         "expanded primary" => {
             use std::io::Read;
-            std::fs::create_dir_all(&configured.base_dir).unwrap();
-            let file = std::fs::File::create(configured.session_file_path()).unwrap();
-            let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
-            std::io::copy(
-                &mut std::io::repeat(b' ')
-                    .take(stored_session::DEFAULT_MAX_EXPANDED_SESSION_BYTES + 1),
+            fs::create_dir_all(&configured.base_dir).unwrap();
+            let file = File::create(configured.session_file_path()).unwrap();
+            let mut encoder = GzEncoder::new(file, flate2::Compression::fast());
+            io::copy(
+                &mut io::repeat(b' ').take(stored_session::DEFAULT_MAX_EXPANDED_SESSION_BYTES + 1),
                 &mut encoder,
             )
             .unwrap();
@@ -827,7 +826,7 @@ fn unsaveable_home(
         }
         "named directory" => {
             let named = named_options(base, "named-home");
-            std::fs::create_dir(named.session_file_path()).unwrap();
+            fs::create_dir(named.session_file_path()).unwrap();
             (named, "directory")
         }
         _ => unreachable!(),
@@ -843,7 +842,7 @@ fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
         "named directory",
         "expanded primary",
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let (home, expected) = unsaveable_home(temp.path(), case);
         let mut input = test_input_state();
@@ -871,17 +870,14 @@ fn a_home_that_cannot_be_loaded_leaves_the_current_session() {
         assert_eq!(runtime.session.options().unwrap().target, current.target);
         let shapes = &runtime.input.boards.active_frame().shapes;
         assert_eq!(shapes.len(), 1, "{case}");
-        assert!(matches!(
-            shapes[0].shape,
-            crate::draw::Shape::Line { x2: 51, .. }
-        ));
+        assert!(matches!(shapes[0].shape, Shape::Line { x2: 51, .. }));
         assert!(runtime.committed_targets.is_empty());
     }
 }
 
 #[test]
 fn returning_home_is_refused_when_the_canvas_changes_while_home_loads() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let home = configured_home(temp.path());
     let mut input = test_input_state();
@@ -910,7 +906,7 @@ fn returning_home_is_refused_when_the_canvas_changes_while_home_loads() {
 
 #[test]
 fn returning_to_a_home_without_persistence_leaves_an_unsaved_empty_canvas() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let mut input = test_input_state();
     add_line(&mut input, 51);
@@ -938,7 +934,7 @@ fn returning_to_a_home_without_persistence_leaves_an_unsaved_empty_canvas() {
 
 #[test]
 fn clear_completion_refreshes_consumer_seeds() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = named_options(temp.path(), "clear");
     options.autosave_enabled = true;
     let mut input = test_input_state();
@@ -990,7 +986,7 @@ fn clear_completion_refreshes_consumer_seeds() {
 fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
     for (open, phases) in [(false, 2), (true, 4)] {
         for completed in 0..phases {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let current = named_options(temp.path(), "current");
             let target = named_options(temp.path(), "target");
             if open {
@@ -1019,7 +1015,7 @@ fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
             }
             assert!(runtime.pending.is_some());
 
-            std::thread::scope(|scope| {
+            thread::scope(|scope| {
                 scope.spawn(move || {
                     for _ in completed..phases {
                         worker.complete_next();
@@ -1065,7 +1061,7 @@ fn shutdown_drains_save_as_and_open_at_every_disk_phase_before_final_save() {
 #[test]
 fn shutdown_starts_ready_to_poll_open_and_save_as_after_an_autosave_receipt() {
     for open in [true, false] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "target");
         if open {
@@ -1100,7 +1096,7 @@ fn shutdown_starts_ready_to_poll_open_and_save_as_after_an_autosave_receipt() {
         assert_eq!(runtime.pending.as_ref().unwrap().request_id, None);
         assert!(runtime.reports.is_empty());
 
-        std::thread::scope(|scope| {
+        thread::scope(|scope| {
             scope.spawn(move || {
                 for _ in 0..if open { 3 } else { 2 } {
                     worker.complete_next();
@@ -1132,7 +1128,7 @@ fn shutdown_starts_ready_to_poll_open_and_save_as_after_an_autosave_receipt() {
 fn shutdown_reports_open_and_save_as_phase_failures_before_final_persistence() {
     for (open, phases) in [(false, 2), (true, 4)] {
         for completed in 0..phases {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let current = named_options(temp.path(), "current");
             let target = named_options(temp.path(), "target");
             if open {
@@ -1212,7 +1208,7 @@ fn shutdown_reports_open_and_save_as_phase_failures_before_final_persistence() {
 #[test]
 fn shutdown_cleans_up_pending_work_after_worker_disconnect_and_when_ready_to_poll() {
     for disconnect in [true, false] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = named_options(temp.path(), "current");
         let mut input = test_input_state();
         let mut session = SessionState::new(Some(options.clone()));
@@ -1238,7 +1234,7 @@ fn shutdown_cleans_up_pending_work_after_worker_disconnect_and_when_ready_to_pol
         } else {
             worker.complete_next();
             runtime.persistence.wait_for_completion().unwrap().unwrap();
-            std::thread::scope(|scope| {
+            thread::scope(|scope| {
                 scope.spawn(move || worker.complete_next());
                 persist_after_pending_commands(&mut runtime, |runtime| {
                     assert!(runtime.pending.is_none());

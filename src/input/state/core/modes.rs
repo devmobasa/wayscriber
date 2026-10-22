@@ -220,26 +220,34 @@ pub(in crate::input::state) struct PresenterRestore {
     tool_override: Option<Option<Tool>>,
 }
 
+/// The chrome settings presenter mode can override, as they are on entry.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::input::state) struct PresenterChrome {
+    pub(in crate::input::state) show_status_bar: bool,
+    pub(in crate::input::state) show_tool_preview: bool,
+    pub(in crate::input::state) toolbar_visibility: ToolbarVisibility,
+    pub(in crate::input::state) click_highlight_enabled: bool,
+    pub(in crate::input::state) input_hud_enabled: bool,
+    pub(in crate::input::state) tool_override: Option<Tool>,
+}
+
 impl PresenterRestore {
     pub(in crate::input::state) fn capture(
         config: &PresenterModeConfig,
-        show_status_bar: bool,
-        show_tool_preview: bool,
-        toolbar_visibility: ToolbarVisibility,
-        click_highlight_enabled: bool,
-        input_hud_enabled: bool,
-        tool_override: Option<Tool>,
+        current: PresenterChrome,
     ) -> Self {
         Self {
-            show_status_bar: config.hide_status_bar.then_some(show_status_bar),
-            show_tool_preview: config.hide_tool_preview.then_some(show_tool_preview),
-            toolbar_visibility: config.hide_toolbars.then_some(toolbar_visibility),
+            show_status_bar: config.hide_status_bar.then_some(current.show_status_bar),
+            show_tool_preview: config
+                .hide_tool_preview
+                .then_some(current.show_tool_preview),
+            toolbar_visibility: config.hide_toolbars.then_some(current.toolbar_visibility),
             click_highlight_enabled: config
                 .enable_click_highlight
-                .then_some(click_highlight_enabled),
-            input_hud_enabled: config.enable_input_hud.then_some(input_hud_enabled),
+                .then_some(current.click_highlight_enabled),
+            input_hud_enabled: config.enable_input_hud.then_some(current.input_hud_enabled),
             tool_override: (!matches!(config.tool_behavior, PresenterToolBehavior::Keep))
-                .then_some(tool_override),
+                .then_some(current.tool_override),
         }
     }
 
@@ -361,13 +369,27 @@ impl LightModeRestore {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::state;
+
     use super::*;
     use crate::config::{PresenterModeConfig, PresenterToolbarMode};
     use crate::input::state::core::ToolbarInteraction;
     use crate::input::tool::Tool;
 
-    fn toolbar_visibility() -> crate::input::state::core::ToolbarVisibility {
+    fn toolbar_visibility() -> state::core::ToolbarVisibility {
         ToolbarInteraction::default().visibility_snapshot()
+    }
+
+    /// Status bar and tool preview shown, highlights and HUD off, no override.
+    fn shown_chrome() -> PresenterChrome {
+        PresenterChrome {
+            show_status_bar: true,
+            show_tool_preview: true,
+            toolbar_visibility: toolbar_visibility(),
+            click_highlight_enabled: false,
+            input_hud_enabled: false,
+            tool_override: None,
+        }
     }
 
     #[test]
@@ -380,12 +402,11 @@ mod tests {
         let visibility = toolbar_visibility();
         let restore = PresenterRestore::capture(
             &config,
-            true,
-            true,
-            visibility,
-            false,
-            false,
-            Some(Tool::Arrow),
+            PresenterChrome {
+                toolbar_visibility: visibility,
+                tool_override: Some(Tool::Arrow),
+                ..shown_chrome()
+            },
         );
         let mut modes = ChromeModes::new(config);
 
@@ -401,22 +422,12 @@ mod tests {
             hide_toolbars: false,
             ..PresenterModeConfig::default()
         };
-        let restore = PresenterRestore::capture(
-            &config,
-            true,
-            true,
-            toolbar_visibility(),
-            false,
-            false,
-            None,
-        );
+        let restore = PresenterRestore::capture(&config, shown_chrome());
         let mut modes = ChromeModes::new(config);
 
         modes.begin_presenter(restore);
 
-        assert!(
-            !modes.retarget_presenter_toolbar_display_mode(crate::config::TopDisplayMode::Micro)
-        );
+        assert!(!modes.retarget_presenter_toolbar_display_mode(TopDisplayMode::Micro));
         assert_eq!(modes.end_presenter().unwrap().toolbar_visibility(), None);
     }
 

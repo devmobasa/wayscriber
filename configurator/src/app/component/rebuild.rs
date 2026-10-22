@@ -10,10 +10,14 @@
 //! it, and how far the visible page is scrolled. This module carries those
 //! across.
 
+use std::iter;
+
 use relm4::{ComponentSender, gtk};
 
 use gtk::glib;
-use gtk::prelude::*;
+use gtk::glib::GString;
+use gtk::prelude::{GtkWindowExt, *};
+use wayscriber::i18n;
 
 use super::super::pages;
 use super::super::state::ConfiguratorApp;
@@ -56,7 +60,7 @@ impl WidgetPath {
 }
 
 fn children(widget: &gtk::Widget) -> impl Iterator<Item = gtk::Widget> {
-    std::iter::successors(widget.first_child(), gtk::Widget::next_sibling)
+    iter::successors(widget.first_child(), gtk::Widget::next_sibling)
 }
 
 /// The caret and selection of an editable control, in characters.
@@ -69,7 +73,7 @@ struct Caret {
 /// View state from the pages being replaced, applied to the new ones.
 pub(super) struct ViewState {
     /// The stack name of the page the state was read from.
-    page: Option<gtk::glib::GString>,
+    page: Option<GString>,
     /// Set when focus was inside the visible page; focus elsewhere sits in
     /// persistent chrome, which the rebuild leaves alone.
     focus: Option<(Option<WidgetPath>, Option<Caret>)>,
@@ -84,7 +88,7 @@ pub(super) fn rebuild_if_language_changed(
     widgets: &mut AppWidgets,
     sender: &ComponentSender<ConfiguratorApp>,
 ) -> Option<ViewState> {
-    let language = wayscriber::i18n::language();
+    let language = i18n::language();
     if widgets.language == language {
         return None;
     }
@@ -123,7 +127,7 @@ fn capture(widgets: &AppWidgets) -> ViewState {
         };
     };
 
-    let focus = gtk::prelude::GtkWindowExt::focus(&widgets.root)
+    let focus = GtkWindowExt::focus(&widgets.root)
         .filter(|focused| focused.is_ancestor(&page))
         .map(|focused| {
             let caret = focused
@@ -157,7 +161,7 @@ fn capture(widgets: &AppWidgets) -> ViewState {
 
 fn descendants(widget: &gtk::Widget) -> impl Iterator<Item = gtk::Widget> {
     let mut pending = vec![widget.clone()];
-    std::iter::from_fn(move || {
+    iter::from_fn(move || {
         let next = pending.pop()?;
         pending.extend(children(&next));
         Some(next)

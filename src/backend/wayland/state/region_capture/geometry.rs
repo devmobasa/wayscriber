@@ -27,7 +27,11 @@ impl RegionSelectionGeometry {
         rect: ImagePixelRect,
         display_selection: RegionSelection,
     ) -> Self {
-        debug_assert_eq!(purpose, RegionPurposeTag::CaptureInteractive);
+        debug_assert_eq!(
+            purpose,
+            RegionPurposeTag::CaptureInteractive,
+            "only interactive captures have a review phase"
+        );
         Self::authoritative(purpose, rect, display_selection)
     }
 
@@ -36,7 +40,10 @@ impl RegionSelectionGeometry {
         rect: ImagePixelRect,
         display_selection: RegionSelection,
     ) -> Self {
-        debug_assert!(purpose.is_capture());
+        debug_assert!(
+            purpose.is_capture(),
+            "authoritative geometry belongs to capture regions, got {purpose:?}"
+        );
         let image_span = pixel_span(
             ImagePoint::new(f64::from(rect.x()), f64::from(rect.y())),
             ImagePoint::new(

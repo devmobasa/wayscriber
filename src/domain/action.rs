@@ -237,6 +237,7 @@ pub enum Action {
 
 impl Action {
     /// Whether this action opens or addresses the native screen-region picker.
+    #[must_use]
     pub const fn is_region_capture(self) -> bool {
         matches!(
             self,

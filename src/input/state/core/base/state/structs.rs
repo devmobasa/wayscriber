@@ -1,7 +1,23 @@
+use crate::input::state::core::command_palette::CommandPaletteState;
+use crate::input::state::core::font_picker::FontPickerState;
+use crate::input::state::core::menus::ContextMenuPanel;
+use crate::input::state::core::properties::PropertiesPanelState;
+use crate::input::state::core::status_hud::StatusHudState;
+use crate::input::state::core::utility::RestoreNoticeContext;
+use crate::input::state::core::utility::ocr_scan::OcrScan;
+use crate::input::state::core::zoom_chip::ZoomChipState;
+use crate::input::state::core::{
+    BoardPickerPanel, ColorPickerPopupPanel, DrawingStyle, EyedropperUiState, HelpOverlayState,
+    HistoryLimits, PresetSlots, RadialMenuPanel, RecognitionFeedback, RegionSelectUiState,
+    TextEditing,
+};
+use crate::input::state::laser::LaserInk;
+use crate::input::state::{PrecisionEntryState, SpotlightWheelGesture, UiVisibility, ZoomAnchor};
+
+use super::super::super::selection::{SelectionClipboard, SelectionInteraction};
 use super::super::super::{
     BoardTransitions, CanvasIndex, ChromeModes, Feedback, Keymap, PointerTracking, SessionFlags,
     ToolbarInteraction, ViewState,
-    selection::{SelectionClipboard, SelectionInteraction},
 };
 use super::super::InputEffectOutbox;
 use super::super::types::{CompositorCapabilities, DrawingState, PendingOnboardingUsage};
@@ -20,11 +36,11 @@ pub struct InputState {
     /// Multi-board canvas management
     pub boards: BoardManager,
     /// Runtime drawing defaults and per-tool appearance settings.
-    pub(crate) style: crate::input::state::core::DrawingStyle,
+    pub(crate) style: DrawingStyle,
     /// State owned by the system font-picker modal.
-    pub(crate) font_picker: crate::input::state::core::font_picker::FontPickerState,
+    pub(crate) font_picker: FontPickerState,
     /// Text-editor mode, asynchronous identity, composition, and pointer state.
-    pub(crate) text_editing: crate::input::state::core::TextEditing,
+    pub(crate) text_editing: TextEditing,
     /// Current modifier key state
     pub modifiers: Modifiers,
     /// Configured shortcuts plus transient keyboard and pointer-dispatch state.
@@ -47,77 +63,73 @@ pub struct InputState {
     /// Dirty, preflight, save-as, and last-capture session state.
     pub(in crate::input::state) session_flags: SessionFlags,
     /// Visibility, navigation, and pointer bookkeeping for the help overlay.
-    pub(crate) help_overlay: crate::input::state::core::HelpOverlayState,
+    pub(crate) help_overlay: HelpOverlayState,
     /// Modal, layout, search, edit, and drag state for the board picker.
-    pub(crate) board_picker: crate::input::state::core::BoardPickerPanel,
+    pub(crate) board_picker: BoardPickerPanel,
     /// State owned by the command palette modal.
-    pub command_palette: crate::input::state::core::command_palette::CommandPaletteState,
+    pub command_palette: CommandPaletteState,
     /// Toast, geometry, blocked-action, and capability feedback state.
     pub(in crate::input::state) feedback: Feedback,
     /// Runtime visibility preferences for overlay chrome and toolbar sections.
-    pub ui_visibility: crate::input::state::UiVisibility,
+    pub ui_visibility: UiVisibility,
     /// Display policy, cached geometry, and pointer interaction state for the zoom chip.
-    pub(crate) zoom_chip: crate::input::state::core::zoom_chip::ZoomChipState,
+    pub(crate) zoom_chip: ZoomChipState,
     /// Presenter, focus, and light mode flags, configuration, and restore snapshots.
     pub(in crate::input::state) modes: ChromeModes,
     /// Configured render color profiles and active preview state.
     pub(crate) render_profiles: RenderProfileSet,
     /// Cached geometry and pointer interaction state for the status HUD.
-    pub(crate) status_hud: crate::input::state::core::status_hud::StatusHudState,
+    pub(crate) status_hud: StatusHudState,
     /// Toolbar visibility, preferences, resolved layout, and interaction state.
     pub(in crate::input::state) toolbar: ToolbarInteraction,
     /// Precise numeric entry popup opened from a pill numeral, when open.
-    pub(crate) precision_entry: Option<crate::input::state::PrecisionEntryState>,
+    pub(crate) precision_entry: Option<PrecisionEntryState>,
     /// Board switch color, recents, delete confirmations, and restore queues.
     pub(in crate::input::state) board_transitions: BoardTransitions,
     /// Tracks dirty regions between renders
     pub(crate) dirty_tracker: DirtyTracker,
     /// In-flight Spotlight magnification undo gesture and wheel remainder.
-    pub(in crate::input::state) spotlight_wheel: crate::input::state::SpotlightWheelGesture,
+    pub(in crate::input::state) spotlight_wheel: SpotlightWheelGesture,
     /// Pending first-run onboarding usage markers to persist in onboarding store
     pub(crate) pending_onboarding_usage: PendingOnboardingUsage,
     /// Where zoom actions centre while an action runs for a control away from
     /// the pointer; `None` centres them on the pointer.
-    pub(crate) zoom_action_anchor: Option<crate::input::state::ZoomAnchor>,
+    pub(crate) zoom_action_anchor: Option<ZoomAnchor>,
     /// Click highlight animation state
     pub(crate) click_highlight: ClickHighlightState,
     /// Finished laser strokes and their fade clock; never part of a frame.
-    pub(in crate::input::state) laser: crate::input::state::laser::LaserInk,
+    pub(in crate::input::state) laser: LaserInk,
     /// On-screen input HUD (keystroke/click chips) state
     pub(crate) input_hud: InputHudState,
     /// Selection membership, nudge direction, and polygon click timing.
     pub(in crate::input::state) selection_interaction: SelectionInteraction,
     /// Lifecycle, target, and cached layout for the context menu.
-    pub(crate) context_menu: crate::input::state::core::menus::ContextMenuPanel,
+    pub(crate) context_menu: ContextMenuPanel,
 
     /// Modal state, cached geometry, and press identity for the color picker popup.
-    pub(crate) color_picker_popup: crate::input::state::core::ColorPickerPopupPanel,
+    pub(crate) color_picker_popup: ColorPickerPopupPanel,
     /// Lifecycle, layout, and configured pointer trigger for the radial menu.
-    pub(crate) radial_menu: crate::input::state::core::RadialMenuPanel,
+    pub(crate) radial_menu: RadialMenuPanel,
     /// Undo retention, delayed playback settings, and active playback state.
-    pub(crate) history_limits: crate::input::state::core::HistoryLimits,
+    pub(crate) history_limits: HistoryLimits,
     /// The scan-band overlay shown while screen text recognition runs, and the
     /// outcome card that follows it.
-    pub(crate) ocr_scan: Option<crate::input::state::core::utility::ocr_scan::OcrScan>,
+    pub(crate) ocr_scan: Option<OcrScan>,
     /// Local selection clipboard, publication, paste request, and image fallback state.
     pub(in crate::input::state::core) selection_clipboard: SelectionClipboard,
     /// Lifecycle, cached geometry, and deferred refresh state for the properties panel.
-    pub(crate) properties: crate::input::state::core::properties::PropertiesPanelState,
+    pub(crate) properties: PropertiesPanelState,
     /// Screen-color eyedropper UI lifecycle.
-    pub(in crate::input::state::core) eyedropper_ui_state:
-        crate::input::state::core::EyedropperUiState,
+    pub(in crate::input::state::core) eyedropper_ui_state: EyedropperUiState,
     /// Generalized screen-region selector lifecycle.
-    pub(in crate::input::state::core) region_select_ui_state:
-        crate::input::state::core::RegionSelectUiState,
+    pub(in crate::input::state::core) region_select_ui_state: RegionSelectUiState,
     /// Runtime preset values, active selection, and transient feedback.
-    pub(crate) preset_slots: crate::input::state::core::PresetSlots,
+    pub(crate) preset_slots: PresetSlots,
     /// Compositor capabilities (layer-shell, screencopy, etc.)
     pub compositor_capabilities: CompositorCapabilities,
     /// The transient chip naming what Shape Pen just recognized.
-    pub(in crate::input::state) recognition_feedback:
-        crate::input::state::core::RecognitionFeedback,
+    pub(in crate::input::state) recognition_feedback: RecognitionFeedback,
     /// The board and page the launch restore notice counted, while it may
     /// still be showing.
-    pub(in crate::input::state) restore_notice:
-        Option<crate::input::state::core::utility::RestoreNoticeContext>,
+    pub(in crate::input::state) restore_notice: Option<RestoreNoticeContext>,
 }

@@ -1,6 +1,10 @@
 mod mapping;
 mod validation;
 
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
+use wayscriber::domain::BoardGridKind;
 use wayscriber::i18n::tr;
 
 use super::super::color::ColorTripletInput;
@@ -24,8 +28,8 @@ impl BoardBackgroundOption {
     }
 }
 
-impl std::fmt::Display for BoardBackgroundOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for BoardBackgroundOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -56,7 +60,7 @@ pub struct BoardItemDraft {
     pub name: String,
     pub background_kind: BoardBackgroundOption,
     pub background_color: ColorTripletInput,
-    pub grid_kind: wayscriber::domain::BoardGridKind,
+    pub grid_kind: BoardGridKind,
     pub grid_spacing: String,
     pub default_pen_color: OptionalTripletInput,
     pub auto_adjust_pen: bool,

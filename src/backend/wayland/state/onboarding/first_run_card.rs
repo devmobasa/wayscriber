@@ -6,7 +6,8 @@
 //! written beside it.
 
 use crate::backend::wayland::state::WaylandState;
-use crate::config::{RadialMenuMouseBinding, keybindings::Action};
+use crate::config::RadialMenuMouseBinding;
+use crate::config::keybindings::Action;
 use crate::i18n::{tr, trf};
 use crate::onboarding::{FirstRunStep, OnboardingState};
 use crate::ui::{

@@ -3,6 +3,7 @@ use wayscriber::i18n::{tr, trf};
 use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
+use gtk::gdk::RGBA;
 
 use wayscriber::config::{QUICK_COLOR_RENDER_LIMIT, QuickColorSlot};
 
@@ -120,10 +121,10 @@ fn quick_color_layouts(app: &ConfiguratorApp) -> Vec<QuickColorLayout> {
 }
 
 /// One quick color row's values: everything the layout deliberately left out.
-struct QuickColorValues<'a> {
-    label: &'a str,
-    name: &'a str,
-    hex: &'a str,
+struct QuickColorValues<'draft> {
+    label: &'draft str,
+    name: &'draft str,
+    hex: &'draft str,
     named: NamedColorOption,
     /// The color the entry resolves to, `None` when it resolves to nothing —
     /// which is also what makes the name field an error.
@@ -224,7 +225,7 @@ fn build_quick_color_row(
         tr("Color mode"),
         &[tr("Named or hex").to_string(), "RGB".to_string()],
     );
-    select_if_changed(&mode, &COLOR_MODES, layout.mode);
+    select_if_changed(&mode, &COLOR_MODES, &layout.mode);
     connect_combo(&mode, sender.clone(), COLOR_MODES.to_vec(), move |value| {
         Message::QuickColorModeChanged(index, value)
     });
@@ -307,7 +308,7 @@ fn build_quick_color_row(
         }
 
         if let Some((r, g, b, a)) = values.preview {
-            let rgba = gtk::gdk::RGBA::new(r as f32, g as f32, b as f32, a as f32);
+            let rgba = RGBA::new(r as f32, g as f32, b as f32, a as f32);
             set_swatch_blocked(&swatch, &swatch_handler, &rgba);
         }
     });

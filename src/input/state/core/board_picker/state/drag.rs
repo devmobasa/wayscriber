@@ -1,3 +1,5 @@
+use crate::draw::TextMeasurer;
+
 use super::super::super::base::InputState;
 use super::super::{BoardPickerDrag, BoardPickerPageDrag, BoardPickerState};
 
@@ -161,7 +163,7 @@ impl InputState {
 
     pub(crate) fn board_picker_finish_page_drag_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
     ) -> bool {
         let Some(drag) = self.board_picker.page_drag.take() else {
             return false;

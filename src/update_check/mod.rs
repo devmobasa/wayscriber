@@ -17,13 +17,15 @@ mod fetch;
 mod manifest;
 mod version;
 
-use std::time::Duration;
+use std::env;
+use std::time::{Duration, Instant};
 
 use log::debug;
 
 pub(crate) use manifest::is_trusted_url;
 pub use manifest::{DEFAULT_NOTES_URL, DEFAULT_UPDATE_URL, MANIFEST_URL, install_source};
 
+use crate::build_info;
 use crate::env_vars::DISABLE_UPDATE_CHECK_ENV;
 
 /// Network timeout for one manifest request.
@@ -78,7 +80,7 @@ pub enum CachedStatus {
 
 /// The running build's version.
 pub fn current_version() -> &'static str {
-    crate::build_info::version()
+    build_info::version()
 }
 
 /// Whether this build can check at all.
@@ -109,7 +111,7 @@ pub fn background_checks_enabled(config_enabled: bool) -> bool {
 /// switch whose only job is to stop network access, an unrecognized value is
 /// honored rather than ignored, so a typo cannot silently re-enable the check.
 fn env_opt_out() -> bool {
-    std::env::var_os(DISABLE_UPDATE_CHECK_ENV)
+    env::var_os(DISABLE_UPDATE_CHECK_ENV)
         .map(|value| {
             let value = value.to_string_lossy().trim().to_ascii_lowercase();
             !matches!(
@@ -234,7 +236,7 @@ fn outcome_for(manifest: &manifest::ReleaseManifest) -> CheckOutcome {
 /// intentionally bypass the interval and therefore do not need it.
 #[derive(Debug, Default)]
 pub(crate) struct CheckThrottle {
-    last_attempt: Option<std::time::Instant>,
+    last_attempt: Option<Instant>,
 }
 
 impl CheckThrottle {
@@ -267,7 +269,7 @@ impl CheckThrottle {
     }
 
     fn note_attempt(&mut self) {
-        self.last_attempt = Some(std::time::Instant::now());
+        self.last_attempt = Some(Instant::now());
     }
 
     fn attempted_within(&self, interval: Duration) -> bool {
@@ -317,37 +319,52 @@ pub fn update_instructions_url() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
+    use crate::{env_vars, test_env, test_temp};
+
     use super::*;
 
     /// Restores the opt-out variable when the test ends, however it ends.
-    struct OptOutEnv(Option<std::ffi::OsString>);
+    ///
+    /// Create it only while holding `test_env::lock()`, and drop it before
+    /// that guard; its environment writes rely on that lock.
+    struct OptOutEnv(Option<OsString>);
 
     impl OptOutEnv {
         fn capture() -> Self {
-            Self(std::env::var_os(DISABLE_UPDATE_CHECK_ENV))
+            Self(env::var_os(DISABLE_UPDATE_CHECK_ENV))
         }
 
         fn set(&self, value: &str) {
-            unsafe { std::env::set_var(DISABLE_UPDATE_CHECK_ENV, value) };
+            // SAFETY: the caller holds the test environment mutex for this
+            // value's lifetime (see the type's documentation).
+            unsafe { env::set_var(DISABLE_UPDATE_CHECK_ENV, value) };
         }
 
         fn clear(&self) {
-            unsafe { std::env::remove_var(DISABLE_UPDATE_CHECK_ENV) };
+            // SAFETY: the caller holds the test environment mutex for this
+            // value's lifetime (see the type's documentation).
+            unsafe { env::remove_var(DISABLE_UPDATE_CHECK_ENV) };
         }
     }
 
     impl Drop for OptOutEnv {
         fn drop(&mut self) {
-            match self.0.take() {
-                Some(value) => unsafe { std::env::set_var(DISABLE_UPDATE_CHECK_ENV, value) },
-                None => unsafe { std::env::remove_var(DISABLE_UPDATE_CHECK_ENV) },
+            // SAFETY: the caller holds the test environment mutex until after
+            // this value drops (see the type's documentation).
+            unsafe {
+                match self.0.take() {
+                    Some(value) => env::set_var(DISABLE_UPDATE_CHECK_ENV, value),
+                    None => env::remove_var(DISABLE_UPDATE_CHECK_ENV),
+                }
             }
         }
     }
 
     #[test]
     fn env_opt_out_recognizes_falsey_values() {
-        let _lock = crate::test_env::lock();
+        let _lock = test_env::lock();
         let env = OptOutEnv::capture();
 
         env.set("1");
@@ -399,10 +416,11 @@ mod tests {
     /// turning a daily check into one request per daemon wakeup.
     #[test]
     fn each_watcher_owns_its_in_process_attempt_throttle() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let _lock = test_env::lock();
+        let dir = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         let mut attempted = CheckThrottle::default();
         attempted.note_attempt();
@@ -416,9 +434,12 @@ mod tests {
         assert!(!attempted.is_due_now(Duration::from_secs(86_400)));
         assert!(untouched.is_due_now(Duration::from_secs(86_400)));
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
@@ -451,10 +472,11 @@ mod tests {
     /// the dialog reads back, with the install-source anchor applied.
     #[test]
     fn cached_status_reports_what_the_last_check_stored() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let _lock = test_env::lock();
+        let dir = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         assert_eq!(cached_status(), CachedStatus::Never(Freshness::default()));
 
@@ -535,18 +557,22 @@ mod tests {
             })
         );
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
     #[test]
     fn a_first_persisted_failure_remains_visible_after_reopening_about() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let _lock = test_env::lock();
+        let dir = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         record_attempt(None);
 
@@ -558,18 +584,22 @@ mod tests {
             })
         );
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
     #[test]
     fn a_same_second_failure_is_not_mistaken_for_the_previous_success() {
-        let _lock = crate::test_env::lock();
-        let dir = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let _lock = test_env::lock();
+        let dir = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         let stamp = cache::now_unix();
         let mut seeded = cache::load();
@@ -587,9 +617,12 @@ mod tests {
             })
         ));
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 

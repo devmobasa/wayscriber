@@ -1,8 +1,15 @@
-use super::*;
+use std::env;
+use std::path::{Path, PathBuf};
+
+use crate::backend::wayland::backend::event_loop::session_save;
 use crate::backend::wayland::session::{
     ExpandedTooLarge, OutputSessionLoad, commit_output_load, load_output_session,
 };
+use crate::backend::wayland::state::WaylandState;
 use crate::i18n::{tr, trf};
+use crate::input::state::{Toast, ToastPriority};
+use crate::{env_vars, notification, session};
+use std::time::Duration;
 
 impl WaylandState {
     /// Loads and commits `staged` as the session for the output identified as
@@ -74,13 +81,11 @@ impl WaylandState {
     }
 
     /// The remembered session this run continues, while no session has loaded.
-    pub(in crate::backend::wayland) fn unloaded_remembered_session(
-        &self,
-    ) -> Option<std::path::PathBuf> {
+    pub(in crate::backend::wayland) fn unloaded_remembered_session(&self) -> Option<PathBuf> {
         self.session_home
             .remembered()
             .filter(|_| !self.session.is_loaded())
-            .map(std::path::Path::to_path_buf)
+            .map(Path::to_path_buf)
     }
 
     /// After a launch-time session load, announce ink restored onto the
@@ -97,8 +102,7 @@ impl WaylandState {
             return;
         }
 
-        let daemon_toggle =
-            std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some();
+        let daemon_toggle = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV).is_some();
         let step = launch_restore_step(
             daemon_toggle,
             self.session.has_loaded_board_data(),

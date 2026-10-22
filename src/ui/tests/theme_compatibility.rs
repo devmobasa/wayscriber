@@ -1,13 +1,18 @@
+use std::env;
+use std::process::Command;
+
 use crate::config::{StatusBarStyle, StatusPosition};
 use crate::input::InputState;
+use crate::input::state::test_support;
 use crate::ui::theme::{Theme, ThemeMode};
 use crate::ui::*;
+use crate::ui_text::UiTextEngine;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 fn state() -> InputState {
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     let style = StatusBarStyle::default();
     state.set_zoom_status(true, true, 2.0, (0.0, 0.0));
     state.update_status_hud_layout(StatusPosition::BottomLeft, &style, WIDTH, HEIGHT);
@@ -74,8 +79,8 @@ fn explicit_status_and_zoom_theme_changes_pixels_without_changing_geometry() {
 #[test]
 fn legacy_light_wrappers_match_explicit_light_in_isolated_process() {
     const CHILD: &str = "WAYSCRIBER_TEST_LEGACY_LIGHT_THEME";
-    if std::env::var_os(CHILD).is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
+    if env::var_os(CHILD).is_none() {
+        let output = Command::new(env::current_exe().unwrap())
             .args(["--exact", "ui::theme_compatibility::legacy_light_wrappers_match_explicit_light_in_isolated_process", "--nocapture"])
             .env(CHILD, "1")
             .output().unwrap();
@@ -89,7 +94,7 @@ fn legacy_light_wrappers_match_explicit_light_in_isolated_process() {
     }
     // Invisible calls used to return before consulting the process theme.
     // Keep that behavior so a later configured Light theme can still install.
-    let hidden = crate::input::state::test_support::make_test_input_state();
+    let hidden = test_support::make_test_input_state();
     let hidden_style = StatusBarStyle::default();
     pixels(|ctx| {
         render_status_bar(ctx, &hidden, &hidden_style, WIDTH, HEIGHT);
@@ -123,7 +128,7 @@ fn legacy_light_wrappers_match_explicit_light_in_isolated_process() {
     state.open_radial_menu(400.0, 300.0);
     state.update_radial_menu_layout(WIDTH, HEIGHT);
     let legacy = pixels(|ctx| render_radial_menu(ctx, &state, WIDTH, HEIGHT));
-    let engine = crate::ui_text::UiTextEngine::default();
+    let engine = UiTextEngine::default();
     let explicit = |theme: &Theme| {
         pixels(|ctx| {
             let mut caches = UiRenderCaches::default();

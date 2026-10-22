@@ -261,7 +261,7 @@ impl InputState {
                         toast_key,
                         action_label,
                         action_name,
-                        tr("session would exceed save limits.").to_string(),
+                        tr("session would exceed save limits."),
                     );
                 }
                 None => {
@@ -269,7 +269,7 @@ impl InputState {
                         toast_key,
                         action_label,
                         action_name,
-                        tr("session size check failed.").to_string(),
+                        tr("session size check failed."),
                     );
                 }
             }
@@ -293,7 +293,7 @@ impl InputState {
                 toast_key,
                 action_label,
                 action_name,
-                trf(
+                &trf(
                     "session would exceed {}. Remove images or raise session.max_file_size_mb.",
                     &[&limit],
                 ),
@@ -319,7 +319,7 @@ impl InputState {
                 toast_key,
                 action_label,
                 action_name,
-                expanded_safety_limit_reason(&limit),
+                &expanded_safety_limit_reason(&limit),
             );
         }
         true
@@ -330,7 +330,7 @@ impl InputState {
         toast_key: &'static str,
         action_label: &str,
         action_name: &str,
-        reason: String,
+        reason: &str,
     ) -> bool {
         self.push_toast(
             ToastPriority::Info,
@@ -439,7 +439,8 @@ fn estimate_frame_page_storage(page: &Frame) -> CloneStorageEstimate {
     if offset != (0, 0) {
         estimate.add_raw(32);
     }
-    for shape in page.shapes.iter().map(|drawn| &drawn.shape) {
+    let shapes = page.shapes.iter().map(|drawn| &drawn.shape);
+    for shape in shapes {
         estimate = estimate.saturating_add(estimate_shape_storage(shape));
     }
     estimate

@@ -7,11 +7,16 @@
 //! know, and an older daemon reads only the plain files directly in
 //! `daemon-commands/`.
 
+use std::io::ErrorKind;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::{env, fs, process};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
+
+use crate::durable_io::AtomicWriteOptions;
+use crate::{durable_io, env_vars, paths};
 
 use super::child::{ActiveGeneration, active_generation_from_environment};
 
@@ -41,7 +46,7 @@ struct SessionTargetRecord {
 }
 
 fn report_dir() -> PathBuf {
-    crate::paths::daemon_command_dir().join("overlay-targets")
+    paths::daemon_command_dir().join("overlay-targets")
 }
 
 fn report_name(generation: &str) -> String {
@@ -56,12 +61,10 @@ fn report_path(generation: &str) -> PathBuf {
 /// earlier report. Returns whether a report was written: a standalone overlay,
 /// or one an older daemon launched, has no daemon that reads reports.
 pub(crate) fn publish_session_from_environment(session: &ReportedSession) -> Result<bool> {
-    if std::env::var_os(crate::env_vars::OVERLAY_SESSION_REPORTS_ENV)
-        .is_none_or(|value| value != "1")
-    {
+    if env::var_os(env_vars::OVERLAY_SESSION_REPORTS_ENV).is_none_or(|value| value != "1") {
         return Ok(false);
     }
-    let generation = std::env::var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV)
+    let generation = env::var(env_vars::OVERLAY_CHILD_GENERATION_ENV)
         .context("a daemon overlay reports its session under its generation")?;
     super::wire::validate_id(&generation)?;
     // Only the process that published this generation's identity reports for it.
@@ -79,16 +82,16 @@ pub(crate) fn publish_session_from_environment(session: &ReportedSession) -> Res
     let record = SessionTargetRecord {
         schema: REPORT_SCHEMA,
         generation,
-        pid: std::process::id(),
+        pid: process::id(),
         process_start_ticks: super::linux::current_process_start_ticks()?,
         target,
     };
     let bytes = super::wire::canonical_json(&record, MAX_REPORT_BYTES)?;
     super::linux::create_private_directory(&report_dir())?;
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &report_path(&record.generation),
         &bytes,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+        AtomicWriteOptions::private_runtime_file(),
     )?;
 
     Ok(true)
@@ -99,7 +102,7 @@ fn report_path_text(path: &Path) -> Result<String> {
     let path = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()
+        env::current_dir()
             .context("failed to resolve a relative session path")?
             .join(path)
     };
@@ -116,12 +119,12 @@ fn report_path_text(path: &Path) -> Result<String> {
 /// a symlink to another directory.
 fn private_report_dir() -> Result<Option<PathBuf>> {
     let directory = report_dir();
-    match std::fs::symlink_metadata(&directory) {
+    match fs::symlink_metadata(&directory) {
         Ok(metadata) if metadata.is_dir() && super::linux::is_private(&metadata) => {
             Ok(Some(directory))
         }
         Ok(_) => bail!("{} is not a private report directory", directory.display()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(error) => {
             Err(error).with_context(|| format!("failed to inspect {}", directory.display()))
         }
@@ -143,7 +146,7 @@ fn read_session_report(
     let path = directory.join(report_name(generation));
     let bytes = match super::linux::read_bounded_private_file(&path, MAX_REPORT_BYTES) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error).context("failed to read the session report"),
     };
     let record: SessionTargetRecord = super::wire::parse_canonical_json(&bytes, MAX_REPORT_BYTES)?;
@@ -228,14 +231,14 @@ fn remove_reports(report: Option<&str>, is_removed: impl Fn(&str) -> bool) -> Re
         remove_entry(&directory.join(report))?;
     }
 
-    let entries = std::fs::read_dir(&directory)
+    let entries = fs::read_dir(&directory)
         .with_context(|| format!("failed to list {}", directory.display()))?;
     for entry in entries.take(MAX_CLEANUP_ENTRIES) {
         let entry = entry?;
         let Ok(name) = entry.file_name().into_string() else {
             continue;
         };
-        let report = crate::durable_io::temp_file_target(&name).unwrap_or(&name);
+        let report = durable_io::temp_file_target(&name).unwrap_or(&name);
         if is_removed(report) {
             remove_entry(&entry.path())?;
         }
@@ -244,9 +247,9 @@ fn remove_reports(report: Option<&str>, is_removed: impl Fn(&str) -> bool) -> Re
 }
 
 fn remove_entry(path: &Path) -> Result<()> {
-    match std::fs::remove_file(path) {
+    match fs::remove_file(path) {
         Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("failed to remove {}", path.display())),
     }
 }

@@ -1,3 +1,5 @@
+use crate::{test_env, test_temp};
+
 use super::*;
 use crate::env_vars::{
     HOME_ENV, USERPROFILE_ENV, XDG_CACHE_HOME_ENV, XDG_CONFIG_HOME_ENV, XDG_DATA_HOME_ENV,
@@ -8,8 +10,8 @@ use std::env;
 #[test]
 #[cfg(unix)]
 fn tray_action_prefers_runtime_dir_when_set() {
-    let _guard = crate::test_env::lock();
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let _guard = test_env::lock();
+    let tmp = test_temp::tempdir().unwrap();
     let prev = env::var_os(XDG_RUNTIME_DIR_ENV);
     // SAFETY: serialised via ENV_MUTEX
     unsafe {
@@ -24,10 +26,12 @@ fn tray_action_prefers_runtime_dir_when_set() {
     assert!(daemon_pid_file().starts_with(tmp.path()));
 
     if let Some(prev) = prev {
+        // SAFETY: this test still holds the environment mutex in `_guard`.
         unsafe {
             env::set_var(XDG_RUNTIME_DIR_ENV, prev);
         }
     } else {
+        // SAFETY: this test still holds the environment mutex in `_guard`.
         unsafe {
             env::remove_var(XDG_RUNTIME_DIR_ENV);
         }
@@ -36,13 +40,14 @@ fn tray_action_prefers_runtime_dir_when_set() {
 
 #[test]
 fn config_dir_prefers_xdg_config_home_when_set() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_CONFIG_HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_CONFIG_HOME_ENV, tmp.path());
         env::remove_var(HOME_ENV);
@@ -53,29 +58,33 @@ fn config_dir_prefers_xdg_config_home_when_set() {
         .unwrap_or_else(|| panic!("config_dir should resolve from {XDG_CONFIG_HOME_ENV}"));
     assert_eq!(dir, tmp.path());
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CONFIG_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CONFIG_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_CONFIG_HOME_ENV, v),
+            None => env::remove_var(XDG_CONFIG_HOME_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn update_check_cache_follows_the_cache_directory() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_CACHE_HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_CACHE_HOME_ENV, tmp.path());
         env::remove_var(HOME_ENV);
@@ -90,6 +99,7 @@ fn update_check_cache_follows_the_cache_directory() {
 
     // Falling back to HOME keeps the result inside ~/.cache, never in data or
     // config directories.
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::remove_var(XDG_CACHE_HOME_ENV);
         env::set_var(HOME_ENV, tmp.path());
@@ -102,29 +112,33 @@ fn update_check_cache_follows_the_cache_directory() {
             .join("update-check.json")
     );
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CACHE_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CACHE_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_CACHE_HOME_ENV, v),
+            None => env::remove_var(XDG_CACHE_HOME_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn config_dir_falls_back_to_home_config() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_CONFIG_HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(HOME_ENV, tmp.path());
         env::remove_var(USERPROFILE_ENV);
@@ -134,29 +148,33 @@ fn config_dir_falls_back_to_home_config() {
     let dir = config_dir().expect("config_dir should resolve from HOME");
     assert_eq!(dir, tmp.path().join(".config"));
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_CONFIG_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_CONFIG_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_CONFIG_HOME_ENV, v),
+            None => env::remove_var(XDG_CONFIG_HOME_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn data_dir_prefers_xdg_data_home_when_set() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_DATA_HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_DATA_HOME_ENV, tmp.path());
         env::remove_var(HOME_ENV);
@@ -171,29 +189,33 @@ fn data_dir_prefers_xdg_data_home_when_set() {
         tmp.path().join("wayscriber/runtime-ui.toml")
     );
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_DATA_HOME_ENV, v),
+            None => env::remove_var(XDG_DATA_HOME_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn data_dir_falls_back_to_home_share() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_DATA_HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(HOME_ENV, tmp.path());
         env::remove_var(USERPROFILE_ENV);
@@ -203,17 +225,20 @@ fn data_dir_falls_back_to_home_share() {
     let dir = data_dir().expect("data_dir should resolve from HOME");
     assert_eq!(dir, tmp.path().join(".local").join("share"));
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_DATA_HOME_ENV, v) },
-        None => unsafe { env::remove_var(XDG_DATA_HOME_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_DATA_HOME_ENV, v),
+            None => env::remove_var(XDG_DATA_HOME_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
@@ -264,13 +289,14 @@ fn searched_data_dirs_follow_the_base_directory_spec() {
 
 #[test]
 fn pictures_dir_prefers_xdg_when_set() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_PICTURES_DIR_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(XDG_PICTURES_DIR_ENV, tmp.path());
         env::remove_var(HOME_ENV);
@@ -281,29 +307,33 @@ fn pictures_dir_prefers_xdg_when_set() {
         .unwrap_or_else(|| panic!("pictures_dir should resolve from {XDG_PICTURES_DIR_ENV}"));
     assert_eq!(dir, tmp.path());
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_PICTURES_DIR_ENV, v) },
-        None => unsafe { env::remove_var(XDG_PICTURES_DIR_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_PICTURES_DIR_ENV, v),
+            None => env::remove_var(XDG_PICTURES_DIR_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn pictures_dir_falls_back_to_home() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
     let prev_userprofile = env::var_os(USERPROFILE_ENV);
     let prev_xdg = env::var_os(XDG_PICTURES_DIR_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(HOME_ENV, tmp.path());
         env::remove_var(USERPROFILE_ENV);
@@ -313,27 +343,31 @@ fn pictures_dir_falls_back_to_home() {
     let dir = pictures_dir().expect("pictures_dir should resolve from HOME");
     assert_eq!(dir, tmp.path().join("Pictures"));
 
-    match prev_xdg {
-        Some(v) => unsafe { env::set_var(XDG_PICTURES_DIR_ENV, v) },
-        None => unsafe { env::remove_var(XDG_PICTURES_DIR_ENV) },
-    }
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
-    }
-    match prev_userprofile {
-        Some(v) => unsafe { env::set_var(USERPROFILE_ENV, v) },
-        None => unsafe { env::remove_var(USERPROFILE_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_xdg {
+            Some(v) => env::set_var(XDG_PICTURES_DIR_ENV, v),
+            None => env::remove_var(XDG_PICTURES_DIR_ENV),
+        }
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
+        match prev_userprofile {
+            Some(v) => env::set_var(USERPROFILE_ENV, v),
+            None => env::remove_var(USERPROFILE_ENV),
+        }
     }
 }
 
 #[test]
 fn expand_tilde_replaces_home() {
-    let _guard = crate::test_env::lock();
+    let _guard = test_env::lock();
 
-    let tmp = crate::test_temp::tempdir().unwrap();
+    let tmp = test_temp::tempdir().unwrap();
     let prev_home = env::var_os(HOME_ENV);
 
+    // SAFETY: serialized by the test environment mutex held in `_guard`.
     unsafe {
         env::set_var(HOME_ENV, tmp.path());
     }
@@ -341,9 +375,12 @@ fn expand_tilde_replaces_home() {
     let path = expand_tilde("~/test");
     assert_eq!(path, tmp.path().join("test"));
 
-    match prev_home {
-        Some(v) => unsafe { env::set_var(HOME_ENV, v) },
-        None => unsafe { env::remove_var(HOME_ENV) },
+    // SAFETY: this test still holds the environment mutex in `_guard`.
+    unsafe {
+        match prev_home {
+            Some(v) => env::set_var(HOME_ENV, v),
+            None => env::remove_var(HOME_ENV),
+        }
     }
 }
 

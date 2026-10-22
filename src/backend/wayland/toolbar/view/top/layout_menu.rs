@@ -7,6 +7,7 @@
 //! `model::layout_menu_entries`, so both frontends list the same presets
 //! with the same wording.
 
+use crate::config::ToolbarLayoutMode;
 use crate::i18n::trf;
 use crate::ui::toolbar::{ToolbarSnapshot, model};
 
@@ -25,7 +26,7 @@ const BOTTOM_MARGIN: f64 = 4.0;
 const SURFACE_MARGIN: f64 = 4.0;
 
 fn panel_size() -> (f64, f64) {
-    let rows = model::layout_menu_entries(crate::config::ToolbarLayoutMode::Regular).len() as f64;
+    let rows = model::layout_menu_entries(ToolbarLayoutMode::Regular).len() as f64;
     let width = model::LAYOUT_MENU_ROW_W + model::LAYOUT_MENU_PAD * 2.0;
     let height = model::LAYOUT_MENU_PAD * 2.0
         + rows * model::LAYOUT_MENU_ROW_H

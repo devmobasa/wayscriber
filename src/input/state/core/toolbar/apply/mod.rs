@@ -5,17 +5,24 @@ mod layout;
 mod pages;
 mod tools;
 
+use std::time::Instant;
+
 use crate::input::InputState;
 
+use crate::config::{Action, TopDisplayMode};
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
 use crate::ui::toolbar::ToolbarEvent;
+use crate::ui::toolbar::model::StrokeSetting;
+use crate::ui_text::UiTextEngine;
 
 impl InputState {
     /// Applies a toolbar-originated event to the input state.
     ///
     /// Returns true if the event resulted in a state change.
     pub fn apply_toolbar_event(&mut self, event: ToolbarEvent) -> bool {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.apply_toolbar_event_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -27,7 +34,7 @@ impl InputState {
 
     pub(crate) fn apply_toolbar_event_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         event: ToolbarEvent,
     ) -> bool {
         // Resolve the keyboard-action equivalent before the event is consumed
@@ -55,11 +62,7 @@ impl InputState {
     /// pressed the key" case the command palette records. Only genuine state
     /// changes for actions that resolve to a shortcut count, so the coach can
     /// always name the key and no-op clicks never build a streak.
-    fn note_toolbar_shortcut_slow_path(
-        &mut self,
-        coach_action: Option<crate::config::Action>,
-        changed: bool,
-    ) {
+    fn note_toolbar_shortcut_slow_path(&mut self, coach_action: Option<Action>, changed: bool) {
         if !changed {
             return;
         }
@@ -73,7 +76,7 @@ impl InputState {
 
     fn apply_toolbar_event_inner_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         event: ToolbarEvent,
     ) -> bool {
         match event {
@@ -97,18 +100,15 @@ impl InputState {
                 self.apply_toolbar_set_spotlight_magnification(value)
             }
             ToolbarEvent::SetPenSmoothing(level) => self.apply_toolbar_set_pen_smoothing(level),
-            ToolbarEvent::NudgePenSmoothing(steps) => self.apply_toolbar_nudge_stroke_setting(
-                crate::ui::toolbar::model::StrokeSetting::Smoothing,
-                steps,
-            ),
+            ToolbarEvent::NudgePenSmoothing(steps) => {
+                self.apply_toolbar_nudge_stroke_setting(StrokeSetting::Smoothing, steps)
+            }
             ToolbarEvent::SetShapeRecognitionSensitivity(level) => {
                 self.set_shape_recognition_sensitivity(level)
             }
-            ToolbarEvent::NudgeShapeRecognitionSensitivity(steps) => self
-                .apply_toolbar_nudge_stroke_setting(
-                    crate::ui::toolbar::model::StrokeSetting::ShapeDetection,
-                    steps,
-                ),
+            ToolbarEvent::NudgeShapeRecognitionSensitivity(steps) => {
+                self.apply_toolbar_nudge_stroke_setting(StrokeSetting::ShapeDetection, steps)
+            }
             ToolbarEvent::OpenFontPicker => self.apply_toolbar_open_font_picker(),
             ToolbarEvent::SetEraserMode(mode) => self.apply_toolbar_set_eraser_mode(mode),
             ToolbarEvent::SetFont(descriptor) => self.apply_toolbar_set_font(descriptor),
@@ -244,16 +244,16 @@ impl InputState {
             ToolbarEvent::SetTopMinimized(minimized) => {
                 let changed = self.apply_toolbar_set_top_minimized(minimized);
                 if changed && !minimized {
-                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                    self.toolbar.arm_restore_guard(Instant::now());
                 }
                 changed
             }
             ToolbarEvent::SetTopDisplayMode(mode) => {
-                let from_micro = self.top_display_state() == crate::config::TopDisplayMode::Micro;
+                let from_micro = self.top_display_state() == TopDisplayMode::Micro;
                 let changed =
                     self.apply_toolbar_set_top_display_mode_with_resources(resources, mode);
-                if changed && from_micro && mode == crate::config::TopDisplayMode::Full {
-                    self.toolbar.arm_restore_guard(std::time::Instant::now());
+                if changed && from_micro && mode == TopDisplayMode::Full {
+                    self.toolbar.arm_restore_guard(Instant::now());
                 }
                 changed
             }
@@ -377,10 +377,10 @@ impl InputState {
 mod coach_tests {
     use crate::config::{Action, Shortcut};
     use crate::draw::{Color, Shape};
-    use crate::input::InputState;
     use crate::input::state::test_support::{
         make_test_input_state, make_test_input_state_with_action_bindings,
     };
+    use crate::input::{InputState, ZoomAnchor};
     use crate::ui::toolbar::ToolbarEvent;
     use std::collections::HashMap;
 
@@ -451,7 +451,7 @@ mod coach_tests {
             state
                 .take_pending_zoom_request()
                 .map(|request| request.anchor),
-            Some(crate::input::ZoomAnchor::ScreenCenter),
+            Some(ZoomAnchor::ScreenCenter),
             "a toolbar zoom centres the screen, not the toolbar button"
         );
         assert!(state.pending_onboarding_usage.used_zoom_control);

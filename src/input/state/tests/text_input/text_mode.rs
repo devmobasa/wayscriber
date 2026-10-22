@@ -1,3 +1,6 @@
+use crate::config::{KeyBinding, KeybindingsConfig, Shortcut, ShortcutTrigger};
+use crate::input::state::actions::key_press::bindings;
+
 use super::super::*;
 
 #[test]
@@ -161,20 +164,17 @@ const FUNCTION_KEYS: [Key; 12] = [
 ];
 
 fn function_key_label(key: Key) -> String {
-    crate::input::state::actions::key_press::bindings::key_to_action_label(key)
-        .expect("function keys have binding labels")
+    bindings::key_to_action_label(key).expect("function keys have binding labels")
 }
 
 /// Every default binding on a function key, with the key that triggers it.
-fn default_function_key_bindings() -> Vec<(crate::config::KeyBinding, Key, Action)> {
-    let map = crate::config::KeybindingsConfig::default()
+fn default_function_key_bindings() -> Vec<(KeyBinding, Key, Action)> {
+    let map = KeybindingsConfig::default()
         .build_action_map()
         .expect("default keybindings build");
     let mut bindings = Vec::new();
     for (shortcut, action) in map {
-        let crate::config::Shortcut::Single(crate::config::ShortcutTrigger::Keyboard(binding)) =
-            shortcut
-        else {
+        let Shortcut::Single(ShortcutTrigger::Keyboard(binding)) = shortcut else {
             continue;
         };
         if let Some(key) = FUNCTION_KEYS
@@ -239,7 +239,7 @@ fn every_default_function_key_binding_works_while_typing() {
 fn user_bound_function_keys_work_while_typing() {
     for key in FUNCTION_KEYS {
         let label = function_key_label(key);
-        let mut keybindings = crate::config::KeybindingsConfig::default();
+        let mut keybindings = KeybindingsConfig::default();
         for bound in [
             &mut keybindings.ui.toggle_help,
             &mut keybindings.ui.toggle_toolbar,
@@ -250,7 +250,7 @@ fn user_bound_function_keys_work_while_typing() {
             bound.retain(|existing| *existing != label);
         }
         keybindings.ui.toggle_status_bar = vec![label.clone()];
-        let mut state = create_test_input_state_with_keybindings(keybindings);
+        let mut state = create_test_input_state_with_keybindings(&keybindings);
         state.state = DrawingState::text_input(100, 100, String::from("draft"));
         let shown = state.ui_visibility.show_status_bar;
 

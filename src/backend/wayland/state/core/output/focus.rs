@@ -1,5 +1,12 @@
-use super::*;
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::buffer_damage::FullDamageReason;
 use crate::i18n::tr;
+use crate::input::state::{OutputFocusAction, Toast, ToastPriority};
+use log::{info, warn};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::Anchor;
+use wayland_client::QueueHandle;
+use wayland_client::protocol::wl_output;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn handle_output_focus_action(
@@ -148,6 +155,8 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     use super::*;
     use crate::backend::wayland::frozen::FrozenImage;
     use crate::backend::wayland::handlers::test_support::HandlerFixture;
@@ -156,7 +165,7 @@ mod tests {
 
     #[test]
     fn explicit_output_switch_invalidates_inactive_zoom_cache_before_same_output_enter() {
-        let mut config = crate::config::Config::default();
+        let mut config = Config::default();
         config.ui.xdg_fullscreen = true;
         config.ui.multi_monitor_enabled = true;
         let mut fixture = HandlerFixture::with_outputs(config, 3);

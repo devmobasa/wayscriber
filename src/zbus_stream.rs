@@ -1,4 +1,5 @@
-use std::{future::poll_fn, pin::Pin};
+use std::future::poll_fn;
+use std::pin::Pin;
 
 use zbus::export::futures_core::Stream;
 

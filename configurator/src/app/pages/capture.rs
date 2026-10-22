@@ -88,7 +88,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Selection frontend"),
             tr("Native draws the picker over a frozen desktop image. Slurp uses the external selector."),
             RegionPickerOption::list(),
-            labels(RegionPickerOption::list(), RegionPickerOption::label),
+            &labels(RegionPickerOption::list(), RegionPickerOption::label),
             |app| app.draft.capture.region_picker,
             Message::CaptureRegionPickerChanged,
         )
@@ -126,7 +126,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Page size"),
             "",
             PdfPageSizeOption::list(),
-            labels(PdfPageSizeOption::list(), PdfPageSizeOption::label),
+            &labels(PdfPageSizeOption::list(), PdfPageSizeOption::label),
             |app| app.draft.export_pdf_page_size,
             Message::ExportPdfPageSizeChanged,
         )
@@ -134,7 +134,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Orientation"),
             "",
             PdfOrientationOption::list(),
-            labels(PdfOrientationOption::list(), PdfOrientationOption::label),
+            &labels(PdfOrientationOption::list(), PdfOrientationOption::label),
             |app| app.draft.export_pdf_orientation,
             Message::ExportPdfOrientationChanged,
         )
@@ -142,7 +142,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Fit"),
             "",
             PdfFitModeOption::list(),
-            labels(PdfFitModeOption::list(), PdfFitModeOption::label),
+            &labels(PdfFitModeOption::list(), PdfFitModeOption::label),
             |app| app.draft.export_pdf_fit,
             Message::ExportPdfFitChanged,
         )
@@ -150,7 +150,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Transparent page background"),
             "",
             PdfTransparentBackgroundOption::list(),
-            labels(
+            &labels(
                 PdfTransparentBackgroundOption::list(),
                 PdfTransparentBackgroundOption::label,
             ),
@@ -185,7 +185,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Label position"),
             "",
             PdfLabelPositionOption::list(),
-            labels(
+            &labels(
                 PdfLabelPositionOption::list(),
                 PdfLabelPositionOption::label,
             ),
@@ -196,7 +196,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Label content"),
             "",
             PdfLabelContentModeOption::list(),
-            labels(
+            &labels(
                 PdfLabelContentModeOption::list(),
                 PdfLabelContentModeOption::label,
             ),

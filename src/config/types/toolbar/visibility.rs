@@ -41,6 +41,7 @@ impl ToolbarSectionFlag {
     ];
 
     /// The config item id that carries explicit overrides for this flag.
+    #[must_use]
     pub fn item_id(self) -> ToolbarItemId {
         match self {
             Self::Actions => ids::SIDE_GROUP_ACTIONS,
@@ -56,6 +57,7 @@ impl ToolbarSectionFlag {
 
     /// Baseline visibility for the flag under `mode`: the mode's defaults
     /// adjusted by the per-mode config overrides.
+    #[must_use]
     pub fn baseline(self, mode: ToolbarLayoutMode, overrides: &ToolbarModeOverrides) -> bool {
         let defaults = mode.section_defaults();
         let over = overrides.for_mode(mode);
@@ -83,6 +85,7 @@ impl ToolbarSectionFlag {
 }
 
 /// The flag carried by a config item id, if any.
+#[must_use]
 pub fn section_flag_for_item(id: ToolbarItemId) -> Option<ToolbarSectionFlag> {
     ToolbarSectionFlag::ALL
         .into_iter()
@@ -133,6 +136,7 @@ impl ToolbarSectionVisibility {
         }
     }
 
+    #[must_use]
     pub fn get(&self, flag: ToolbarSectionFlag) -> bool {
         match flag {
             ToolbarSectionFlag::Actions => self.show_actions_section,
@@ -149,6 +153,7 @@ impl ToolbarSectionVisibility {
 
 /// Resolve the effective section visibility: explicit item overrides win,
 /// then the mode baseline.
+#[must_use]
 pub fn resolve_section_visibility(
     mode: ToolbarLayoutMode,
     overrides: &ToolbarModeOverrides,

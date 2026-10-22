@@ -1,21 +1,58 @@
 use std::path::Path;
 use std::sync::mpsc::TryRecvError;
+use std::{fs, mem};
 
 use anyhow::{Context, Result};
 
-use super::*;
+use crate::backend::wayland::RuntimeWakeHandle;
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
+use super::lifecycle::RuntimeUiLifecycleState;
+use super::live_state::{
+    apply_live_board_state, apply_live_toolbar_positions, apply_live_toolbar_state,
+    runtime_preview_authority,
+};
+use super::positions::{
+    position_rollback, position_seed_targets, position_values, rejected_source_mutation,
+};
+use super::rollback::apply_toolbar_runtime_rollback;
+use super::seeds::{
+    board_pin_seeds_from_input, retain_stored_board_pin_seeds_for_session_restore,
+    runtime_seeds_from_config, toolbar_values,
+};
+use super::{
+    ActiveItemDrag, ActivePositionDrag, PreparedToolbarMutation, ToolbarPositionSnapshot,
+    ToolbarRuntimeDrain, ToolbarRuntimeFinish, ToolbarRuntimeState, ToolbarSeedRefresh,
+};
+use crate::backend::wayland::state::MoveDragKind;
+use crate::config::{Config, ToolbarItemOrderGroup};
+use crate::input::InputState;
+use crate::runtime_ui_state::{
+    AbandonedPreviewResolutionReason, ControllerBarrierId, ExternalAuthorityInstallError,
+    InteractionSeedTarget, PreviewFinishResult, PreviewRollbackSnapshot, RecoveryIoCompletion,
+    RecoveryIoOperation, RecoveryIoResult, RuntimePreviewFinishIntent,
+    RuntimeStateFailurePathEffect, RuntimeStateInspectionError, RuntimeStateIoError,
+    RuntimeStateObservedPathEffect, RuntimeStateSourceObservation, RuntimeStateWriterCommand,
+    RuntimeStateWriterCompletion, RuntimeStateWriterSubmitError, RuntimeUiFileStatus,
+    RuntimeUiMutationScope, RuntimeUiMutationValues, RuntimeUiStateStore, RuntimeUiStateWriter,
+    RuntimeUiWireState, SourceMutationResult, SubmitSourceMutationResult, UpdateSeedsResult,
+    decode_runtime_ui_file, runtime_preview_rollback,
+};
+use crate::ui::toolbar::model::ToolbarRuntimeUiPersistenceTarget;
+use std::collections::BTreeMap;
 
 impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn start(
         config: &Config,
         input: &InputState,
         path: &Path,
-        runtime_wake: crate::backend::wayland::RuntimeWakeHandle,
+        runtime_wake: RuntimeWakeHandle,
     ) -> Result<Self> {
         let parent = path
             .parent()
             .context("runtime UI state path has no parent directory")?;
-        std::fs::create_dir_all(parent).with_context(|| {
+        fs::create_dir_all(parent).with_context(|| {
             format!(
                 "failed to create runtime UI state directory {}",
                 parent.display()
@@ -61,8 +98,8 @@ impl ToolbarRuntimeState {
 
     pub(in crate::backend::wayland) fn apply_startup_state(
         &self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         input: &mut InputState,
     ) {
         apply_live_toolbar_state(
@@ -90,8 +127,8 @@ impl ToolbarRuntimeState {
 
     pub(super) fn apply_live_state(
         &self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         input: &mut InputState,
         positions: &mut ToolbarPositionSnapshot,
     ) {
@@ -122,7 +159,7 @@ impl ToolbarRuntimeState {
         input: &InputState,
     ) -> Option<PreparedToolbarMutation> {
         let values = toolbar_values(target, input).ok()?;
-        self.begin_toolbar_mutation_with_rollback(target, values)
+        self.begin_toolbar_mutation_with_rollback(target, &values)
     }
 
     /// Begin a toolbar mutation whose pre-change values are already known.
@@ -132,7 +169,7 @@ impl ToolbarRuntimeState {
     pub(in crate::backend::wayland) fn begin_toolbar_mutation_with_rollback(
         &self,
         target: ToolbarRuntimeUiPersistenceTarget,
-        rollback_values: RuntimeUiMutationValues,
+        rollback_values: &RuntimeUiMutationValues,
     ) -> Option<PreparedToolbarMutation> {
         let rollback = PreviewRollbackSnapshot {
             values: rollback_values.values().clone(),
@@ -287,8 +324,8 @@ impl ToolbarRuntimeState {
 
     pub(in crate::backend::wayland) fn refresh_config_seeds(
         &mut self,
-        engine: &crate::ui_text::UiTextEngine,
-        measurer: &crate::draw::TextMeasurer,
+        engine: &UiTextEngine,
+        measurer: &TextMeasurer,
         config: &Config,
         input: &mut InputState,
         positions: &mut ToolbarPositionSnapshot,
@@ -301,7 +338,7 @@ impl ToolbarRuntimeState {
                 return ToolbarSeedRefresh::default();
             }
         };
-        let changed = match self.controller.update_seeds(seeds) {
+        let changed = match self.controller.update_seeds(&seeds) {
             UpdateSeedsResult::Applied {
                 changed_targets, ..
             } => changed_targets,
@@ -368,7 +405,7 @@ impl ToolbarRuntimeState {
     pub(super) fn drain_writer_completions(&mut self) -> ToolbarRuntimeDrain {
         let lifecycle_before = self.persistence_snapshot();
         let mut drain = ToolbarRuntimeDrain {
-            rebuild_live: std::mem::take(&mut self.live_rebuild_pending),
+            rebuild_live: mem::take(&mut self.live_rebuild_pending),
             ..ToolbarRuntimeDrain::default()
         };
         self.collect_preview_resolutions(&mut drain);
@@ -384,7 +421,7 @@ impl ToolbarRuntimeState {
             };
             self.integrate_writer_completion(completion);
             self.poll_recovery_completion();
-            drain.rebuild_live |= std::mem::take(&mut self.live_rebuild_pending);
+            drain.rebuild_live |= mem::take(&mut self.live_rebuild_pending);
             self.collect_preview_resolutions(&mut drain);
             self.dispatch_writer_command();
         }

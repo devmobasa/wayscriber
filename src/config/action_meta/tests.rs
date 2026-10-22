@@ -1,3 +1,6 @@
+use crate::config::action_meta;
+use crate::config::keybindings::KeybindingsConfig;
+
 use super::*;
 use std::collections::HashSet;
 
@@ -361,12 +364,11 @@ fn action_meta_covers_surface_actions() {
 /// therefore tells the user their shortcut collided with "Action".
 #[test]
 fn every_configurable_action_has_a_name_to_show() {
-    let unnamed: Vec<Action> =
-        crate::config::keybindings::KeybindingsConfig::configurable_actions()
-            .iter()
-            .copied()
-            .filter(|action| action_meta(*action).is_none())
-            .collect();
+    let unnamed: Vec<Action> = KeybindingsConfig::configurable_actions()
+        .iter()
+        .copied()
+        .filter(|action| action_meta(*action).is_none())
+        .collect();
     assert!(
         unnamed.is_empty(),
         "these configurable actions would be shown to the user as \"Action\": {unnamed:?}"
@@ -446,7 +448,7 @@ fn meta_macro_arms_default_aliases_and_icon() {
         false,
         false,
         false,
-        icon: crate::config::action_meta::ActionIcon::Undo
+        icon: action_meta::ActionIcon::Undo
     );
     const FULL: ActionMeta = meta!(
         Undo,
@@ -458,7 +460,7 @@ fn meta_macro_arms_default_aliases_and_icon() {
         false,
         false,
         &["back"],
-        icon: crate::config::action_meta::ActionIcon::Undo
+        icon: action_meta::ActionIcon::Undo
     );
 
     assert!(PLAIN.icon.is_none() && PLAIN.search_aliases.is_empty());

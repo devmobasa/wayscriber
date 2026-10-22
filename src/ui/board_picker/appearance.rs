@@ -1,4 +1,7 @@
+use std::f64::consts;
+
 use crate::domain::BoardGridKind;
+use crate::draw::BoardPaper;
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
 use crate::input::state::AppearanceField;
@@ -167,7 +170,7 @@ pub(super) fn render(
         draw_size_row(
             engine,
             ctx,
-            SizeRowPaint {
+            &SizeRowPaint {
                 label_x: 4.0,
                 label_right: row.label_right,
                 label: match edit.kind {
@@ -193,7 +196,7 @@ pub(super) fn render(
     // The pattern stays at board size so the preview shows the real spacing.
     ctx.scale(1.0 / frame.scale, 1.0 / frame.scale);
     let (color, grid) = edit.preview();
-    if let Ok(paper) = crate::draw::BoardPaper::for_context(color, grid, ctx) {
+    if let Ok(paper) = BoardPaper::for_context(color, grid, ctx) {
         let _ = paper.paint(ctx);
     }
     let _ = ctx.restore();
@@ -302,14 +305,14 @@ fn draw_frame(ctx: &cairo::Context, (left, top, frame_width, frame_height): (f64
     let _ = ctx.stroke();
 }
 
-struct SizeRowPaint<'a> {
+struct SizeRowPaint<'text> {
     label_x: f64,
     label_right: f64,
-    label: &'a str,
+    label: &'text str,
     /// Rail `(start_x, end_x, center_y)`, thumb x, and thumb radius.
     slider: Option<((f64, f64, f64), f64, f64)>,
     field: (f64, f64, f64, f64),
-    text: &'a str,
+    text: &'text str,
     focused: bool,
     /// Typing replaces the size, shown as a selection.
     armed: bool,
@@ -321,7 +324,7 @@ struct SizeRowPaint<'a> {
 fn draw_size_row(
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    row: SizeRowPaint<'_>,
+    row: &SizeRowPaint<'_>,
     style: UiTextStyle<'_>,
 ) {
     let (field_x, field_y, field_width, field_height) = row.field;
@@ -357,7 +360,7 @@ fn draw_size_row(
         }
 
         ctx.new_sub_path();
-        ctx.arc(thumb_x, center_y, radius, 0.0, std::f64::consts::TAU);
+        ctx.arc(thumb_x, center_y, radius, 0.0, consts::TAU);
         constants::set_color(ctx, TEXT_PRIMARY);
         let _ = ctx.fill_preserve();
         constants::set_color(

@@ -1,3 +1,12 @@
+use crate::backend::wayland::handlers::test_support::HandlerFixture;
+use crate::config::{Config, TabletInputConfig};
+use crate::draw::TextMeasurer;
+use crate::input::state::{Toast, ToastPriority, test_support};
+use crate::ui::OnboardingCardLayout;
+use crate::ui::toolbar::ToolbarEvent;
+
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::{Event, ZwpTabletToolV2};
+
 use super::{DrawingState, WaylandState, modal_blocks_stylus_barrel_actions, stylus_barrel_action};
 use crate::input::state::test_support::make_test_input_state;
 
@@ -7,7 +16,7 @@ fn hard_popup_taps_through_the_pen_frame_handler_do_not_resize_the_next_stroke()
     use wayland_client::{Dispatch, Proxy};
     use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::{Event, ZwpTabletToolV2};
     for chrome in ["card", "popover", "color button", "color slider", "radial"] {
-        let mut config = crate::config::Config::default();
+        let mut config = Config::default();
         config.ui.show_onboarding_hints = chrome == "card";
         config.tablet.enabled = true;
         config.tablet.pressure_enabled = true;
@@ -21,21 +30,19 @@ fn hard_popup_taps_through_the_pen_frame_handler_do_not_resize_the_next_stroke()
         let initial = state.input_state.style.current_thickness;
         let position = match chrome {
             "card" => {
-                state
-                    .onboarding_card
-                    .set_layout(Some(crate::ui::OnboardingCardLayout {
-                        x: 100.0,
-                        y: 50.0,
-                        width: 200.0,
-                        height: 120.0,
-                        buttons: Vec::new(),
-                    }));
+                state.onboarding_card.set_layout(Some(OnboardingCardLayout {
+                    x: 100.0,
+                    y: 50.0,
+                    width: 200.0,
+                    height: 120.0,
+                    buttons: Vec::new(),
+                }));
                 (110.0, 60.0)
             }
             "popover" => {
-                state.input_state.apply_toolbar_event(
-                    crate::ui::toolbar::ToolbarEvent::ToggleSessionPopover(true),
-                );
+                state
+                    .input_state
+                    .apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
                 (600.0, 400.0)
             }
             "radial" => {
@@ -121,34 +128,24 @@ fn hard_popup_taps_through_the_pen_frame_handler_do_not_resize_the_next_stroke()
     }
 }
 
-fn pen_fixture(
-    pressure_enabled: bool,
-) -> (
-    crate::backend::wayland::handlers::test_support::HandlerFixture,
-    wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2,
-) {
+fn pen_fixture(pressure_enabled: bool) -> (HandlerFixture, ZwpTabletToolV2) {
     use wayland_client::Proxy;
-    let mut config = crate::config::Config::default();
+    let mut config = Config::default();
     config.ui.show_onboarding_hints = false;
     config.tablet.enabled = true;
     config.tablet.pressure_enabled = pressure_enabled;
     config.tablet.min_thickness = 1.0;
     config.tablet.max_thickness = 20.0;
-    let mut fixture = crate::backend::wayland::handlers::test_support::HandlerFixture::new(config);
+    let mut fixture = HandlerFixture::new(config);
     fixture.state.tablet.on_overlay = true;
-    let tool =
-        wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2::inert(
-            fixture.conn.backend().downgrade(),
-        );
+    let tool = ZwpTabletToolV2::inert(fixture.conn.backend().downgrade());
     (fixture, tool)
 }
 
 fn send_pen(
-    fixture: &mut crate::backend::wayland::handlers::test_support::HandlerFixture,
-    tool: &wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2,
-    events: impl IntoIterator<
-        Item = wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Event,
-    >,
+    fixture: &mut HandlerFixture,
+    tool: &ZwpTabletToolV2,
+    events: impl IntoIterator<Item = Event>,
 ) {
     use wayland_client::Dispatch;
     use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
@@ -223,11 +220,10 @@ fn a_pen_tap_on_a_toast_acts_on_the_toast_instead_of_drawing() {
     use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Event;
     let (mut fixture, tool) = pen_fixture(true);
     let initial = fixture.state.input_state.style.current_thickness;
-    fixture.state.input_state.push_toast(
-        crate::input::state::ToastPriority::Info,
-        "test",
-        crate::input::state::Toast::info("Saved"),
-    );
+    fixture
+        .state
+        .input_state
+        .push_toast(ToastPriority::Info, "test", Toast::info("Saved"));
     fixture
         .state
         .input_state
@@ -280,7 +276,7 @@ fn a_pen_tap_that_closes_a_menu_keeps_a_thickness_set_since_the_last_stroke() {
     );
     assert!(fixture.state.input_state.style.current_thickness < 3.0);
     // A mouse or keyboard change after the stroke, which the pen never saw.
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let _ = fixture
         .state
         .input_state
@@ -288,7 +284,7 @@ fn a_pen_tap_that_closes_a_menu_keeps_a_thickness_set_since_the_last_stroke() {
     fixture
         .state
         .input_state
-        .apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::ToggleSessionPopover(true));
+        .apply_toolbar_event(ToolbarEvent::ToggleSessionPopover(true));
     send_pen(
         &mut fixture,
         &tool,
@@ -325,18 +321,14 @@ fn screen_region_modals_block_stylus_barrel_actions() {
 
     state.set_region_pending_capture(RegionPurposeTag::Ocr, 1, ScreenCaptureSource::Frozen);
     assert!(modal_blocks_stylus_barrel_actions(&state));
-    state.activate_region_with(
-        &crate::draw::TextMeasurer::default(),
-        RegionPurposeTag::Ocr,
-        1,
-    );
+    state.activate_region_with(&TextMeasurer::default(), RegionPurposeTag::Ocr, 1);
     assert!(modal_blocks_stylus_barrel_actions(&state));
     state.cancel_region_ui_only();
     assert!(!modal_blocks_stylus_barrel_actions(&state));
 
     state.set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen);
     assert!(modal_blocks_stylus_barrel_actions(&state));
-    state.activate_eyedropper_with(&crate::draw::TextMeasurer::default(), Some(1));
+    state.activate_eyedropper_with(&TextMeasurer::default(), Some(1));
     assert!(modal_blocks_stylus_barrel_actions(&state));
     state.cancel_eyedropper();
     assert!(!modal_blocks_stylus_barrel_actions(&state));
@@ -351,10 +343,10 @@ fn canonical_stylus_shortcut_wins_over_legacy_tablet_binding() {
     keybindings.core.undo = vec!["StylusPrimary".to_string()];
     let action_map = keybindings.build_action_map().expect("map");
     let action_bindings = keybindings.build_action_bindings().expect("bindings");
-    let mut state = crate::input::state::test_support::make_test_input_state();
+    let mut state = test_support::make_test_input_state();
     state.set_keybinding_maps(action_map, action_bindings);
 
-    let mut tablet = crate::config::TabletInputConfig::default();
+    let mut tablet = TabletInputConfig::default();
     tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
 
     assert_eq!(
@@ -373,8 +365,8 @@ fn unbound_stylus_falls_back_to_legacy_tablet_action() {
     use crate::config::Action;
     use crate::config::keybindings::linux;
 
-    let state = crate::input::state::test_support::make_test_input_state();
-    let mut tablet = crate::config::TabletInputConfig::default();
+    let state = test_support::make_test_input_state();
+    let mut tablet = TabletInputConfig::default();
     tablet.stylus_button.action = Some(Action::ToggleRadialMenu);
     tablet.stylus_button2.action = None;
 

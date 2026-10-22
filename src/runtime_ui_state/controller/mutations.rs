@@ -1,9 +1,13 @@
-use super::*;
+use super::super::{
+    MutationShapeError, RuntimeUiFileStatus, RuntimeUiMutationPermit, RuntimeUiMutationScope,
+    RuntimeUiMutationValues, StagedSeedReload, ValidatedInteractionSeeds,
+};
+use super::{BeginMutationError, CommitResult, RuntimeUiStateController, UpdateSeedsResult};
 
 impl RuntimeUiStateController {
     pub(crate) fn begin_mutation(
         &self,
-        scope: RuntimeUiMutationScope,
+        scope: &RuntimeUiMutationScope,
     ) -> Result<RuntimeUiMutationPermit, BeginMutationError> {
         if self.shutting_down {
             return Err(BeginMutationError::ShuttingDown);
@@ -37,7 +41,7 @@ impl RuntimeUiStateController {
     pub(crate) fn commit(
         &mut self,
         permit: RuntimeUiMutationPermit,
-        desired_values: RuntimeUiMutationValues,
+        desired_values: &RuntimeUiMutationValues,
     ) -> CommitResult {
         self.drain_lifecycle_controls();
         if let Some(barrier) = &self.active_barrier {
@@ -80,7 +84,7 @@ impl RuntimeUiStateController {
 
         let previous_model = self.model.clone();
         let previous_passthrough = self.passthrough.clone();
-        if !self.model.apply(&permit.guards, &desired_values) {
+        if !self.model.apply(&permit.guards, desired_values) {
             return CommitResult::NoChange;
         }
         self.passthrough.reconcile_entries(&self.model);
@@ -97,7 +101,7 @@ impl RuntimeUiStateController {
         }
     }
 
-    pub(crate) fn update_seeds(&mut self, seeds: ValidatedInteractionSeeds) -> UpdateSeedsResult {
+    pub(crate) fn update_seeds(&mut self, seeds: &ValidatedInteractionSeeds) -> UpdateSeedsResult {
         self.drain_lifecycle_controls();
         if self.shutting_down {
             return UpdateSeedsResult::RejectedShuttingDown;

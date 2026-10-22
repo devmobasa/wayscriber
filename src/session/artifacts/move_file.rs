@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 use anyhow::{Context, Result, anyhow};
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -6,6 +8,8 @@ use std::io::ErrorKind;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
+use crate::session;
+use crate::session::catalog;
 use crate::session::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 use crate::session::primary::open_session_artifact_for_read;
 
@@ -76,9 +80,9 @@ pub fn move_named_session_non_lock_artifacts(
     source: &Path,
     target: &Path,
 ) -> Result<NamedSessionMoveOutcome> {
-    crate::session::validate_named_session_file_for_info(source)?;
-    crate::session::validate_named_session_file_for_foreground(target)?;
-    if crate::session::catalog::session_paths_match(source, target) {
+    session::validate_named_session_file_for_info(source)?;
+    session::validate_named_session_file_for_foreground(target)?;
+    if catalog::session_paths_match(source, target) {
         return Err(anyhow!(
             "Move Session target must be different from the source: {}",
             target.display()
@@ -249,7 +253,7 @@ fn target_path_for_source_artifact(
         if let Some(name) = source_name.to_str()
             && let Some(suffix) = preserved_newer_version_suffix(&source_artifacts.primary, name)
         {
-            return Some(crate::session::append_path_suffix(
+            return Some(session::append_path_suffix(
                 &target_artifacts.primary,
                 suffix,
             ));
@@ -402,7 +406,7 @@ pub(crate) fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Re
 }
 
 #[cfg(target_os = "linux")]
-fn path_to_cstring(path: &Path) -> io::Result<std::ffi::CString> {
+fn path_to_cstring(path: &Path) -> io::Result<CString> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
 

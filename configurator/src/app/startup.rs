@@ -1,6 +1,8 @@
+use std::mem;
+
 use wayscriber::configurator_destination::ConfiguratorScreen;
 
-use crate::models::{SearchQuery, TabId, UiTabId};
+use crate::models::{SearchQuery, TabId, UiTabId, keybindings};
 
 use super::effects::Effect;
 use super::state::ConfiguratorApp;
@@ -12,7 +14,7 @@ impl ConfiguratorApp {
     /// Reload is the user asking for the file again, not a fresh launch, and
     /// snapping the tabs back would undo wherever they navigated in between.
     pub(crate) fn apply_startup_request(&mut self) -> Vec<Effect> {
-        let request = std::mem::take(&mut self.startup_request);
+        let request = mem::take(&mut self.startup_request);
 
         if let Some(problem) = request.problem() {
             self.status = self.status.clone().with_note(&problem.message());
@@ -40,8 +42,7 @@ impl ConfiguratorApp {
                 // nothing to show lands where the matches actually are.
                 self.align_active_tabs_for_search();
                 if self.active_tab == TabId::Keybindings
-                    && let Some(field) =
-                        crate::models::keybindings::field_matching_search_term(&term)
+                    && let Some(field) = keybindings::field_matching_search_term(&term)
                 {
                     self.select_keybinding_field(field);
                 }
@@ -102,10 +103,17 @@ impl ConfiguratorApp {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+    use std::{fs, iter};
 
     use wayscriber::config::ConfigDocument;
+    use wayscriber::configurator_destination;
     use wayscriber::configurator_destination::{ConfiguratorDestination, KeybindingsSection};
+
+    use crate::app::search::SearchArea;
+    use crate::models::KeybindingField;
+    use crate::test_env;
 
     use super::*;
     use crate::app::state::StatusMessage;
@@ -117,18 +125,18 @@ mod tests {
         status.text().unwrap_or_default().to_string()
     }
 
-    fn args(values: &[&str]) -> Vec<std::ffi::OsString> {
-        std::iter::once("wayscriber-configurator")
+    fn args(values: &[&str]) -> Vec<OsString> {
+        iter::once("wayscriber-configurator")
             .chain(values.iter().copied())
-            .map(std::ffi::OsString::from)
+            .map(OsString::from)
             .collect()
     }
 
     /// A config file of its own, so the load path under test is the real one.
-    fn config_file() -> (TempDir, std::path::PathBuf) {
+    fn config_file() -> (TempDir, PathBuf) {
         let dir = tempdir().expect("temporary test directory");
         let path = dir.path().join("config.toml");
-        std::fs::write(&path, "").expect("write test config");
+        fs::write(&path, "").expect("write test config");
         (dir, path)
     }
 
@@ -140,8 +148,8 @@ mod tests {
     }
 
     /// The app as the launcher would start it, after its first config load.
-    fn app_launched_with(values: &[&str]) -> (ConfiguratorApp, TempDir, std::path::PathBuf) {
-        crate::test_env::sanitize_language_environment();
+    fn app_launched_with(values: &[&str]) -> (ConfiguratorApp, TempDir, PathBuf) {
+        test_env::sanitize_language_environment();
         let (dir, path) = config_file();
         let (mut app, _effects) =
             ConfiguratorApp::new_app_with_startup(StartupRequest::from_args(args(values)));
@@ -237,8 +245,7 @@ mod tests {
 
     #[test]
     fn the_onboarding_hint_destination_lands_on_the_general_ui_setting() {
-        let launched =
-            wayscriber::configurator_destination::onboarding_hints_destination().as_arg();
+        let launched = configurator_destination::onboarding_hints_destination().as_arg();
         let (app, _dir, _path) = app_launched_with(&["--open", &launched]);
 
         assert_eq!(app.active_tab, TabId::Ui);
@@ -247,7 +254,7 @@ mod tests {
         let ui = summary
             .tab(TabId::Ui)
             .expect("General UI destination match");
-        assert!(ui.area_matches(crate::app::search::SearchArea::UiGeneral));
+        assert!(ui.area_matches(SearchArea::UiGeneral));
     }
 
     /// The shortcut-action row: subtab plus action search.
@@ -259,10 +266,7 @@ mod tests {
         assert_eq!(app.active_tab, TabId::Keybindings);
         assert_eq!(app.active_keybindings_tab, KeybindingsTabId::Drawing);
         assert_eq!(app.search_query.raw(), "Clear Canvas");
-        assert_eq!(
-            app.selected_keybinding,
-            Some(crate::models::KeybindingField::ClearCanvas)
-        );
+        assert_eq!(app.selected_keybinding, Some(KeybindingField::ClearCanvas));
         assert!(app.search_summary().tab(TabId::Keybindings).is_some());
     }
 
@@ -275,10 +279,7 @@ mod tests {
 
         assert_eq!(app.active_tab, TabId::Keybindings);
         assert_eq!(app.active_keybindings_tab, KeybindingsTabId::Drawing);
-        assert_eq!(
-            app.selected_keybinding,
-            Some(crate::models::KeybindingField::ClearCanvas)
-        );
+        assert_eq!(app.selected_keybinding, Some(KeybindingField::ClearCanvas));
     }
 
     /// A term with no match on the requested screen is the one case where

@@ -1,10 +1,12 @@
+use crate::backend::wayland::capture::RegionCapturePhase;
 use crate::capture::{
-    CaptureDestination, ImageFormatMetadata, ImageOperationKind, RenderImageRequest,
-    RenderedImageDeliveryRequest, output_size as band_cut_output_size,
+    CaptureDestination, CaptureError, CutBand, ImageFormatMetadata, ImageOperationKind,
+    ImageRenderJob, RenderImageRequest, RenderedImageDeliveryRequest,
+    output_size as band_cut_output_size,
 };
 use crate::input::state::{BoardPasteTarget, RegionPurposeTag, Toast, ToastPriority};
 use crate::screen_pixels::{EmbeddedImageLimits, ImagePixelRect};
-use crate::ui::RegionAction;
+use crate::ui::{RegionAction, RegionActionBar};
 
 use super::super::capture::should_exit_after_capture;
 use super::render::{RegionRenderRequest, region_render_job};
@@ -15,7 +17,7 @@ use crate::i18n::tr;
 const TOAST_SOURCE: &str = "capture";
 
 pub(super) fn region_delivery_request(
-    render: crate::capture::ImageRenderJob,
+    render: ImageRenderJob,
     intent: &RegionCaptureIntent,
     destination: CaptureDestination,
 ) -> RenderedImageDeliveryRequest {
@@ -66,7 +68,7 @@ impl WaylandState {
             return None;
         }
         let selection = self.region_selection_geometry()?.display_selection();
-        crate::ui::RegionActionBar::place(selection, (self.surface.width(), self.surface.height()))
+        RegionActionBar::place(selection, (self.surface.width(), self.surface.height()))
             .enabled_hit(point, self.region_cut_availability())
     }
 
@@ -98,7 +100,7 @@ impl WaylandState {
             return false;
         }
         self.region_selection_geometry().is_some_and(|geometry| {
-            crate::ui::RegionActionBar::place(
+            RegionActionBar::place(
                 geometry.display_selection(),
                 (self.surface.width(), self.surface.height()),
             )
@@ -162,7 +164,7 @@ impl WaylandState {
         true
     }
 
-    fn preview_permits_submit(&self, cuts: &[crate::capture::CutBand]) -> bool {
+    fn preview_permits_submit(&self, cuts: &[CutBand]) -> bool {
         cuts.is_empty()
             || self
                 .region_capture
@@ -238,9 +240,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn submit_region_capture(&mut self, rect: ImagePixelRect) {
         let destination = match self.capture.region_phase() {
-            crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
-                intent.destination()
-            }
+            RegionCapturePhase::Reserved(intent) => intent.destination(),
             _ => return,
         };
         self.submit_region_capture_with(rect, Vec::new(), RegionSubmit::Deliver(destination));
@@ -249,7 +249,7 @@ impl WaylandState {
     fn submit_region_capture_with(
         &mut self,
         rect: ImagePixelRect,
-        cuts: Vec<crate::capture::CutBand>,
+        cuts: Vec<CutBand>,
         submit: RegionSubmit,
     ) {
         let Some(ActiveScreenRegion::Ready {
@@ -267,7 +267,7 @@ impl WaylandState {
         }
         let snapshot = match self.snapshot_region_render(rect, include_drawings) {
             Ok(snapshot) => snapshot,
-            Err(crate::capture::CaptureError::Cancelled(_)) => {
+            Err(CaptureError::Cancelled(_)) => {
                 self.cancel_region_capture_for_source_change();
                 return;
             }

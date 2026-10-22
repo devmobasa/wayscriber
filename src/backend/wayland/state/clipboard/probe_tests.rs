@@ -1,5 +1,8 @@
 //! The paste decision after a failed private publish, through the same start
 //! and probe-continuation steps a paste completion uses.
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::config::Action;
 use crate::draw::Shape;
@@ -22,8 +25,8 @@ fn copy_with_failed_publish(
     x: i32,
     at_failure: Option<ClipboardFingerprint>,
 ) -> u64 {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     let id = input_state
         .boards
         .active_frame_mut()
@@ -78,8 +81,8 @@ fn a_failed_publish_is_pasted_locally_only_while_the_system_clipboard_is_unchang
         &mut input_state,
         request,
         generation,
-        expected,
-        Some(fingerprint(1)),
+        expected.as_ref(),
+        Some(&fingerprint(1)),
     );
     assert!(matches!(action, PasteAction::UseLocalShapes { .. }));
 
@@ -88,8 +91,8 @@ fn a_failed_publish_is_pasted_locally_only_while_the_system_clipboard_is_unchang
         &mut input_state,
         request,
         generation,
-        expected,
-        Some(fingerprint(2)),
+        expected.as_ref(),
+        Some(&fingerprint(2)),
     );
     assert!(matches!(action, PasteAction::ReadSystemClipboard { .. }));
     let local = input_state.selection_clipboard_snapshot();
@@ -108,8 +111,8 @@ fn a_failed_publish_without_a_fingerprint_is_superseded_by_a_readable_clipboard(
         &mut input_state,
         request,
         generation,
-        expected,
-        Some(fingerprint(1)),
+        expected.as_ref(),
+        Some(&fingerprint(1)),
     );
 
     assert!(matches!(action, PasteAction::ReadSystemClipboard { .. }));
@@ -126,8 +129,13 @@ fn an_unreadable_clipboard_reads_the_system_clipboard_and_keeps_the_fallback() {
     copy_with_failed_publish(&mut input_state, 10, None);
 
     let (request, generation, expected) = start_probe(&mut input_state);
-    let action =
-        continue_after_fingerprint_probe(&mut input_state, request, generation, expected, None);
+    let action = continue_after_fingerprint_probe(
+        &mut input_state,
+        request,
+        generation,
+        expected.as_ref(),
+        None,
+    );
 
     assert!(matches!(action, PasteAction::ReadSystemClipboard { .. }));
     assert!(
@@ -157,8 +165,8 @@ fn a_probe_for_an_older_copy_neither_pastes_nor_supersedes_a_newer_one() {
         &mut input_state,
         request,
         generation,
-        expected,
-        Some(fingerprint(1)),
+        expected.as_ref(),
+        Some(&fingerprint(1)),
     );
     assert!(matches!(action, PasteAction::ReadSystemClipboard { .. }));
     assert_eq!(

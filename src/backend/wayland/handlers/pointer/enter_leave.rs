@@ -4,7 +4,9 @@ use wayland_client::Connection;
 
 use crate::input::{EraserMode, Tool};
 
-use super::*;
+use super::super::route::{InputSurface, RoutedInput};
+use crate::backend::wayland::state::WaylandState;
+use crate::input::state::RegionInputSource;
 
 impl WaylandState {
     pub(super) fn handle_pointer_enter(

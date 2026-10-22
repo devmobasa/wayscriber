@@ -1,7 +1,13 @@
 //! Validate and install completed output images; portal pixels are processed on the worker.
-use super::*;
+use super::{FrozenCaptureSource, FrozenState, PendingFrozenImage};
+use crate::backend::wayland::acquisition::ScreenAcquisitionOutcome;
+use crate::backend::wayland::frozen::{FrozenImage, ScreenImageProvenance};
+use crate::backend::wayland::frozen_geometry::OutputGeometry;
 use crate::backend::wayland::portal_capture::layout_token_matches;
+use crate::input::InputState;
 use log::info;
+use std::sync::Arc;
+use wayland_client::protocol::wl_output;
 
 impl FrozenState {
     pub fn set_pending_output_image(

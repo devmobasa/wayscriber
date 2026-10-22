@@ -1,7 +1,11 @@
 //! Bounded GTK-main-context settling for asynchronously created popovers.
 
+use std::cmp;
 use std::future::Future;
 use std::time::{Duration, Instant};
+
+use glib::Priority;
+use gtk4::glib;
 
 use super::CaptureProofTarget;
 
@@ -33,7 +37,7 @@ where
         // Run only after all default-priority sources that are already ready.
         // They may include an input callback that schedules GtkText's delayed
         // selection popup, so start the quiet clock after this checkpoint.
-        gtk4::glib::timeout_future_with_priority(gtk4::glib::Priority::LOW, Duration::ZERO).await;
+        glib::timeout_future_with_priority(Priority::LOW, Duration::ZERO).await;
         let mut quiet_until = Instant::now() + GTK_POPUP_QUIET_PERIOD;
 
         loop {
@@ -67,16 +71,16 @@ where
                 return Ok(());
             }
 
-            let checkpoint_at = std::cmp::min(quiet_until, deadline);
-            gtk4::glib::timeout_future_with_priority(
-                gtk4::glib::Priority::LOW,
+            let checkpoint_at = cmp::min(quiet_until, deadline);
+            glib::timeout_future_with_priority(
+                Priority::LOW,
                 checkpoint_at.saturating_duration_since(now),
             )
             .await;
         }
     };
 
-    match gtk4::glib::future_with_timeout(CAPTURE_BARRIER_TIMEOUT, settle).await {
+    match glib::future_with_timeout(CAPTURE_BARRIER_TIMEOUT, settle).await {
         Ok(result) => result,
         Err(_) => Err(quiescence_timeout(generation, started, rounds)),
     }

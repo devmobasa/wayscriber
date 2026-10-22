@@ -3,11 +3,22 @@
 //! Coalesces stable start-relative gesture coordinates while the GTK input
 //! surface remains parked, then reports explicit lifecycle phases to the backend.
 
+use gtk4::glib::ControlFlow;
+use gtk4::graphene::Point;
+
+use crate::toolbar_gtk;
+use crate::toolbar_gtk::GtkToolbarSurfaceSize;
+
 use super::super::drag::{
     FrameCoalescedDrag, ReservedDragSequence, cancel_move_drag, clamp_drag_offsets,
     drag_frame_position,
 };
-use super::*;
+use super::{BASE_MARGIN, END_MARGIN, TopBar};
+use crate::toolbar_gtk::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
+use gtk4::prelude::*;
+use gtk4_layer_shell::{Edge, LayerShell};
+use std::cell::Cell;
+use std::rc::Rc;
 
 impl TopBar {
     /// Park the GTK input surface at its origin while the main overlay renders
@@ -39,13 +50,13 @@ impl TopBar {
         let begin_pending = pending.clone();
         let begin_generation = active_generation.clone();
         let begin_ready = ready_generation.clone();
-        let begin_origin = drag_origin.clone();
+        let begin_origin = drag_origin;
         let begin_window = window.downgrade();
         let begin_visual = self.root.downgrade();
         let begin_grip = grip.downgrade();
         let frame_offsets = offsets.clone();
         let frame_feedback = feedback.clone();
-        let frame_base = base_x.clone();
+        let frame_base = base_x;
         let frame_seq = seq.clone();
         drag.connect_drag_begin(move |gesture, start_x, start_y| {
             if begin_blocked.get() {
@@ -60,7 +71,7 @@ impl TopBar {
                 gesture.set_state(gtk4::EventSequenceState::Denied);
                 return;
             };
-            let start = gtk4::graphene::Point::new(start_x as f32, start_y as f32);
+            let start = Point::new(start_x as f32, start_y as f32);
             if !grip
                 .compute_bounds(&frame_window)
                 .is_some_and(|bounds| bounds.contains_point(&start))
@@ -77,7 +88,7 @@ impl TopBar {
             let start = GtkToolbarFeedback::SetTopOffset {
                 x: origin.0,
                 y: origin.1,
-                surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(
+                surface_size: GtkToolbarSurfaceSize::from_window(
                     &frame_window,
                 ),
                 seq: start_seq.value(),
@@ -91,7 +102,7 @@ impl TopBar {
             );
             let start_feedback = frame_feedback.clone();
             let start_window = frame_window.clone();
-            let start_visual = visual.clone();
+            let start_visual = visual;
             let start_active = begin_active.clone();
             let start_generation = begin_generation.clone();
             let start_ready = begin_ready.clone();
@@ -127,13 +138,13 @@ impl TopBar {
             let drag_origin = begin_origin.clone();
             frame_window.add_tick_callback(move |_, _| {
                 if active_generation.get() != generation {
-                    return gtk4::glib::ControlFlow::Break;
+                    return ControlFlow::Break;
                 }
                 if ready_generation.get() != generation {
-                    return gtk4::glib::ControlFlow::Continue;
+                    return ControlFlow::Continue;
                 }
                 let Some(frame) = pending.take_frame(generation) else {
-                    return gtk4::glib::ControlFlow::Continue;
+                    return ControlFlow::Continue;
                 };
                 let base = base_x.get();
                 let (cx, cy) = offsets.get();
@@ -142,7 +153,7 @@ impl TopBar {
                     clamp_drag_offsets(&window, (x, y), (base, BASE_MARGIN.0 as f64), END_MARGIN);
                 offsets.set((x, y));
                 seq.set(seq.get() + 1);
-                crate::toolbar_gtk::drag_debug_log(format!(
+                toolbar_gtk::drag_debug_log(format!(
                     "top frame generation={generation} seq={} phase={:?} delta=({:.3},{:.3}) origin=({:.3},{:.3}) before=({cx:.3},{cy:.3}) preview=({x:.3},{y:.3}) parked_margin=({}, {}) size={}x{}",
                     seq.get(),
                     frame.phase,
@@ -158,7 +169,7 @@ impl TopBar {
                 let _ = feedback.send(GtkToolbarFeedback::SetTopOffset {
                     x,
                     y,
-                    surface_size: crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(&window),
+                    surface_size: GtkToolbarSurfaceSize::from_window(&window),
                     seq: seq.get(),
                     phase: frame.phase,
                 });
@@ -168,9 +179,9 @@ impl TopBar {
                         active_generation.set(0);
                         ready_generation.set(0);
                     }
-                    gtk4::glib::ControlFlow::Break
+                    ControlFlow::Break
                 } else {
-                    gtk4::glib::ControlFlow::Continue
+                    ControlFlow::Continue
                 }
             });
         });
@@ -179,16 +190,16 @@ impl TopBar {
         let update_generation = active_generation.clone();
         drag.connect_drag_update(move |_, dx, dy| {
             let generation = update_generation.get();
-            crate::toolbar_gtk::drag_debug_log(format!(
+            toolbar_gtk::drag_debug_log(format!(
                 "top raw generation={generation} start_relative=({dx:.3},{dy:.3})",
             ));
             update_pending.update(generation, dx, dy);
         });
 
-        let end_pending = pending.clone();
+        let end_pending = pending;
         let end_generation = active_generation.clone();
         drag.connect_drag_end(move |_, dx, dy| {
-            crate::toolbar_gtk::drag_debug_log(format!(
+            toolbar_gtk::drag_debug_log(format!(
                 "top end generation={} delta=({dx:.3},{dy:.3})",
                 end_generation.get(),
             ));

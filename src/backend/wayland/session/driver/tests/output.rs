@@ -1,6 +1,9 @@
+use crate::draw::ShapeId;
+use crate::input::MouseButton;
+
 use super::*;
 
-fn add_line(input: &mut InputState, x2: i32) -> crate::draw::ShapeId {
+fn add_line(input: &mut InputState, x2: i32) -> ShapeId {
     let id = super::add_line(input, x2);
     input.mark_session_dirty();
     id
@@ -20,7 +23,7 @@ fn output_command(
 
 #[test]
 fn output_switch_returns_with_save_and_load_held_then_commits_in_order() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "destination");
     stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -54,14 +57,14 @@ fn output_switch_returns_with_save_and_load_held_then_commits_in_order() {
     assert!(runtime.session.pending_output_transition().is_none());
     assert!(matches!(
         runtime.input.boards.active_frame().shapes[0].shape,
-        crate::draw::Shape::Line { x2: 42, .. }
+        Shape::Line { x2: 42, .. }
     ));
 }
 
 #[test]
 fn output_load_cannot_replace_a_newer_destination_or_live_edits() {
     for change in ["destination", "return to source", "edit", "interaction"] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "destination");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -97,9 +100,9 @@ fn output_load_cannot_replace_a_newer_destination_or_live_edits() {
                 runtime.input.on_mouse_press_with_canvas_and_resources(
                     crate::input::state::InputTextResources {
                         measurer: &measurer,
-                        ui_engine: &crate::ui_text::UiTextEngine::default(),
+                        ui_engine: &UiTextEngine::default(),
                     },
-                    crate::input::MouseButton::Left,
+                    MouseButton::Left,
                     500,
                     400,
                     500,
@@ -125,7 +128,7 @@ fn output_load_cannot_replace_a_newer_destination_or_live_edits() {
         }
         assert!(matches!(
             runtime.input.boards.active_frame().shapes[0].shape,
-            crate::draw::Shape::Line { x2: 51, .. }
+            Shape::Line { x2: 51, .. }
         ));
         if change == "edit" {
             assert!(runtime.session.is_dirty());
@@ -162,11 +165,11 @@ fn output_load_cannot_replace_a_newer_destination_or_live_edits() {
 #[test]
 fn output_switch_does_not_recreate_missing_remembered_primary_or_restore_its_backup() {
     for home_enabled in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let remembered = named_options(temp.path(), "remembered");
         let home = configured_home(temp.path());
         stored_session::save_snapshot(&sample_snapshot(), &remembered).unwrap();
-        std::fs::rename(
+        fs::rename(
             remembered.session_file_path(),
             remembered.backup_file_path(),
         )
@@ -219,7 +222,7 @@ fn output_switch_does_not_recreate_missing_remembered_primary_or_restore_its_bac
             assert!(runtime.session.options().is_none());
             assert!(matches!(
                 runtime.input.boards.active_frame().shapes[0].shape,
-                crate::draw::Shape::Line { x2: 51, .. }
+                Shape::Line { x2: 51, .. }
             ));
         }
     }
@@ -228,12 +231,12 @@ fn output_switch_does_not_recreate_missing_remembered_primary_or_restore_its_bac
 #[test]
 fn clean_output_loads_the_destination_without_rotating_existing_source_bytes() {
     for protected in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "destination");
         stored_session::save_snapshot(&sample_snapshot(), &current).unwrap();
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
-        let before = std::fs::read(current.session_file_path()).unwrap();
+        let before = fs::read(current.session_file_path()).unwrap();
         let mut input = test_input_state();
         let measurer = TextMeasurer::default();
         let mut session = SessionState::new(Some(current.clone()));
@@ -250,19 +253,19 @@ fn clean_output_loads_the_destination_without_rotating_existing_source_bytes() {
         runtime.receive();
         assert!(runtime.errors.is_empty(), "{:?}", runtime.errors);
         assert_eq!(runtime.session.options().unwrap().target, target.target);
-        assert_eq!(std::fs::read(current.session_file_path()).unwrap(), before);
+        assert_eq!(fs::read(current.session_file_path()).unwrap(), before);
         assert!(!current.backup_file_path().exists());
     }
 }
 
 #[test]
 fn failed_output_save_keeps_the_source_canvas_and_pending_destination() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "destination");
     stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
     // A forbidden primary is an actual save error, independent of worker control.
-    std::fs::create_dir(current.session_file_path()).unwrap();
+    fs::create_dir(current.session_file_path()).unwrap();
     let mut input = test_input_state();
     add_line(&mut input, 51);
     let measurer = TextMeasurer::default();
@@ -289,14 +292,14 @@ fn failed_output_save_keeps_the_source_canvas_and_pending_destination() {
     assert_eq!(runtime.session.options().unwrap().target, current.target);
     assert!(matches!(
         runtime.input.boards.active_frame().shapes[0].shape,
-        crate::draw::Shape::Line { x2: 51, .. }
+        Shape::Line { x2: 51, .. }
     ));
 }
 
 #[test]
 fn queued_target_commands_refuse_a_changed_session_instead_of_using_its_canvas() {
     for action in ["open", "save as", "home"] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "destination");
         let explicit = named_options(temp.path(), "explicit");
@@ -355,11 +358,11 @@ fn queued_target_commands_refuse_a_changed_session_instead_of_using_its_canvas()
 #[test]
 fn shutdown_finishes_remembered_home_fallback_before_final_persistence() {
     for home_enabled in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let remembered = named_options(temp.path(), "remembered");
         let home = configured_home(temp.path());
         stored_session::save_snapshot(&sample_snapshot(), &remembered).unwrap();
-        std::fs::rename(
+        fs::rename(
             remembered.session_file_path(),
             remembered.backup_file_path(),
         )
@@ -408,7 +411,7 @@ fn shutdown_finishes_remembered_home_fallback_before_final_persistence() {
                 assert!(!home_enabled);
                 assert!(matches!(
                     runtime.input.boards.active_frame().shapes[0].shape,
-                    crate::draw::Shape::Line { x2: 51, .. }
+                    Shape::Line { x2: 51, .. }
                 ));
             }
             Ok(())
@@ -428,14 +431,14 @@ fn shutdown_finishes_remembered_home_fallback_before_final_persistence() {
 
 #[test]
 fn quarantine_failure_blocks_dirty_autosave_and_save_before_open() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let other = named_options(temp.path(), "other");
     stored_session::save_snapshot(&sample_snapshot(), &current).unwrap();
-    std::fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
-    let backup = std::fs::read(current.backup_file_path()).unwrap();
-    std::fs::write(current.session_file_path(), b"broken primary").unwrap();
-    std::fs::write(
+    fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
+    let backup = fs::read(current.backup_file_path()).unwrap();
+    fs::write(current.session_file_path(), b"broken primary").unwrap();
+    fs::write(
         stored_session::append_path_suffix(
             &current.session_file_path(),
             ".corrupt-18446744073709551615",
@@ -481,10 +484,10 @@ fn quarantine_failure_blocks_dirty_autosave_and_save_before_open() {
     assert!(runtime.pending.is_none());
     assert_eq!(runtime.errors.len(), 2);
     assert_eq!(
-        std::fs::read(current.session_file_path()).unwrap(),
+        fs::read(current.session_file_path()).unwrap(),
         b"broken primary"
     );
-    assert_eq!(std::fs::read(current.backup_file_path()).unwrap(), backup);
+    assert_eq!(fs::read(current.backup_file_path()).unwrap(), backup);
 }
 
 fn drain_output_worker(runtime: &mut CommandRuntime<'_>, mut complete: impl FnMut()) {
@@ -502,7 +505,7 @@ fn drain_output_worker(runtime: &mut CommandRuntime<'_>, mut complete: impl FnMu
 fn unloaded_edits_cannot_overwrite_primary_on_retry_or_return_to_source() {
     for source in ["named", "remembered", "configured", "per-output"] {
         for cancel in [false, true] {
-            let temp = crate::test_temp::tempdir().unwrap();
+            let temp = test_temp::tempdir().unwrap();
             let options = if source == "named" || source == "remembered" {
                 named_options(temp.path(), "current")
             } else {
@@ -517,7 +520,7 @@ fn unloaded_edits_cannot_overwrite_primary_on_retry_or_return_to_source() {
                 target.set_output_identity(Some("new-output"));
             }
             stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
-            let original = std::fs::read(options.session_file_path()).unwrap();
+            let original = fs::read(options.session_file_path()).unwrap();
             let mut input = test_input_state();
             let measurer = TextMeasurer::default();
             let mut session = SessionState::new(Some(options.clone()));
@@ -549,13 +552,13 @@ fn unloaded_edits_cannot_overwrite_primary_on_retry_or_return_to_source() {
                 assert!(!target.session_file_path().exists());
             }
             assert!(
-                std::fs::read(options.session_file_path()).unwrap() == original,
+                fs::read(options.session_file_path()).unwrap() == original,
                 "the unloaded source must retain its saved ink"
             );
             assert!(!options.backup_file_path().exists());
             assert!(matches!(
                 runtime.input.boards.active_frame().shapes[0].shape,
-                crate::draw::Shape::Line { x2: 77, .. }
+                Shape::Line { x2: 77, .. }
             ));
             assert!(
                 !runtime
@@ -567,12 +570,12 @@ fn unloaded_edits_cannot_overwrite_primary_on_retry_or_return_to_source() {
 }
 #[test]
 fn corrupt_remembered_backup_continues_and_recreates_primary_on_final_save() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let options = named_options(temp.path(), "remembered");
     stored_session::save_snapshot(&sample_snapshot(), &options).unwrap();
-    std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
-    let backup = std::fs::read(options.backup_file_path()).unwrap();
-    std::fs::write(options.session_file_path(), b"corrupt remembered").unwrap();
+    fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+    let backup = fs::read(options.backup_file_path()).unwrap();
+    fs::write(options.session_file_path(), b"corrupt remembered").unwrap();
     let mut input = test_input_state();
     let measurer = TextMeasurer::default();
     let mut session = SessionState::new(Some(options.clone()));
@@ -608,7 +611,7 @@ fn corrupt_remembered_backup_continues_and_recreates_primary_on_final_save() {
     })
     .unwrap();
     assert_eq!(loaded_line_x2(&options), 42);
-    assert_eq!(std::fs::read(options.backup_file_path()).unwrap(), backup);
+    assert_eq!(fs::read(options.backup_file_path()).unwrap(), backup);
     assert!(
         runtime
             .input
@@ -622,14 +625,14 @@ fn corrupt_remembered_backup_continues_and_recreates_primary_on_final_save() {
 #[test]
 fn repaired_reload_unblocks_writes_and_dirty_blocked_sources_cannot_switch() {
     for repair in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let destination = named_options(temp.path(), "destination");
         stored_session::save_snapshot(&sample_snapshot(), &current).unwrap();
-        std::fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
-        let backup = std::fs::read(current.backup_file_path()).unwrap();
-        std::fs::write(current.session_file_path(), b"corrupt primary").unwrap();
-        std::fs::write(
+        fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
+        let backup = fs::read(current.backup_file_path()).unwrap();
+        fs::write(current.session_file_path(), b"corrupt primary").unwrap();
+        fs::write(
             stored_session::append_path_suffix(
                 &current.session_file_path(),
                 ".corrupt-18446744073709551615",
@@ -651,7 +654,7 @@ fn repaired_reload_unblocks_writes_and_dirty_blocked_sources_cannot_switch() {
                 .refuses_source_write(&current.session_file_path())
         );
         if repair {
-            std::fs::copy(current.backup_file_path(), current.session_file_path()).unwrap();
+            fs::copy(current.backup_file_path(), current.session_file_path()).unwrap();
             let retry = output_command(runtime.session, &current);
             start_session_command(&mut runtime, retry).unwrap();
             drain_output_worker(&mut runtime, || worker.complete_next());
@@ -683,7 +686,7 @@ fn repaired_reload_unblocks_writes_and_dirty_blocked_sources_cannot_switch() {
                 saved.boards[0].pages.pages[0]
                     .shapes
                     .iter()
-                    .any(|shape| matches!(shape.shape, crate::draw::Shape::Line { x2: 77, .. }))
+                    .any(|shape| matches!(shape.shape, Shape::Line { x2: 77, .. }))
             );
         } else {
             assert_eq!(runtime.session.options().unwrap().target, current.target);
@@ -694,13 +697,13 @@ fn repaired_reload_unblocks_writes_and_dirty_blocked_sources_cannot_switch() {
                     .active_frame()
                     .shapes
                     .iter()
-                    .any(|shape| matches!(shape.shape, crate::draw::Shape::Line { x2: 77, .. }))
+                    .any(|shape| matches!(shape.shape, Shape::Line { x2: 77, .. }))
             );
             assert_eq!(
-                std::fs::read(current.session_file_path()).unwrap(),
+                fs::read(current.session_file_path()).unwrap(),
                 b"corrupt primary"
             );
-            assert_eq!(std::fs::read(current.backup_file_path()).unwrap(), backup);
+            assert_eq!(fs::read(current.backup_file_path()).unwrap(), backup);
             assert!(!destination.session_file_path().exists());
         }
     }
@@ -709,7 +712,7 @@ fn repaired_reload_unblocks_writes_and_dirty_blocked_sources_cannot_switch() {
 #[test]
 fn queued_commands_remain_bound_to_the_visible_source_and_report_failures() {
     for fail_transport in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "destination");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -764,7 +767,7 @@ fn queued_commands_remain_bound_to_the_visible_source_and_report_failures() {
 
 #[test]
 fn output_queue_coalesces_duplicates_limits_growth_and_cancels_edits_at_shutdown() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "destination");
     stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -828,7 +831,7 @@ fn output_queue_coalesces_duplicates_limits_growth_and_cancels_edits_at_shutdown
 #[test]
 fn a_queued_clear_clears_what_it_was_requested_over_and_nothing_drawn_after() {
     for drawn_after_request in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "current");
         let target = named_options(temp.path(), "destination");
         stored_session::save_snapshot(&sample_snapshot(), &target).unwrap();
@@ -863,10 +866,7 @@ fn a_queued_clear_clears_what_it_was_requested_over_and_nothing_drawn_after() {
         assert_eq!(refused, drawn_after_request, "{:?}", runtime.errors);
         let shapes = &runtime.input.boards.active_frame().shapes;
         if drawn_after_request {
-            assert!(matches!(
-                shapes[0].shape,
-                crate::draw::Shape::Line { x2: 77, .. }
-            ));
+            assert!(matches!(shapes[0].shape, Shape::Line { x2: 77, .. }));
         } else {
             assert!(shapes.is_empty());
         }
@@ -875,7 +875,7 @@ fn a_queued_clear_clears_what_it_was_requested_over_and_nothing_drawn_after() {
 
 #[test]
 fn repeated_failed_output_loads_do_not_rotate_a_clean_sources_backup() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current = named_options(temp.path(), "current");
     let target = named_options(temp.path(), "destination");
     stored_session::save_snapshot(&sample_snapshot(), &current).unwrap();
@@ -890,10 +890,10 @@ fn repeated_failed_output_loads_do_not_rotate_a_clean_sources_backup() {
     )
     .unwrap();
     input.clear_session_dirty();
-    let primary = std::fs::read(current.session_file_path()).unwrap();
-    let backup = std::fs::read(current.backup_file_path()).unwrap();
-    std::fs::write(target.session_file_path(), b"corrupt destination").unwrap();
-    std::fs::write(
+    let primary = fs::read(current.session_file_path()).unwrap();
+    let backup = fs::read(current.backup_file_path()).unwrap();
+    fs::write(target.session_file_path(), b"corrupt destination").unwrap();
+    fs::write(
         stored_session::append_path_suffix(
             &target.session_file_path(),
             ".corrupt-18446744073709551615",
@@ -911,8 +911,8 @@ fn repeated_failed_output_loads_do_not_rotate_a_clean_sources_backup() {
         start_session_command(&mut runtime, command).unwrap();
         finish_pending_session_command(&mut runtime).unwrap();
         assert_eq!(runtime.session.options().unwrap().target, current.target);
-        assert_eq!(std::fs::read(current.session_file_path()).unwrap(), primary);
-        assert_eq!(std::fs::read(current.backup_file_path()).unwrap(), backup);
+        assert_eq!(fs::read(current.session_file_path()).unwrap(), primary);
+        assert_eq!(fs::read(current.backup_file_path()).unwrap(), backup);
     }
     assert_eq!(runtime.errors.len(), 3);
     assert!(runtime.reports.is_empty());
@@ -921,14 +921,14 @@ fn repeated_failed_output_loads_do_not_rotate_a_clean_sources_backup() {
 #[test]
 fn remembered_preservation_failure_goes_home_without_retrying_the_unreadable_source() {
     for home_enabled in [false, true] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current = named_options(temp.path(), "remembered");
         let home = named_options(temp.path(), "home");
         stored_session::save_snapshot(&sample_snapshot(), &current).unwrap();
-        std::fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
-        let backup = std::fs::read(current.backup_file_path()).unwrap();
-        std::fs::write(current.session_file_path(), b"corrupt remembered").unwrap();
-        std::fs::write(
+        fs::rename(current.session_file_path(), current.backup_file_path()).unwrap();
+        let backup = fs::read(current.backup_file_path()).unwrap();
+        fs::write(current.session_file_path(), b"corrupt remembered").unwrap();
+        fs::write(
             stored_session::append_path_suffix(
                 &current.session_file_path(),
                 ".corrupt-18446744073709551615",
@@ -970,9 +970,9 @@ fn remembered_preservation_failure_goes_home_without_retrying_the_unreadable_sou
             }]
         ));
         assert_eq!(
-            std::fs::read(current.session_file_path()).unwrap(),
+            fs::read(current.session_file_path()).unwrap(),
             b"corrupt remembered"
         );
-        assert_eq!(std::fs::read(current.backup_file_path()).unwrap(), backup);
+        assert_eq!(fs::read(current.backup_file_path()).unwrap(), backup);
     }
 }

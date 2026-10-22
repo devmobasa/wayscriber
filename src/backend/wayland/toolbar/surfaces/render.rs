@@ -2,10 +2,12 @@ use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use log::debug;
-use smithay_client_toolkit::{
-    shell::WaylandSurface,
-    shm::{Shm, slot::SlotPool},
-};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shm::Shm;
+use smithay_client_toolkit::shm::slot::SlotPool;
+use wayland_client::protocol::wl_shm::Format;
+
+use crate::util::Rect;
 
 use super::structs::ToolbarSurface;
 use crate::backend::wayland::toolbar::hit::HitRegion;
@@ -71,7 +73,7 @@ impl ToolbarSurface {
                 phys_w as i32,
                 phys_h as i32,
                 (phys_w * 4) as i32,
-                wayland_client::protocol::wl_shm::Format::Argb8888,
+                Format::Argb8888,
             )
             .map_err(|err| anyhow!("failed to create a {phys_w}x{phys_h} buffer: {err}"))?;
 
@@ -136,7 +138,7 @@ impl ToolbarSurface {
         drop(ctx);
         drop(surface);
         if let Some(profile) = render_profile
-            && let Some(full) = crate::util::Rect::new(0, 0, phys_w as i32, phys_h as i32)
+            && let Some(full) = Rect::new(0, 0, phys_w as i32, phys_h as i32)
         {
             profile.remap_argb8888_regions(
                 canvas,

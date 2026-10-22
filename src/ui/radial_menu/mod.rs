@@ -9,6 +9,7 @@ use text::{draw_centered_label, draw_wedge_content};
 use std::f64::consts::PI;
 
 use crate::config::{Action, action_meta, action_short_label};
+use crate::draw::Color;
 use crate::input::state::{
     RADIAL_COMPASS_SLICES, RADIAL_TOOL_SEGMENT_COUNT, RadialMenuLayout, RadialMenuState,
     RadialParent, RadialRingSwatch, RadialSegmentId, RadialSlice, RadialSliceKind,
@@ -22,7 +23,10 @@ use crate::toolbar_icons::{
 };
 use crate::ui::primitives::{draw_keycap_with_engine, keycap_size_with_engine};
 use crate::ui::theme::{self, Rgba, overlay, toolbar};
+use crate::ui::toolbar::model;
+use crate::ui::{UiRenderCaches, UiRenderCtx};
 use crate::ui_text::UiTextEngine;
+use crate::{toolbar_icons, ui};
 
 // ── File-local style values without a matching token in ui/theme.rs ──
 
@@ -50,7 +54,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
         return;
     }
     let engine = UiTextEngine::default();
-    let mut caches = crate::ui::UiRenderCaches::default();
+    let mut caches = UiRenderCaches::default();
     render_radial_menu_with_context(
         &engine,
         &mut crate::ui::UiRenderCtx {
@@ -66,7 +70,7 @@ pub fn render_radial_menu(ctx: &cairo::Context, input_state: &InputState, width:
 
 pub(crate) fn render_radial_menu_with_context(
     engine: &UiTextEngine,
-    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
+    render: &mut UiRenderCtx<'_, '_, '_>,
     input_state: &InputState,
     width: u32,
     height: u32,
@@ -188,7 +192,7 @@ fn draw_static_base(
                 end - color_gap,
             );
         };
-        crate::ui::checkerboard_behind(ctx, c.a, segment);
+        ui::checkerboard_behind(ctx, c.a, segment);
         segment(ctx);
         ctx.set_source_rgba(c.r, c.g, c.b, c.a);
         let _ = ctx.fill_preserve();
@@ -392,7 +396,7 @@ fn draw_sub_ring(
         let color = wedge_content_color(theme, is_hovered, is_active);
         let icon = action_meta(*action)
             .and_then(|meta| meta.icon)
-            .map(crate::toolbar_icons::action_icon_painter);
+            .map(toolbar_icons::action_icon_painter);
         let label = action_short_label(*action);
         match icon {
             Some(_) if show_labels => {
@@ -501,7 +505,7 @@ fn draw_center_well(
                 active_color.b,
                 active_color.a,
             ),
-            ring_width: crate::ui::toolbar::model::micro_ring_width(size),
+            ring_width: model::micro_ring_width(size),
             icon_color: if is_center_hovered {
                 toolbar::COLOR_ICON_HOVER
             } else {
@@ -676,7 +680,7 @@ fn slice_icon(slice: &RadialSlice) -> Option<ToolbarIconPainter> {
     match slice.kind {
         RadialSliceKind::Action(action) => action_meta(action)
             .and_then(|meta| meta.icon)
-            .map(crate::toolbar_icons::action_icon_painter),
+            .map(toolbar_icons::action_icon_painter),
         RadialSliceKind::Parent(RadialParent::Shapes) => Some(draw_icon_shape_picker),
         RadialSliceKind::Parent(RadialParent::Notes) => Some(draw_icon_note),
     }
@@ -734,6 +738,6 @@ fn center_glyph(input_state: &InputState, active_tool: Tool) -> ToolbarIconPaint
 }
 
 /// Check whether two colors are approximately equal.
-fn colors_match(a: &crate::draw::Color, b: &crate::draw::Color) -> bool {
+fn colors_match(a: &Color, b: &Color) -> bool {
     (a.r - b.r).abs() < 0.01 && (a.g - b.g).abs() < 0.01 && (a.b - b.b).abs() < 0.01
 }

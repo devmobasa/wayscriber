@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use crate::i18n::tr;
 use crate::util::Rect;
 use serde::{Deserialize, Serialize};
@@ -20,6 +22,7 @@ pub enum PolygonKind {
 }
 
 impl PolygonKind {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Triangle => tr("Triangle"),
@@ -52,6 +55,7 @@ impl PolygonTemplate {
     }
 }
 
+#[must_use]
 pub fn clamp_regular_sides(sides: u8) -> u8 {
     sides.clamp(REGULAR_POLYGON_MIN_SIDES, REGULAR_POLYGON_MAX_SIDES)
 }
@@ -150,11 +154,11 @@ fn regular_polygon_points(start: (i32, i32), end: (i32, i32), sides: u8) -> Vec<
     let radius_x = f64::from(end.0.abs_diff(start.0)) / 2.0;
     let radius_y = f64::from(end.1.abs_diff(start.1)) / 2.0;
     let radius = radius_x.min(radius_y);
-    let start_angle = -std::f64::consts::FRAC_PI_2;
+    let start_angle = -consts::FRAC_PI_2;
 
     (0..sides)
         .map(|index| {
-            let angle = start_angle + std::f64::consts::TAU * f64::from(index) / f64::from(sides);
+            let angle = start_angle + consts::TAU * f64::from(index) / f64::from(sides);
             (
                 (center_x + angle.cos() * radius).round() as i32,
                 (center_y + angle.sin() * radius).round() as i32,

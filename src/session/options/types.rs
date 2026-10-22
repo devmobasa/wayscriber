@@ -84,10 +84,12 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn any_enabled(&self) -> bool {
         self.persist_transparent || self.persist_whiteboard || self.persist_blackboard
     }
 
+    #[must_use]
     pub fn effective_history_limit(&self, runtime_limit: usize) -> usize {
         if !self.persist_history {
             return 0;
@@ -98,6 +100,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn is_named_file(&self) -> bool {
         matches!(self.target, SessionTarget::NamedFile(_))
     }
@@ -117,6 +120,7 @@ impl SessionOptions {
         self.restore_tool_state = true;
     }
 
+    #[must_use]
     pub fn session_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -126,6 +130,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn backup_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -135,6 +140,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn backup_recovery_marker_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -144,6 +150,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn recovery_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -153,6 +160,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn recovery_recoverable_marker_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self.base_dir.join(format!(
@@ -163,6 +171,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn clear_marker_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -172,6 +181,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn lock_file_path(&self) -> PathBuf {
         match &self.target {
             SessionTarget::Configured => self
@@ -181,6 +191,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn file_prefix(&self) -> String {
         format!("session-{}", self.display_id)
     }
@@ -210,6 +221,7 @@ impl SessionOptions {
         }
     }
 
+    #[must_use]
     pub fn output_identity(&self) -> Option<&str> {
         self.output_identity.as_deref()
     }

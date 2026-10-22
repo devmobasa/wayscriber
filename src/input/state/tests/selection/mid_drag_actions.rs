@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::ShapeId;
 use crate::input::state::SelectionHandle;
@@ -31,8 +34,8 @@ fn rect_geometry(state: &InputState, id: ShapeId) -> (i32, i32, i32, i32) {
 }
 
 fn undo(state: &mut InputState) {
-    let measurer = crate::draw::TextMeasurer::default();
-    let ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let ui_engine = UiTextEngine::default();
     state.handle_action_with_resources(
         crate::input::state::InputTextResources {
             measurer: &measurer,
@@ -80,7 +83,7 @@ fn a_nudge_key_mid_move_lands_the_move_before_recording_the_nudge() {
 
 #[test]
 fn a_nudge_key_mid_resize_lands_the_resize_before_recording_the_nudge() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = select_state();
     let rect = add_filled_rect(&mut state, 100, 100);
     let original = rect_geometry(&state, rect);

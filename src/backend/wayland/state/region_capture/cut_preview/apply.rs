@@ -1,3 +1,6 @@
+use crate::capture;
+use crate::input::state::RegionSelection;
+
 use super::super::cut_review::{
     CutPreviewKey, PreviewApply, RegionCutBase, RegionCutPreview, RegionReviewEdits,
 };
@@ -13,10 +16,7 @@ fn preview_matches_review(edits: &RegionReviewEdits, key: &CutPreviewKey) -> boo
 pub(super) fn apply_cut_preview_outcome(
     edits: &mut Option<RegionReviewEdits>,
     outcome: CutPreviewOutcome,
-    display_for: impl FnOnce(
-        &RegionReviewEdits,
-        &[CutBand],
-    ) -> Option<crate::input::state::RegionSelection>,
+    display_for: impl FnOnce(&RegionReviewEdits, &[CutBand]) -> Option<RegionSelection>,
 ) -> PreviewApply {
     let Some(edits) = edits.as_mut() else {
         return PreviewApply::Ignored;
@@ -87,7 +87,7 @@ pub(super) fn apply_cut_preview_outcome(
 }
 
 fn output_size_from_key(key: &CutPreviewKey) -> Option<(u32, u32)> {
-    crate::capture::output_size(
+    capture::output_size(
         (
             key.fingerprint.source_rect().width(),
             key.fingerprint.source_rect().height(),
@@ -106,10 +106,7 @@ pub(super) struct CutPreviewVisibleEffect {
 pub(super) fn visible_effect_for_cut_preview(
     edits: &mut Option<RegionReviewEdits>,
     outcome: CutPreviewOutcome,
-    display_for: impl FnOnce(
-        &RegionReviewEdits,
-        &[CutBand],
-    ) -> Option<crate::input::state::RegionSelection>,
+    display_for: impl FnOnce(&RegionReviewEdits, &[CutBand]) -> Option<RegionSelection>,
 ) -> CutPreviewVisibleEffect {
     let desired = edits
         .as_ref()

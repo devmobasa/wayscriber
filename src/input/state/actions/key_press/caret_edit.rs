@@ -19,9 +19,11 @@
 use std::ops::Range;
 use unicode_segmentation::{GraphemeCursor, UnicodeSegmentation};
 
+use crate::draw::TextMeasurer;
 use crate::draw::shape::{VisualCaretDirection, VisualLineDirection, VisualLineEdge};
 use crate::input::events::Key;
 use crate::input::state::DrawingState;
+use crate::input::state::core::TextEditing;
 
 use super::text_input::move_horizontal_caret;
 
@@ -29,9 +31,9 @@ use super::text_input::move_horizontal_caret;
 /// The owner is shared with damage measurement; no destination Cairo context
 /// or runtime resource is retained by the editor state.
 #[derive(Clone, Copy)]
-pub(in crate::input::state) struct TextNavigation<'a> {
-    pub(in crate::input::state) measurer: &'a crate::draw::TextMeasurer,
-    pub(in crate::input::state) font: &'a str,
+pub(in crate::input::state) struct TextNavigation<'text> {
+    pub(in crate::input::state) measurer: &'text TextMeasurer,
+    pub(in crate::input::state) font: &'text str,
     pub(in crate::input::state) wrap_width: Option<i32>,
 }
 
@@ -490,7 +492,7 @@ pub(in crate::input::state) fn select_all(
     true
 }
 
-impl crate::input::state::core::TextEditing {
+impl TextEditing {
     /// Apply one editor-owned key. `None` means the key belongs to the action
     /// layer; `Some` reports whether the visible editor state changed.
     pub(in crate::input::state) fn apply_key_edit(
@@ -641,8 +643,8 @@ mod tests {
 
     #[test]
     fn owner_key_edits_advance_revision_only_for_buffer_mutations() {
-        let measurer = crate::draw::TextMeasurer::default();
-        let mut editing = crate::input::state::core::TextEditing::default();
+        let measurer = TextMeasurer::default();
+        let mut editing = TextEditing::default();
         let mut state = DrawingState::text_input(0, 0, "ab".to_string());
         editing.begin_session();
 

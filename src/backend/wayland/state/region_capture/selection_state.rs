@@ -1,4 +1,8 @@
-use super::*;
+use super::super::screen_image::image_point_for_screen_point;
+use super::active_state::ActiveScreenRegion;
+use super::geometry;
+use super::measure::{measure_anchor, measure_edge};
+use crate::screen_pixels::clamp_edge;
 
 impl ActiveScreenRegion {
     pub(super) fn begin_selection(&mut self, logical: (f64, f64)) -> bool {

@@ -1,4 +1,8 @@
-use super::*;
+use crate::util;
+
+use super::OUTPUT_BADGE_MAX_LEN;
+use crate::backend::wayland::state::WaylandState;
+use wayland_client::protocol::wl_output;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn preferred_fullscreen_output(
@@ -67,10 +71,7 @@ impl WaylandState {
         let info = self.protocol.output().info(output)?;
 
         if let Some(name) = info.name.as_deref().filter(|name| !name.is_empty()) {
-            return Some(crate::util::truncate_with_ellipsis(
-                name,
-                OUTPUT_BADGE_MAX_LEN,
-            ));
+            return Some(util::truncate_with_ellipsis(name, OUTPUT_BADGE_MAX_LEN));
         }
 
         let label = match (info.make.trim(), info.model.trim()) {
@@ -80,10 +81,7 @@ impl WaylandState {
             (make, model) => format!("{make} {model}"),
         };
 
-        Some(crate::util::truncate_with_ellipsis(
-            &label,
-            OUTPUT_BADGE_MAX_LEN,
-        ))
+        Some(util::truncate_with_ellipsis(&label, OUTPUT_BADGE_MAX_LEN))
     }
 
     pub(in crate::backend::wayland) fn refresh_active_output_label(&mut self) {

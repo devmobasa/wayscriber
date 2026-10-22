@@ -1,10 +1,12 @@
+use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
+
+use crate::backend::wayland::toolbar;
 use crate::ui_text::UiTextEngine;
 use log::info;
-use smithay_client_toolkit::{
-    compositor::CompositorState,
-    shell::wlr_layer::{LayerShell, LayerSurfaceConfigure},
-};
-use wayland_client::{QueueHandle, protocol::wl_output};
+use smithay_client_toolkit::compositor::CompositorState;
+use smithay_client_toolkit::shell::wlr_layer::{LayerShell, LayerSurfaceConfigure};
+use wayland_client::QueueHandle;
+use wayland_client::protocol::wl_output;
 
 use super::structs::ToolbarSurfaceManager;
 use crate::backend::wayland::state::WaylandState;
@@ -22,7 +24,7 @@ impl ToolbarSurfaceManager {
         output: Option<&wl_output::WlOutput>,
         snapshot: &ToolbarSnapshot,
     ) {
-        let top_size = crate::backend::wayland::toolbar::top_size(engine, snapshot);
+        let top_size = toolbar::top_size(engine, snapshot);
 
         if self.is_top_visible() {
             if self.top.layer_surface.is_none() {
@@ -48,7 +50,7 @@ impl ToolbarSurfaceManager {
     pub fn handle_configure(
         &mut self,
         configure: &LayerSurfaceConfigure,
-        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+        layer: &LayerSurface,
     ) -> bool {
         if self.top.is_layer(layer) {
             return self.top.handle_configure(configure);

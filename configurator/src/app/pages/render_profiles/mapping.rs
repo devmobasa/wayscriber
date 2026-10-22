@@ -3,6 +3,7 @@ use wayscriber::i18n::tr;
 use super::rows::{connect_button, plain_row, row_content_box, side_label};
 use relm4::{ComponentSender, gtk};
 
+use gtk::gdk::RGBA;
 use gtk::glib::SignalHandlerId;
 use gtk::prelude::*;
 
@@ -35,7 +36,7 @@ impl ColorField {
             // rather than flashing it to black on every keystroke.
             return;
         };
-        let rgba = gtk::gdk::RGBA::new(rgb[0] as f32, rgb[1] as f32, rgb[2] as f32, 1.0);
+        let rgba = RGBA::new(rgb[0] as f32, rgb[1] as f32, rgb[2] as f32, 1.0);
         set_swatch_blocked(&self.swatch, &self.swatch_handler, &rgba);
     }
 }

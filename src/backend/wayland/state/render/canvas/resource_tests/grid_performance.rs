@@ -1,4 +1,6 @@
 //! Opt-in end-to-end paper consumers. No compositor or native windows.
+use crate::draw::Frame;
+
 use super::*;
 use crate::canvas_export::{
     BoardExportSnapshot, CanvasExportBackdropSnapshot, CanvasExportSnapshot, CanvasExportViewport,
@@ -7,15 +9,15 @@ use crate::canvas_export::{
 use crate::domain::{BoardGrid, BoardGridKind};
 use std::time::Instant;
 
-fn workload(origin: (i32, i32), size: (u32, u32), count: usize) -> crate::draw::Frame {
-    let mut frame = crate::draw::Frame::new();
+fn workload(origin: (i32, i32), size: (u32, u32), count: usize) -> Frame {
+    let mut frame = Frame::new();
     for n in 0..80 {
         frame.add_shape(Shape::Line {
             x1: origin.0,
             y1: origin.1 + n * 19,
             x2: origin.0 + size.0 as i32,
             y2: origin.1 + n * 19 + 60,
-            color: crate::draw::BLUE,
+            color: draw::BLUE,
             thick: 3.0,
         });
     }
@@ -56,7 +58,7 @@ fn board_grid_consumers_performance() {
                             width: size.0,
                             height: size.1,
                             origin: (f64::from(origin.0), f64::from(origin.1)),
-                            background: Some(crate::draw::WHITE),
+                            background: Some(draw::WHITE),
                             grid,
                             ..inputs()
                         };
@@ -68,10 +70,7 @@ fn board_grid_consumers_performance() {
                                 origin_x: origin.0,
                                 origin_y: origin.1,
                             },
-                            backdrop: CanvasExportBackdropSnapshot::board_paper(
-                                crate::draw::WHITE,
-                                grid,
-                            ),
+                            backdrop: CanvasExportBackdropSnapshot::board_paper(draw::WHITE, grid),
                             board: BoardExportSnapshot {
                                 frame: frame.clone_without_history(),
                             },
@@ -81,10 +80,10 @@ fn board_grid_consumers_performance() {
                         };
                         let mut samples = [Vec::new(), Vec::new(), Vec::new()];
                         let mut png_bytes = 0;
-                        let measurer = crate::draw::TextMeasurer::default();
+                        let measurer = TextMeasurer::default();
                         for sample in 0..6 {
                             let mut layer = CanvasLayerCache::new();
-                            let mut caches = crate::draw::RenderCaches::default();
+                            let mut caches = RenderCaches::default();
                             let start = Instant::now();
                             assert!(layer.ensure(&measurer, &mut caches, &frame.shapes, request));
                             let cold = start.elapsed().as_micros();

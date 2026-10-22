@@ -1,5 +1,9 @@
 //! Bounded raster reuse keyed by content and the exact card pixels beneath it.
 //! Retaining the backdrop preserves transparent paint and eraser semantics.
+use crate::domain::BoardGrid;
+use crate::draw;
+use crate::draw::Shape;
+
 use super::content::render_page_content;
 use super::types::PageContentArgs;
 use crate::draw::{RenderCtx, TextMeasurer};
@@ -16,7 +20,7 @@ struct ThumbnailKey {
     content: u64,
     view: (i32, i32),
     background: Option<[u64; 3]>,
-    grid: crate::domain::BoardGrid,
+    grid: BoardGrid,
     backdrop: Vec<u8>,
     geometry: [u64; 4],
     matrix: [u64; 6],
@@ -111,8 +115,8 @@ fn try_render_cached(
         && args.frame.shapes.iter().any(|drawn| {
             matches!(
                 &drawn.shape,
-                crate::draw::Shape::Spotlight { magnification, .. }
-                    if crate::draw::spotlight_magnification_is_active(*magnification)
+                Shape::Spotlight { magnification, .. }
+                    if draw::spotlight_magnification_is_active(*magnification)
             )
         })
     {

@@ -1,3 +1,5 @@
+use crate::draw::shape::Shape;
+
 use super::super::super::core::Frame;
 use super::super::super::types::{DrawnShape, ShapeId, UndoAction};
 
@@ -102,7 +104,7 @@ impl Frame {
         bounds: super::super::super::types::ImageBoundsSnapshot,
     ) {
         if let Some(target) = self.shape_mut(shape_id)
-            && let crate::draw::shape::Shape::Image { x, y, w, h, .. } = &mut target.shape
+            && let Shape::Image { x, y, w, h, .. } = &mut target.shape
         {
             *x = bounds.x;
             *y = bounds.y;

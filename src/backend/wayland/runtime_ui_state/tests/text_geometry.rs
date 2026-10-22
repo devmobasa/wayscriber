@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 use crate::config::{StatusBarItem, StatusBarStyle, StatusPosition};
 use crate::ui::StatusHudSegmentKind;
@@ -5,7 +7,7 @@ use crate::ui_text::UiTextEngine;
 
 #[test]
 fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut config = Config::default();
     config
         .ui
@@ -13,14 +15,14 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
     let engine = UiTextEngine::default();
     let mut input = input_from_config(&config);
     let mut runtime = controller_only_runtime(&config, &temp.path().join("runtime-ui.toml"));
-    runtime.apply_startup_state(&engine, &crate::draw::TextMeasurer::default(), &mut input);
+    runtime.apply_startup_state(&engine, &TextMeasurer::default(), &mut input);
     assert!(
         input.status_hud_layout().is_none(),
         "startup has no previous frame dimensions"
     );
     input.update_status_hud_layout_for_pointer_with_resources(
         crate::input::state::InputTextResources {
-            measurer: &crate::draw::TextMeasurer::default(),
+            measurer: &TextMeasurer::default(),
             ui_engine: &engine,
         },
         StatusPosition::BottomLeft,
@@ -50,7 +52,7 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
         runtime
             .refresh_config_seeds(
                 &engine,
-                &crate::draw::TextMeasurer::default(),
+                &TextMeasurer::default(),
                 &config,
                 &mut input,
                 &mut positions
@@ -77,7 +79,7 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
     };
     apply_toolbar_runtime_rollback(
         &engine,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &rollback,
@@ -94,7 +96,7 @@ fn preference_reapply_and_rollback_refresh_text_geometry_before_another_frame() 
     assert_ne!(format!("{:?}", input.status_hud_layout()), hidden_geometry);
     runtime.apply_live_state(
         &engine,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );

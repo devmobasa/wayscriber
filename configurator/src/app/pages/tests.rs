@@ -1,4 +1,7 @@
 use wayscriber::domain::Language;
+use wayscriber::i18n;
+
+use crate::test_env;
 
 use super::validate_u32_range;
 
@@ -22,10 +25,10 @@ fn an_invalid_whole_number_names_the_actual_bounds() {
 
 #[test]
 fn the_bounds_survive_translation() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(module_path!(), "::the_bounds_survive_translation"),
         || {
-            wayscriber::i18n::set_language(Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             assert_eq!(
                 validate_u32_range("256", 0, 255).as_deref(),
                 Some("请输入 0 到 255 之间的整数。")

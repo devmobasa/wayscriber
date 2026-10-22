@@ -1,10 +1,12 @@
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use crate::draw::{ArrowStyle, Color, DrawnShape, Frame, Shape, ShapeId};
 
 #[cfg(test)]
 thread_local! {
-    static SELECTION_RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SELECTION_RESOLUTIONS: Cell<usize> = const { Cell::new(0) };
 }
 
 impl super::super::InputState {
@@ -19,7 +21,7 @@ impl super::super::InputState {
 
     #[cfg(test)]
     pub(crate) fn selection_resolution_count() -> usize {
-        SELECTION_RESOLUTIONS.with(std::cell::Cell::get)
+        SELECTION_RESOLUTIONS.with(Cell::get)
     }
 }
 

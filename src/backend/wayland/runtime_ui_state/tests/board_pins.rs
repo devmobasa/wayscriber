@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 
 fn force_board_pin_test_persistence_failure(
@@ -6,12 +8,12 @@ fn force_board_pin_test_persistence_failure(
     let target = InteractionSeedTarget::TopPinned;
     let permit = runtime
         .controller
-        .begin_mutation(RuntimeUiMutationScope::one(target.clone()))
+        .begin_mutation(&RuntimeUiMutationScope::one(target.clone()))
         .unwrap();
     assert!(matches!(
         runtime.controller.commit(
             permit,
-            RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(false)).unwrap(),
+            &RuntimeUiMutationValues::one(target, InteractionSeedValue::Bool(false)).unwrap(),
         ),
         CommitResult::Accepted { .. }
     ));
@@ -77,7 +79,7 @@ fn recover_board_pin_test_persistence(
 #[test]
 fn board_pin_is_runtime_owned_and_survives_restart_without_touching_config() {
     const AUTHORED: &[u8] = b"# authored config bytes stay exact\n";
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let config_path = temp.path().join("config.toml");
     let runtime_path = temp.path().join("data/runtime-ui.toml");
     fs::write(&config_path, AUTHORED).unwrap();
@@ -108,8 +110,8 @@ fn board_pin_is_runtime_owned_and_survives_restart_without_touching_config() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(board_pinned(&restarted_input, "whiteboard"));
@@ -119,7 +121,7 @@ fn board_pin_is_runtime_owned_and_survives_restart_without_touching_config() {
 
 #[test]
 fn session_only_board_pin_survives_startup_until_session_identity_is_known() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
@@ -142,8 +144,8 @@ value = true
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -160,7 +162,7 @@ value = true
 
 #[test]
 fn absent_provisional_board_pin_is_pruned_after_session_reconciliation() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
@@ -178,8 +180,8 @@ value = true
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
 
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config,
         &mut input,
         &mut positions,
@@ -196,7 +198,7 @@ value = true
 
 #[test]
 fn newly_created_board_does_not_adopt_a_provisional_session_pin() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
@@ -222,8 +224,8 @@ value = true
     assert!(finish.is_none());
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -234,8 +236,8 @@ value = true
     assert!(restarted_input.create_board());
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!board_pinned(&restarted_input, &board_id));
@@ -244,7 +246,7 @@ value = true
 
 #[test]
 fn restored_board_pin_is_replayed_after_same_authority_recovery() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -268,8 +270,8 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
     let rebuild_live = recover_board_pin_test_persistence(&mut runtime, incident);
     assert!(rebuild_live);
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -291,7 +293,7 @@ fn restored_board_pin_is_replayed_after_same_authority_recovery() {
 
 #[test]
 fn deferred_board_pin_restore_is_discarded_when_reset_changes_authority() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -319,8 +321,8 @@ fn deferred_board_pin_restore_is_discarded_when_reset_changes_authority() {
     assert!(runtime.controller.active_barrier().is_none());
     assert_ne!(runtime.controller.authority_epoch(), original_epoch);
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut ToolbarPositionSnapshot { top: (0.0, 0.0) },
     );
@@ -339,7 +341,7 @@ fn deferred_board_pin_restore_is_discarded_when_reset_changes_authority() {
 
 #[test]
 fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     let mut input = input_from_config(&config);
@@ -356,8 +358,8 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     runtime.apply_live_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
     );
@@ -367,8 +369,8 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!board_pinned(&restarted_input, "whiteboard"));
@@ -377,7 +379,7 @@ fn delayed_delete_and_same_id_reuse_cannot_resurrect_old_board_pin() {
 
 #[test]
 fn stale_deferred_board_pin_is_rejected_after_authored_pin_reload() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config_a = Config::default();
     let mut input = input_from_config(&config_a);
@@ -400,8 +402,8 @@ fn stale_deferred_board_pin_is_rejected_after_authored_pin_reload() {
         .sync_pin_seeds_from_config(&config_b.resolved_boards());
     let mut positions = ToolbarPositionSnapshot { top: (0.0, 0.0) };
     let refresh = runtime.refresh_config_seeds(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &config_b,
         &mut input,
         &mut positions,

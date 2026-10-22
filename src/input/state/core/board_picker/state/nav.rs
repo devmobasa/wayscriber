@@ -1,3 +1,4 @@
+use crate::draw::TextMeasurer;
 use crate::i18n::tr;
 use crate::input::events::Key;
 use crate::input::state::{Toast, ToastPriority};
@@ -117,7 +118,7 @@ impl InputState {
 
     pub(crate) fn handle_board_picker_page_nav_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> Option<bool> {
         match self.board_picker_page_nav_mode() {
@@ -192,7 +193,7 @@ impl InputState {
 
     fn handle_board_picker_page_search_key_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         key: Key,
     ) -> bool {
         match key {

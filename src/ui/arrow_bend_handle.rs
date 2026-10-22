@@ -1,5 +1,7 @@
 //! The bend handle drawn on a selected curved arrow.
 
+use std::f64::consts;
+
 use crate::util::Rect;
 
 /// Border width of the handle, matching the selection box's handles so the two
@@ -21,7 +23,7 @@ pub(crate) fn render_arrow_bend_handle(ctx: &cairo::Context, rect: Rect) {
 
     let _ = ctx.save();
     ctx.new_path();
-    ctx.arc(cx, cy, radius, 0.0, std::f64::consts::TAU);
+    ctx.arc(cx, cy, radius, 0.0, consts::TAU);
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.95);
     let _ = ctx.fill_preserve();
     ctx.set_source_rgba(0.2, 0.45, 1.0, 0.95);

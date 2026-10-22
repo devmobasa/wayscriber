@@ -2,7 +2,7 @@ use std::path::Path;
 
 use log::{info, warn};
 
-use super::super::*;
+use super::super::WaylandState;
 use crate::backend::wayland::session::session_target;
 use crate::daemon::protocol_v2::publish_session_from_environment;
 use crate::i18n::trf;

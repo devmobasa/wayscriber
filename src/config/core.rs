@@ -203,6 +203,7 @@ impl Config {
     }
 
     /// Which `[keybindings]` keys the source this configuration came from spelled out.
+    #[must_use]
     pub fn keybinding_authorship(&self) -> &KeybindingAuthorship {
         &self.keybinding_authorship
     }
@@ -219,6 +220,7 @@ impl Config {
         }
     }
 
+    #[must_use]
     pub fn resolved_boards(&self) -> BoardsConfig {
         match &self.boards {
             Some(boards) if !boards.items.is_empty() => boards.clone(),

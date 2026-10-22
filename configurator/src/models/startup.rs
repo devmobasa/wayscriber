@@ -152,10 +152,12 @@ pub(crate) fn startup_usage() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::iter;
+
     use super::*;
 
     fn args(values: &[&str]) -> Vec<OsString> {
-        std::iter::once("wayscriber-configurator")
+        iter::once("wayscriber-configurator")
             .chain(values.iter().copied())
             .map(OsString::from)
             .collect()

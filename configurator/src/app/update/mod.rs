@@ -134,7 +134,7 @@ impl ConfiguratorApp {
                 self.handle_session_catalog_clear_confirmed(id)
             }
             Message::SessionCatalogClearCanceled(id) => {
-                self.handle_session_catalog_clear_canceled(id)
+                self.handle_session_catalog_clear_canceled(&id)
             }
             Message::SearchChanged(value) => self.handle_search_changed(value),
             Message::SearchCleared => self.handle_search_cleared(),
@@ -180,7 +180,7 @@ impl ConfiguratorApp {
             Message::FontCycleRemoved(index) => self.handle_font_cycle_removed(index),
             Message::FontCycleMoved(index, delta) => self.handle_font_cycle_moved(index, delta),
             Message::FontCycleChanged(index, family) => {
-                self.handle_font_cycle_changed(index, family)
+                self.handle_font_cycle_changed(index, &family)
             }
             Message::QuickColorModeChanged(index, mode) => {
                 self.handle_quick_color_mode_changed(index, mode)
@@ -344,7 +344,7 @@ impl ConfiguratorApp {
                 self.handle_shortcut_sequence_remove_last_step()
             }
             Message::ShortcutRemoved(field, binding) => {
-                self.handle_shortcut_removed(field, binding)
+                self.handle_shortcut_removed(field, &binding)
             }
             Message::ShortcutResetRequested(field) => self.handle_shortcut_reset_requested(field),
             Message::ShortcutTextEditStarted(field) => {

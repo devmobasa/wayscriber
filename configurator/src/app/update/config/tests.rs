@@ -1,6 +1,10 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
+use wayscriber::config;
 use wayscriber::config::{Action, CURRENT_CONFIG_REVISION, Config, ConfigDocument};
+
+use crate::test_temp;
 
 use super::save::save_validation_errors;
 use super::*;
@@ -16,9 +20,9 @@ fn status_contains(status: &StatusMessage, needle: &str) -> bool {
 }
 
 fn temp_config_document(name: &str, contents: &str) -> (TempDir, Box<ConfigDocument>) {
-    let temp = crate::test_temp::tempdir().expect("temporary config directory");
+    let temp = test_temp::tempdir().expect("temporary config directory");
     let path = temp.path().join(format!("{name}.toml"));
-    std::fs::write(&path, contents).expect("write test config");
+    fs::write(&path, contents).expect("write test config");
     let document = ConfigDocument::load_from_path(&path).expect("load test config document");
     (temp, Box::new(document))
 }
@@ -128,7 +132,7 @@ fn handle_config_loaded_surfaces_resolved_shortcut_conflicts() {
         "shortcut-conflict",
         &format!(
             "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\"]\ncycle_toolbar_display = [\"F2\"]\n",
-            wayscriber::config::CURRENT_CONFIG_REVISION
+            config::CURRENT_CONFIG_REVISION
         ),
     );
 
@@ -155,7 +159,7 @@ fn handle_config_loaded_surfaces_skipped_default_shortcuts() {
         "skipped-default",
         &format!(
             "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = [\"F2\", \"F9\"]\n",
-            wayscriber::config::CURRENT_CONFIG_REVISION
+            config::CURRENT_CONFIG_REVISION
         ),
     );
 
@@ -185,7 +189,7 @@ fn handle_config_loaded_surfaces_shortcuts_that_could_not_be_parsed() {
         "invalid-shortcut",
         &format!(
             "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\n",
-            wayscriber::config::CURRENT_CONFIG_REVISION
+            config::CURRENT_CONFIG_REVISION
         ),
     );
 
@@ -211,7 +215,7 @@ fn handle_config_loaded_separates_every_keybinding_diagnostic_kind() {
         "invalid-and-conflicting",
         &format!(
             "config_revision = {}\n\n[keybindings]\nclear_canvas = [\"Ctrl+Shift\"]\ntoggle_toolbar = [\"F2\", \"F9\"]\nundo = [\"Ctrl+Alt+U\"]\nredo = [\"Ctrl+Alt+U\"]\n",
-            wayscriber::config::CURRENT_CONFIG_REVISION
+            config::CURRENT_CONFIG_REVISION
         ),
     );
 
@@ -900,9 +904,9 @@ const LEGACY_REVISION_ZERO_CONFIG: &str = "config_revision = 0\n\n[drawing]\ndef
 /// A config file of its own, in a directory the test owns: an applied
 /// migration saves, and a save drops its `.bak` next to the file.
 fn app_with_config_file(contents: &str) -> (ConfiguratorApp, TempDir, PathBuf) {
-    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let dir = test_temp::tempdir().expect("temporary test directory");
     let path = dir.path().join("config.toml");
-    std::fs::write(&path, contents).expect("write test config");
+    fs::write(&path, contents).expect("write test config");
     let (mut app, _effects) = ConfiguratorApp::new_app();
     load_config_file(&mut app, &path);
     (app, dir, path)
@@ -954,7 +958,7 @@ fn config_setting(contents: &str, key: &str) -> Option<String> {
 }
 
 fn read_config(path: &Path) -> String {
-    std::fs::read_to_string(path).expect("read the saved config")
+    fs::read_to_string(path).expect("read the saved config")
 }
 
 /// A file that is valid TOML but holds one value serde cannot map used to
@@ -963,9 +967,9 @@ fn read_config(path: &Path) -> String {
 /// defaults instead of calling the file unparseable, and Save keeps the rest.
 #[test]
 fn a_file_with_one_unreadable_value_loads_its_other_settings_and_saves_them_back() {
-    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let dir = test_temp::tempdir().expect("temporary test directory");
     let path = dir.path().join("config.toml");
-    std::fs::write(
+    fs::write(
         &path,
         "# mine\n[drawing]\ndefault_thickness = 7.0\n\n[keybindings]\nundo = \"Ctrl+Z\"\n",
     )
@@ -1061,7 +1065,7 @@ fn applying_and_saving_writes_the_reviewed_fields_the_revision_and_a_backup() {
 
     let backup = save_draft(&mut app).expect("the save creates a backup");
     assert_eq!(
-        std::fs::read_to_string(&backup).expect("read the backup"),
+        fs::read_to_string(&backup).expect("read the backup"),
         LEGACY_REVISION_ZERO_CONFIG,
         "the backup holds the file as it was before the migration"
     );
@@ -1332,11 +1336,11 @@ fn a_fully_customized_apply_records_the_revision_without_reoffering() {
 fn dismissal_follows_the_file_not_the_path_across_a_retarget() {
     use std::os::unix::fs::symlink;
 
-    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let dir = test_temp::tempdir().expect("temporary test directory");
     let first = dir.path().join("profile-a.toml");
     let second = dir.path().join("profile-b.toml");
-    std::fs::write(&first, LEGACY_REVISION_ZERO_CONFIG).expect("write the first profile");
-    std::fs::write(&second, LEGACY_REVISION_ZERO_CONFIG).expect("write the second profile");
+    fs::write(&first, LEGACY_REVISION_ZERO_CONFIG).expect("write the first profile");
+    fs::write(&second, LEGACY_REVISION_ZERO_CONFIG).expect("write the second profile");
     let link = dir.path().join("config.toml");
     symlink(&first, &link).expect("link the config path at the first profile");
 
@@ -1353,7 +1357,7 @@ fn dismissal_follows_the_file_not_the_path_across_a_retarget() {
         "the same file reloaded is not the user asking again"
     );
 
-    std::fs::remove_file(&link).expect("unlink the config path");
+    fs::remove_file(&link).expect("unlink the config path");
     symlink(&second, &link).expect("retarget the config path at the second profile");
     load_config_file(&mut app, &link);
 
@@ -1380,7 +1384,7 @@ fn an_empty_or_missing_file_never_offers_a_migration() {
     let (app, _dir, _path) = app_with_config_file("");
     assert!(app.pending_migration().is_none());
 
-    let dir = crate::test_temp::tempdir().expect("temporary test directory");
+    let dir = test_temp::tempdir().expect("temporary test directory");
     let (mut app, _effects) = ConfiguratorApp::new_app();
     load_config_file(&mut app, &dir.path().join("missing.toml"));
 

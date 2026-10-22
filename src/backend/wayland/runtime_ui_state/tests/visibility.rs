@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 
 /// The keyboard visibility toggle (F9) persists through the same pin wire
@@ -6,8 +8,8 @@ use super::*;
 /// exactly what the toggle left on screen.
 #[test]
 fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -16,7 +18,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     assert!(config.ui.toolbar.top_pinned);
@@ -44,7 +46,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            rollback,
+            &rollback,
         )
         .expect("visibility permit");
     assert!(matches!(
@@ -58,7 +60,7 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     );
     assert!(settle_runtime(&mut runtime).rollbacks.is_empty());
     assert_eq!(
-        stored_bool(&runtime, InteractionSeedTarget::TopPinned),
+        stored_bool(&runtime, &InteractionSeedTarget::TopPinned),
         Some(false)
     );
     runtime.shutdown_blocking();
@@ -67,8 +69,8 @@ fn keyboard_visibility_toggle_persists_both_pins_and_startup_hides_the_toolbar()
     assert!(restarted_input.toolbar_visible());
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_pinned());
@@ -92,8 +94,8 @@ fn a_rolled_back_hide_toggle_restores_live_visibility_from_the_pins() {
     input.set_toolbar_top_pinned(false);
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -119,8 +121,8 @@ fn a_rolled_back_show_toggle_re_hides_the_toolbar() {
     input.set_toolbar_top_pinned(true);
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(false),
@@ -152,8 +154,8 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
     };
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &rollback,
@@ -171,7 +173,7 @@ fn a_rolled_back_pin_button_keeps_a_visible_unpinned_toolbar_visible() {
 /// and applying it restores the pre-toggle screen, not just the pins.
 #[test]
 fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     assert!(config.ui.toolbar.top_pinned);
@@ -187,7 +189,7 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            rollback,
+            &rollback,
         )
         .expect("visibility permit");
     assert!(input.set_toolbar_visible(false));
@@ -208,7 +210,7 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
         id: reset.id,
         error: RuntimeStateIoError::new("test reset failure"),
         active: Some(RuntimeStateSourceObservation::missing(
-            reset.expected_source.clone(),
+            reset.expected_source,
         )),
         recovery_artifacts: Vec::new(),
         path_effect: RuntimeStateFailurePathEffect::Known(
@@ -218,8 +220,8 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
     let drain = runtime.drain_writer_completions();
     assert_eq!(drain.rollbacks.len(), 1);
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &drain.rollbacks[0],
@@ -241,8 +243,8 @@ fn visibility_toggle_rollback_through_a_failed_reset_restores_the_screen() {
 /// instead, and the take's no-op filter then drops the entry as moot.
 #[test]
 fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -251,7 +253,7 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     assert!(config.ui.toolbar.top_pinned);
@@ -276,7 +278,7 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
         runtime
             .begin_toolbar_mutation_with_rollback(
                 ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-                pins_rollback_values(true),
+                &pins_rollback_values(true),
             )
             .is_none(),
         "the barrier refuses new mutations, which is why the drain defers"
@@ -315,7 +317,7 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            pins_rollback_values(true),
+            &pins_rollback_values(true),
         )
         .expect("visibility permit after the barrier resolves");
     assert!(matches!(
@@ -328,7 +330,7 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
         "the deferred toggle still settles through one accepted revision"
     );
     assert_eq!(
-        stored_bool(&runtime, InteractionSeedTarget::TopPinned),
+        stored_bool(&runtime, &InteractionSeedTarget::TopPinned),
         Some(false)
     );
 }
@@ -342,8 +344,8 @@ fn a_barrier_defers_queued_visibility_persistence_instead_of_dropping_it() {
 /// not the pre-toggle pins.
 #[test]
 fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -352,7 +354,7 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     use crate::domain::Action;
     use crate::input::state::PendingToolbarPersistence;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let runtime_path = temp.path().join("runtime-ui.toml");
     let config = Config::default();
     assert!(config.ui.toolbar.top_pinned);
@@ -378,8 +380,8 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     assert!(drain.rollbacks.is_empty());
     if drain.rebuild_live {
         runtime.apply_live_state(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             &mut input,
             &mut positions,
         );
@@ -396,7 +398,7 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            pins_rollback_values(true),
+            &pins_rollback_values(true),
         )
         .expect("visibility permit after teardown settled the barrier");
     assert!(matches!(
@@ -409,8 +411,8 @@ fn an_exit_during_an_active_reset_barrier_still_lands_the_deferred_toggle() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert!(!restarted_input.toolbar_top_pinned());

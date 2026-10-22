@@ -1,10 +1,13 @@
 //! Owned capacity-one task used by frozen and zoom portal fallbacks.
 
 use std::future::Future;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
+
+use tokio::runtime::Handle;
+use tokio::task::{JoinHandle, JoinSet};
 
 use super::RuntimeWakeHandle;
 
@@ -60,7 +63,7 @@ impl<T: Send + 'static> PortalOperation<T> {
 
 pub(super) struct PortalTask<T> {
     receiver: Receiver<PortalMessage<T>>,
-    worker: Option<tokio::task::JoinHandle<()>>,
+    worker: Option<JoinHandle<()>>,
     expected_cancel: Arc<AtomicBool>,
     started_at: Instant,
 }
@@ -70,7 +73,7 @@ where
     T: Send + 'static,
 {
     pub(super) fn spawn(
-        runtime: &tokio::runtime::Handle,
+        runtime: &Handle,
         runtime_wake: RuntimeWakeHandle,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Self {
@@ -78,17 +81,17 @@ where
     }
 
     fn spawn_at(
-        runtime: &tokio::runtime::Handle,
+        runtime: &Handle,
         runtime_wake: RuntimeWakeHandle,
         started_at: Instant,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Self {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         let expected_cancel = Arc::new(AtomicBool::new(false));
         let task_cancel = Arc::clone(&expected_cancel);
         let worker = runtime.spawn(async move {
             let guard = PortalTaskExitGuard::new(sender, runtime_wake, task_cancel);
-            let mut tasks = tokio::task::JoinSet::new();
+            let mut tasks = JoinSet::new();
             tasks.spawn(future);
             let message = match tasks.join_next().await {
                 Some(Ok(value)) => PortalMessage::Ready(value),
@@ -107,7 +110,7 @@ where
 
     #[cfg(test)]
     pub(super) fn spawn_at_for_test(
-        runtime: &tokio::runtime::Handle,
+        runtime: &Handle,
         runtime_wake: RuntimeWakeHandle,
         started_at: Instant,
         future: impl Future<Output = T> + Send + 'static,
@@ -117,7 +120,7 @@ where
 
     #[cfg(test)]
     pub(super) fn disconnected_for_test(started_at: Instant) -> Self {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let (sender, receiver) = mpsc::sync_channel(1);
         drop(sender);
         Self {
             receiver,
@@ -213,7 +216,10 @@ impl<T> Drop for PortalTaskExitGuard<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::future;
     use std::os::fd::AsRawFd;
+
+    use tokio::task;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
@@ -230,22 +236,18 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn publishes_before_waking() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut task =
-            PortalTask::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                17
-            });
+        let wake = RuntimeWakeSource::try_new().unwrap();
+        let mut task = PortalTask::spawn(&Handle::current(), wake.handle(), async { 17 });
         wait_for_wake(&wake);
         assert!(matches!(task.poll(), PortalPoll::Ready(17)));
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn panic_is_an_explicit_failure_before_wake() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let mut task =
-            PortalTask::<u64>::spawn(&tokio::runtime::Handle::current(), wake.handle(), async {
-                panic!("expected portal panic")
-            });
+        let wake = RuntimeWakeSource::try_new().unwrap();
+        let mut task = PortalTask::<u64>::spawn(&Handle::current(), wake.handle(), async {
+            panic!("expected portal panic")
+        });
         wait_for_wake(&wake);
         assert!(matches!(
             task.poll(),
@@ -255,35 +257,32 @@ mod tests {
 
     #[tokio::test]
     async fn expected_cancel_aborts_without_waking_failure() {
-        let wake = RuntimeWakeSource::new().unwrap();
-        let task = PortalTask::spawn(
-            &tokio::runtime::Handle::current(),
-            wake.handle(),
-            async move {
-                std::future::pending::<()>().await;
-                1
-            },
-        );
+        let wake = RuntimeWakeSource::try_new().unwrap();
+        let task = PortalTask::spawn(&Handle::current(), wake.handle(), async move {
+            future::pending::<()>().await;
+            1
+        });
         drop(task);
-        tokio::task::yield_now().await;
+        task::yield_now().await;
         let mut pollfd = libc::pollfd {
             fd: wake.poll_fd().as_raw_fd(),
             events: libc::POLLIN,
             revents: 0,
         };
         // SAFETY: the descriptor and pollfd are valid for this non-blocking poll.
-        assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 0) }, 0);
+        let ready = unsafe { libc::poll(&mut pollfd, 1, 0) };
+        assert_eq!(ready, 0);
     }
 
     #[tokio::test]
     async fn deadline_uses_injected_start_instant() {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let start = Instant::now();
         let task = PortalTask::spawn_at(
-            &tokio::runtime::Handle::current(),
+            &Handle::current(),
             wake.handle(),
             start,
-            std::future::pending::<()>(),
+            future::pending::<()>(),
         );
         assert_eq!(task.timeout(start), PORTAL_CAPTURE_TIMEOUT);
         assert!(task.timed_out(start + PORTAL_CAPTURE_TIMEOUT));

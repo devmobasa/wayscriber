@@ -1,4 +1,5 @@
 use crate::domain::Action;
+use crate::input::state::{InputTextResources, ZoomAnchor};
 
 use super::super::{InputState, interaction};
 
@@ -9,7 +10,7 @@ impl InputState {
     /// gesture preflights live at that shared boundary rather than here.
     pub(crate) fn handle_action_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         action: Action,
     ) {
         self.note_session_interaction_activity();
@@ -22,9 +23,9 @@ impl InputState {
     /// `anchor` instead of on the control under the pointer.
     pub(crate) fn handle_action_anchored(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         action: Action,
-        anchor: crate::input::state::ZoomAnchor,
+        anchor: ZoomAnchor,
     ) {
         let previous = self.zoom_action_anchor.replace(anchor);
         self.handle_action_with_resources(resources, action);

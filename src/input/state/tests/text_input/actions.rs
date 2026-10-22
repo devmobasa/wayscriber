@@ -1,9 +1,12 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::super::*;
 
 #[test]
 fn test_redo_restores_shape_after_undo() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -43,8 +46,8 @@ fn test_redo_restores_shape_after_undo() {
 
 #[test]
 fn capture_action_sets_pending_and_clears_modifiers() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -74,8 +77,8 @@ fn capture_action_sets_pending_and_clears_modifiers() {
 
 #[test]
 fn region_capture_action_preserves_live_shift_until_the_picker_arms() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -99,8 +102,8 @@ fn region_capture_action_preserves_live_shift_until_the_picker_arms() {
 
 #[test]
 fn canvas_export_action_sets_pending_backend_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -120,8 +123,8 @@ fn canvas_export_action_sets_pending_backend_action() {
 
 #[test]
 fn board_pdf_export_action_sets_pending_backend_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -141,8 +144,8 @@ fn board_pdf_export_action_sets_pending_backend_action() {
 
 #[test]
 fn all_boards_pdf_export_action_sets_pending_backend_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,

@@ -1,16 +1,27 @@
-use super::*;
+use super::super::compression::compress_bytes;
+use super::super::types::{
+    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
+};
+use super::model::{
+    HistoryFallbackStrategy, SaveLimitExceeded, SavePayloadTooLarge, SaveSnapshotOutcome,
+    SnapshotPayloadEstimate,
+};
+use crate::session::options::{CompressionMode, SessionOptions};
 use crate::session::snapshot::generation::{MAX_GENERATION, payload_prefix_generation};
+use anyhow::{Context, Result};
+use log::{debug, info, warn};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy)]
-pub(super) struct PayloadStamp<'a> {
-    pub(super) last_modified: &'a str,
+pub(super) struct PayloadStamp<'modified> {
+    pub(super) last_modified: &'modified str,
     pub(super) generation: Option<u64>,
 }
 
-impl<'a> PayloadStamp<'a> {
+impl<'modified> PayloadStamp<'modified> {
     /// The widest stamp a save can write, for estimates made before a
     /// generation is allocated.
-    pub(super) fn widest(last_modified: &'a str) -> Self {
+    pub(super) fn widest(last_modified: &'modified str) -> Self {
         Self {
             last_modified,
             generation: Some(MAX_GENERATION),

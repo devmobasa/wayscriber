@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use wayscriber::config::{ConfigDocument, Shortcut, ToolbarItemId, ToolbarItemOrderGroup};
+use wayscriber::domain::BoardGridKind;
 
 use crate::models::{
     ArrowStyleOption, BoardBackgroundOption, BoardItemTextField, BoardItemToggleField, ColorMode,
@@ -150,7 +151,7 @@ pub enum Message {
     BoardsCollapseToggled(usize),
     BoardsDefaultChanged(String),
     BoardsItemTextChanged(usize, BoardItemTextField, String),
-    BoardsGridKindChanged(usize, wayscriber::domain::BoardGridKind),
+    BoardsGridKindChanged(usize, BoardGridKind),
     BoardsBackgroundKindChanged(usize, BoardBackgroundOption),
     BoardsBackgroundColorChanged(usize, usize, String),
     BoardsDefaultPenEnabledChanged(usize, bool),

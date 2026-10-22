@@ -1,3 +1,8 @@
+use crate::draw::{PageDeleteOutcome, TextMeasurer};
+use crate::input::state::InputTextResources;
+use crate::input::{ZoomAction, ZoomAnchor};
+use crate::ui_text::UiTextEngine;
+
 use super::super::base::{InputState, PasteAnchor};
 use super::types::{ContextMenuState, MenuCommand};
 use crate::domain::Action;
@@ -23,12 +28,12 @@ impl InputState {
     /// Zoom from the menu centres where the menu was opened. A canvas menu
     /// opened from the keyboard sits in a corner, so that one centres the
     /// screen instead.
-    fn context_menu_zoom_anchor(&self) -> crate::input::ZoomAnchor {
+    fn context_menu_zoom_anchor(&self) -> ZoomAnchor {
         match self.context_menu.state {
             ContextMenuState::Open { anchor, .. } if !self.context_menu.anchored_in_corner => {
-                crate::input::ZoomAnchor::At(anchor.0, anchor.1)
+                ZoomAnchor::At(anchor.0, anchor.1)
             }
-            _ => crate::input::ZoomAnchor::ScreenCenter,
+            _ => ZoomAnchor::ScreenCenter,
         }
     }
 
@@ -62,7 +67,7 @@ impl InputState {
         true
     }
 
-    fn select_hovered_context_menu_shape_with(&mut self, measurer: &crate::draw::TextMeasurer) {
+    fn select_hovered_context_menu_shape_with(&mut self, measurer: &TextMeasurer) {
         if let Some(hovered_shape) = self.hovered_context_menu_shape() {
             self.set_selection_with(measurer, vec![hovered_shape]);
             self.close_context_menu();
@@ -74,18 +79,14 @@ impl InputState {
     /// Closes the menu, then runs `action`. Closing first keeps the menu from
     /// painting over what the action shows, and keeps Exit from spending
     /// itself on cancelling the menu.
-    fn close_menu_and_run(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-        action: Action,
-    ) {
+    fn close_menu_and_run(&mut self, resources: InputTextResources<'_>, action: Action) {
         self.close_context_menu();
         self.handle_action_with_resources(resources, action);
     }
 
     pub fn execute_menu_command(&mut self, command: MenuCommand) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.execute_menu_command_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -97,7 +98,7 @@ impl InputState {
 
     pub(crate) fn execute_menu_command_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         command: MenuCommand,
     ) {
         match command {
@@ -177,22 +178,22 @@ impl InputState {
             }
             MenuCommand::ZoomIn => {
                 let anchor = self.context_menu_zoom_anchor();
-                self.request_zoom_action_at(crate::input::ZoomAction::In, anchor);
+                self.request_zoom_action_at(ZoomAction::In, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ZoomOut => {
                 let anchor = self.context_menu_zoom_anchor();
-                self.request_zoom_action_at(crate::input::ZoomAction::Out, anchor);
+                self.request_zoom_action_at(ZoomAction::Out, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ResetZoom => {
                 let anchor = self.context_menu_zoom_anchor();
-                self.request_zoom_action_at(crate::input::ZoomAction::Reset, anchor);
+                self.request_zoom_action_at(ZoomAction::Reset, anchor);
                 self.close_context_menu();
             }
             MenuCommand::ToggleZoomLock => {
                 let anchor = self.context_menu_zoom_anchor();
-                self.request_zoom_action_at(crate::input::ZoomAction::ToggleLock, anchor);
+                self.request_zoom_action_at(ZoomAction::ToggleLock, anchor);
                 self.close_context_menu();
             }
             MenuCommand::Undo => self.close_menu_and_run(resources, Action::Undo),
@@ -227,7 +228,7 @@ impl InputState {
             MenuCommand::PageDelete => {
                 if matches!(
                     self.page_delete_with_measurer(resources.measurer),
-                    crate::draw::PageDeleteOutcome::Cleared
+                    PageDeleteOutcome::Cleared
                 ) {
                     self.push_toast(
                         ToastPriority::Info,
@@ -267,8 +268,7 @@ impl InputState {
                         target.board_index,
                         target.page_index,
                     );
-                    if !matches!(outcome, crate::draw::PageDeleteOutcome::Pending) && affects_panel
-                    {
+                    if !matches!(outcome, PageDeleteOutcome::Pending) && affects_panel {
                         self.board_picker_reconcile_page_nav_after_page_change();
                     }
                 }

@@ -16,6 +16,7 @@
 use relm4::{adw, gtk};
 
 use adw::prelude::*;
+use gtk::gdk::RGBA;
 use gtk::glib::SignalHandlerId;
 
 use crate::messages::Message;
@@ -30,7 +31,7 @@ pub(crate) type ResolvedColor = Option<(f64, f64, f64, f64)>;
 
 /// Formats a dialog selection the way the hex handler expects: `#rrggbb`,
 /// with an alpha byte only when the color is actually translucent.
-pub(crate) fn dialog_hex(rgba: &gtk::gdk::RGBA) -> String {
+pub(crate) fn dialog_hex(rgba: &RGBA) -> String {
     let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
     let (r, g, b, a) = (
         channel(rgba.red()),
@@ -47,7 +48,7 @@ pub(crate) fn dialog_hex(rgba: &gtk::gdk::RGBA) -> String {
 
 /// Formats a selection for a four-component field, retaining `FF` so choosing
 /// fully opaque replaces any translucent alpha already in the draft.
-fn dialog_hex_with_alpha(rgba: &gtk::gdk::RGBA) -> String {
+fn dialog_hex_with_alpha(rgba: &RGBA) -> String {
     let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
     let (r, g, b, a) = (
         channel(rgba.red()),
@@ -86,7 +87,7 @@ pub(crate) fn mark_hex_error(widget: &impl IsA<gtk::Widget>, text: &str) {
 pub(crate) fn set_swatch_blocked(
     button: &gtk::ColorDialogButton,
     handler: &SignalHandlerId,
-    rgba: &gtk::gdk::RGBA,
+    rgba: &RGBA,
 ) {
     if dialog_hex(&button.rgba()) == dialog_hex(rgba) {
         return;
@@ -140,7 +141,7 @@ pub(crate) fn color_row(
         set_text_blocked(&row, &row_handler, &text);
         mark_hex_error(&row, &text);
         if let Some((r, g, b, a)) = resolved(app) {
-            let rgba = gtk::gdk::RGBA::new(r as f32, g as f32, b as f32, a as f32);
+            let rgba = RGBA::new(r as f32, g as f32, b as f32, a as f32);
             set_swatch_blocked(&dialog_button, &button_handler, &rgba);
         }
     });
@@ -153,7 +154,7 @@ mod tests {
 
     #[test]
     fn alpha_dialog_hex_keeps_an_explicit_opaque_byte() {
-        let rgba = gtk::gdk::RGBA::new(18.0 / 255.0, 52.0 / 255.0, 86.0 / 255.0, 1.0);
+        let rgba = RGBA::new(18.0 / 255.0, 52.0 / 255.0, 86.0 / 255.0, 1.0);
 
         assert_eq!(dialog_hex_with_alpha(&rgba), "#123456FF");
         assert_eq!(dialog_hex(&rgba), "#123456");

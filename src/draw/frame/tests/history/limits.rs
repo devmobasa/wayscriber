@@ -1,5 +1,6 @@
+use crate::draw::Shape;
+use crate::draw::color::BLACK;
 use crate::draw::frame::{DrawnShape, Frame, UndoAction};
-use crate::draw::{Shape, color::BLACK};
 
 #[test]
 fn undo_stack_respects_limit() {
@@ -128,7 +129,8 @@ fn limited_clone_matches_clamp_and_preserves_live_history() {
 #[test]
 #[ignore = "release measurement: cargo test --release limited_history_copy_cost -- --ignored --nocapture"]
 fn limited_history_copy_cost() {
-    use std::{hint::black_box, time::Instant};
+    use std::hint::black_box;
+    use std::time::Instant;
     let mut frame = Frame::new();
     let shape = Shape::Freehand {
         points: (0..4096)

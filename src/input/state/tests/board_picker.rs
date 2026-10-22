@@ -1,3 +1,8 @@
+use crate::config::BoardsConfig;
+use crate::draw::TextMeasurer;
+use crate::input::boards::BoardManager;
+use crate::input::state::{BoardPickerLayout, InputState};
+
 use super::create_test_input_state;
 use crate::draw::{Frame, PageDeleteOutcome};
 use crate::input::BoardBackground;
@@ -11,7 +16,7 @@ use crate::input::state::{
     PAGE_DELETE_ICON_MARGIN, PAGE_DELETE_ICON_SIZE, PAGE_NAME_HEIGHT, PAGE_NAME_PADDING,
 };
 
-fn apply_pending_board_pin(input: &mut crate::input::state::InputState) {
+fn apply_pending_board_pin(input: &mut InputState) {
     let actions = input.take_pending_board_runtime_ui_actions();
     assert_eq!(actions.len(), 1);
     let PendingBoardRuntimeUiAction::TogglePin {
@@ -40,7 +45,7 @@ fn apply_pending_board_pin(input: &mut crate::input::state::InputState) {
 #[test]
 fn board_picker_search_selects_transposed_match() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     for ch in "balckboard".chars() {
         input.board_picker_append_search(ch);
     }
@@ -52,7 +57,7 @@ fn board_picker_search_selects_transposed_match() {
 #[test]
 fn board_picker_search_selects_prefix_match() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     for ch in "blue".chars() {
         input.board_picker_append_search(ch);
     }
@@ -66,7 +71,7 @@ fn board_picker_selects_recent_board() {
     let mut input = create_test_input_state();
     input.switch_board("blackboard");
     input.switch_board("whiteboard");
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
     let selected = input.board_picker_selected_index().expect("selection");
     let name = &input.boards.board_states()[selected].spec.name;
     assert_eq!(name, "Blackboard");
@@ -76,7 +81,7 @@ fn board_picker_selects_recent_board() {
 fn board_picker_quick_mode_hides_new_row() {
     let mut input = create_test_input_state();
     let board_count = input.boards.board_count();
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
     assert_eq!(input.board_picker_row_count(), board_count);
     if board_count > 0 {
         assert!(!input.board_picker_is_new_row(board_count - 1));
@@ -93,12 +98,12 @@ fn board_picker_quick_mode_pins_board_to_top() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
     input.switch_board("whiteboard");
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(blackboard_index);
     input.board_picker_toggle_pin_selected();
     apply_pending_board_pin(&mut input);
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
-    input.board_picker_activate_row_with_measurer(&crate::draw::TextMeasurer::default(), 0);
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
+    input.board_picker_activate_row_with_measurer(&TextMeasurer::default(), 0);
     assert_eq!(input.board_id(), "blackboard");
 }
 
@@ -112,19 +117,19 @@ fn board_picker_full_mode_pins_board_to_top() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
     input.switch_board("whiteboard");
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(blackboard_index);
     input.board_picker_toggle_pin_selected();
     apply_pending_board_pin(&mut input);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
-    input.board_picker_activate_row_with_measurer(&crate::draw::TextMeasurer::default(), 0);
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
+    input.board_picker_activate_row_with_measurer(&TextMeasurer::default(), 0);
     assert_eq!(input.board_id(), "blackboard");
 }
 
 #[test]
 fn board_picker_drag_pinned_clamped_to_pinned_section() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let blackboard_index = input
         .boards
         .board_states()
@@ -156,7 +161,7 @@ fn board_picker_drag_pinned_clamped_to_pinned_section() {
 #[test]
 fn board_picker_drag_unpinned_clamped_after_pinned() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let blackboard_index = input
         .boards
         .board_states()
@@ -190,18 +195,14 @@ fn board_picker_drag_unpinned_clamped_after_pinned() {
     assert!(row_after >= 1);
 }
 
-fn update_picker_layout(state: &mut crate::input::state::InputState, width: i32, height: i32) {
+fn update_picker_layout(state: &mut InputState, width: i32, height: i32) {
     let surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).expect("image surface");
     let ctx = cairo::Context::new(&surface).expect("cairo context");
     state.update_board_picker_layout(&ctx, width as u32, height as u32);
 }
 
-fn set_board_page_count(
-    state: &mut crate::input::state::InputState,
-    board_index: usize,
-    page_count: usize,
-) {
+fn set_board_page_count(state: &mut InputState, board_index: usize, page_count: usize) {
     let pages = state.boards.board_states_mut()[board_index]
         .pages
         .pages_mut();
@@ -209,11 +210,7 @@ fn set_board_page_count(
     pages.extend((0..page_count.max(1)).map(|_| Frame::new()));
 }
 
-fn set_board_page_names(
-    state: &mut crate::input::state::InputState,
-    board_index: usize,
-    names: &[&str],
-) {
+fn set_board_page_names(state: &mut InputState, board_index: usize, names: &[&str]) {
     set_board_page_count(state, board_index, names.len());
     for (index, name) in names.iter().enumerate() {
         assert!(
@@ -224,10 +221,7 @@ fn set_board_page_names(
     }
 }
 
-fn page_thumb_origin(
-    layout: crate::input::state::BoardPickerLayout,
-    page_index: usize,
-) -> Option<(f64, f64)> {
+fn page_thumb_origin(layout: BoardPickerLayout, page_index: usize) -> Option<(f64, f64)> {
     if page_index < layout.page_first_visible_index {
         return None;
     }
@@ -251,7 +245,7 @@ fn page_thumb_origin(
     ))
 }
 
-fn assert_page_visible(layout: crate::input::state::BoardPickerLayout, page_index: usize) {
+fn assert_page_visible(layout: BoardPickerLayout, page_index: usize) {
     assert!(
         page_thumb_origin(layout, page_index).is_some(),
         "page {} should be visible in {:?}",
@@ -263,7 +257,7 @@ fn assert_page_visible(layout: crate::input::state::BoardPickerLayout, page_inde
 #[test]
 fn board_picker_page_hit_testing_uses_rendered_thumbnail_positions() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let layout = *input.board_picker_layout().expect("layout");
@@ -300,7 +294,7 @@ fn board_picker_page_hit_testing_uses_rendered_thumbnail_positions() {
 #[test]
 fn board_picker_empty_page_list_has_no_page_hit() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -322,7 +316,7 @@ fn board_picker_empty_page_list_has_no_page_hit() {
 #[test]
 fn board_picker_add_card_clickable_when_pages_exactly_fill_rows() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let board_index = input
@@ -364,7 +358,7 @@ fn board_picker_add_card_clickable_when_pages_exactly_fill_rows() {
 #[test]
 fn board_picker_overflow_hitbox_matches_rendered_hint_position() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let board_index = input
@@ -394,7 +388,7 @@ fn board_picker_overflow_hitbox_matches_rendered_hint_position() {
 #[test]
 fn board_picker_page_ten_hit_testing_returns_absolute_index() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -438,7 +432,7 @@ fn board_picker_page_ten_hit_testing_returns_absolute_index() {
 #[test]
 fn board_picker_page_ten_operations_use_absolute_index() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -452,20 +446,20 @@ fn board_picker_page_ten_operations_use_absolute_index() {
     }
     update_picker_layout(&mut input, 1280, 720);
 
-    input.board_picker_duplicate_page_with_measurer(&crate::draw::TextMeasurer::default(), 9);
+    input.board_picker_duplicate_page_with_measurer(&TextMeasurer::default(), 9);
 
     let pages = &input.boards.board_states()[board_index].pages;
     assert_eq!(pages.active_index(), 10);
     assert_eq!(pages.page_name(10), Some("Page 10"));
     assert_eq!(pages.page_name(9), Some("Page 10"));
 
-    input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 9);
+    input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 9);
     assert_eq!(
         input.boards.board_states()[board_index].pages.page_count(),
         13,
         "first delete should only request confirmation"
     );
-    input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 9);
+    input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 9);
 
     let pages = &input.boards.board_states()[board_index].pages;
     assert_eq!(pages.page_count(), 12);
@@ -481,7 +475,7 @@ fn board_picker_active_page_ten_visible_on_open_and_focus() {
         .pages
         .switch_to_page(9);
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
     let layout = *input.board_picker_layout().expect("layout");
     assert_page_visible(layout, 9);
@@ -496,7 +490,7 @@ fn board_picker_active_page_ten_visible_on_open_and_focus() {
 #[test]
 fn board_picker_keyboard_focus_scrolls_absolute_page_into_view() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -515,7 +509,7 @@ fn board_picker_keyboard_focus_scrolls_absolute_page_into_view() {
 #[test]
 fn board_picker_sticky_add_works_when_visible_grid_is_full() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -529,7 +523,7 @@ fn board_picker_sticky_add_works_when_visible_grid_is_full() {
 
     assert!(input.board_picker_page_add_card_at(add_x, add_y));
 
-    input.board_picker_add_page_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_add_page_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let pages = &input.boards.board_states()[board_index].pages;
@@ -540,9 +534,9 @@ fn board_picker_sticky_add_works_when_visible_grid_is_full() {
 
 #[test]
 fn board_picker_ctrl_n_adds_page_while_page_panel_focused() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -568,18 +562,18 @@ fn board_picker_ctrl_n_adds_page_while_page_panel_focused() {
 #[test]
 fn board_picker_add_and_duplicate_scroll_to_newly_active_page() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
     set_board_page_count(&mut input, board_index, 15);
     update_picker_layout(&mut input, 1280, 720);
 
-    input.board_picker_add_page_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_add_page_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
     assert_page_visible(*input.board_picker_layout().expect("layout"), 15);
 
-    input.board_picker_duplicate_page_with_measurer(&crate::draw::TextMeasurer::default(), 15);
+    input.board_picker_duplicate_page_with_measurer(&TextMeasurer::default(), 15);
     update_picker_layout(&mut input, 1280, 720);
     assert_page_visible(*input.board_picker_layout().expect("layout"), 16);
 }
@@ -587,7 +581,7 @@ fn board_picker_add_and_duplicate_scroll_to_newly_active_page() {
 #[test]
 fn board_picker_wheel_scroll_changes_visible_page_window() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -619,7 +613,7 @@ fn board_picker_wheel_scroll_changes_visible_page_window() {
 #[test]
 fn board_picker_repeated_wheel_scroll_uses_state_between_layouts() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -641,7 +635,7 @@ fn board_picker_repeated_wheel_scroll_uses_state_between_layouts() {
 #[test]
 fn board_picker_wheel_scroll_up_clamps_focus_to_last_visible_page() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -679,9 +673,9 @@ fn board_picker_wheel_scroll_up_clamps_focus_to_last_visible_page() {
 
 #[test]
 fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -735,9 +729,9 @@ fn board_picker_page_search_wheel_scroll_syncs_cursor_with_visible_focus() {
 
 #[test]
 fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -775,7 +769,7 @@ fn board_picker_page_search_wheel_scroll_without_visible_match_clears_cursor() {
 #[test]
 fn board_picker_column_change_keeps_focused_absolute_page_visible() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -796,9 +790,9 @@ fn board_picker_column_change_keeps_focused_absolute_page_visible() {
 
 #[test]
 fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -826,9 +820,9 @@ fn board_picker_page_jump_focuses_absolute_page_and_scrolls_visible() {
 
 #[test]
 fn board_picker_page_jump_edges_keep_picker_open() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -872,9 +866,9 @@ fn board_picker_page_jump_edges_keep_picker_open() {
 
 #[test]
 fn board_picker_page_search_slash_starts_without_inserting_slash() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
@@ -889,9 +883,9 @@ fn board_picker_page_search_slash_starts_without_inserting_slash() {
 
 #[test]
 fn board_picker_selecting_current_board_row_clears_page_nav_mode() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
     input.board_picker_set_focus(BoardPickerFocus::PagePanel);
 
@@ -917,9 +911,9 @@ fn board_picker_selecting_current_board_row_clears_page_nav_mode() {
 
 #[test]
 fn board_picker_page_search_finds_named_page_beyond_visible_window() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -942,9 +936,9 @@ fn board_picker_page_search_finds_named_page_beyond_visible_window() {
 
 #[test]
 fn board_picker_page_search_numeric_is_exact_page_number() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -966,9 +960,9 @@ fn board_picker_page_search_numeric_is_exact_page_number() {
 
 #[test]
 fn board_picker_page_search_no_match_enter_is_noop() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -1000,9 +994,9 @@ fn board_picker_page_search_no_match_enter_is_noop() {
 
 #[test]
 fn board_picker_page_search_f3_cycles_matches() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -1030,9 +1024,9 @@ fn board_picker_page_search_f3_cycles_matches() {
 
 #[test]
 fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -1060,9 +1054,9 @@ fn board_picker_page_search_enter_opens_absolute_page_beyond_nine() {
 
 #[test]
 fn board_picker_page_search_rename_updates_derived_match() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -1081,9 +1075,7 @@ fn board_picker_page_search_rename_updates_derived_match() {
         page_index: 9,
         buffer: "Target".to_string(),
     });
-    assert!(
-        input.board_picker_commit_page_edit_with_measurer(&crate::draw::TextMeasurer::default())
-    );
+    assert!(input.board_picker_commit_page_edit_with_measurer(&TextMeasurer::default()));
 
     assert_eq!(input.board_picker_page_search_active_match(), Some(9));
     assert_eq!(input.board_picker_page_focus_page_index(), Some(9));
@@ -1091,9 +1083,9 @@ fn board_picker_page_search_rename_updates_derived_match() {
 
 #[test]
 fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let board_index = input
         .board_picker_page_panel_board_index()
         .expect("page panel board index");
@@ -1114,14 +1106,14 @@ fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
     assert_eq!(input.board_picker_page_search_active_match(), Some(1));
 
     assert_eq!(
-        input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 1),
+        input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 1),
         PageDeleteOutcome::Pending
     );
     assert_eq!(input.board_picker_page_search_cursor(), Some(1));
     assert_eq!(input.board_picker_page_search_active_match(), Some(1));
 
     assert_eq!(
-        input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 1),
+        input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 1),
         PageDeleteOutcome::Removed
     );
     assert_eq!(input.board_picker_page_search_cursor(), Some(0));
@@ -1132,7 +1124,7 @@ fn board_picker_page_search_pending_delete_preserves_confirmed_delete_clamps() {
 #[test]
 fn board_picker_row_action_hitboxes_match_rendered_positions() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let layout = *input.board_picker_layout().expect("layout");
@@ -1164,7 +1156,7 @@ fn board_picker_row_action_hitboxes_match_rendered_positions() {
 #[test]
 fn board_picker_palette_hit_testing_uses_rendered_coordinates() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
 
     let solid_board_index = input
         .boards
@@ -1176,7 +1168,7 @@ fn board_picker_palette_hit_testing_uses_rendered_coordinates() {
         .board_picker_row_for_board(solid_board_index)
         .expect("solid row");
     input.board_picker_set_selected(solid_row);
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
 
     update_picker_layout(&mut input, 1280, 720);
     let layout = *input.board_picker_layout().expect("layout");
@@ -1195,7 +1187,7 @@ fn board_picker_palette_hit_testing_uses_rendered_coordinates() {
 #[test]
 fn board_picker_page_focus_clamps_to_existing_pages() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     update_picker_layout(&mut input, 1280, 720);
 
     let board_index = input
@@ -1216,7 +1208,7 @@ fn board_picker_page_focus_clamps_to_existing_pages() {
 #[test]
 fn board_picker_footer_text_prefers_active_search_query() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker.search = "blue".to_string();
 
     assert_eq!(
@@ -1227,15 +1219,15 @@ fn board_picker_footer_text_prefers_active_search_query() {
 
 #[test]
 fn board_picker_footer_text_changes_for_quick_and_page_panel_modes() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
     assert_eq!(
         input.board_picker_footer_text(),
         "Enter: switch  Type: jump  Esc: close"
     );
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert_eq!(
         input.board_picker_footer_text(),
         "Enter: open  F2: rename  Ctrl+C: color  Ctrl+N: new  Del: delete"
@@ -1280,14 +1272,14 @@ fn board_picker_title_and_recent_label_reflect_mode_and_recent_boards() {
         "transparent".to_string(),
     ]);
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert_eq!(input.board_picker_title(3, 8), "Boards (3 of 8 max)");
     assert_eq!(
         input.board_picker_recent_label(),
         Some("Recent: Blackboard, Overlay".to_string())
     );
 
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
     assert_eq!(input.board_picker_title(3, 8), "Switch board");
 }
 
@@ -1301,12 +1293,12 @@ fn board_picker_rename_selected_promotes_quick_mode_to_full_editing() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
     input.board_picker_set_selected(selected_row);
-    input.board_picker_rename_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_rename_selected_with_measurer(&TextMeasurer::default());
 
     assert_eq!(input.board_picker_mode(), BoardPickerMode::Full);
     assert_eq!(
@@ -1317,7 +1309,7 @@ fn board_picker_rename_selected_promotes_quick_mode_to_full_editing() {
 
 #[test]
 fn board_picker_f2_starts_board_name_edit_not_color_edit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1326,7 +1318,7 @@ fn board_picker_f2_starts_board_name_edit_not_color_edit() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
@@ -1349,7 +1341,7 @@ fn board_picker_f2_key_route_starts_board_name_edit_not_color_edit() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
@@ -1364,7 +1356,7 @@ fn board_picker_f2_key_route_starts_board_name_edit_not_color_edit() {
 
 #[test]
 fn board_picker_f2_switches_color_edit_back_to_name_edit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1373,12 +1365,12 @@ fn board_picker_f2_switches_color_edit_back_to_name_edit() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
     input.board_picker_set_selected(selected_row);
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
     assert_eq!(
         input.board_picker_edit_state(),
         Some((BoardPickerEditMode::Color, selected_row, "#111111"))
@@ -1394,7 +1386,7 @@ fn board_picker_f2_switches_color_edit_back_to_name_edit() {
 
 #[test]
 fn board_picker_ctrl_c_starts_board_color_edit() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut input = create_test_input_state();
     let blackboard_index = input
         .boards
@@ -1403,7 +1395,7 @@ fn board_picker_ctrl_c_starts_board_color_edit() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
@@ -1427,13 +1419,13 @@ fn board_picker_edit_color_selected_shows_info_toast_for_transparent_board() {
         .position(|board| board.spec.background.is_transparent())
         .expect("transparent board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(transparent_index)
             .expect("transparent row"),
     );
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
 
     assert!(input.board_picker_edit_state().is_none());
     assert_eq!(
@@ -1452,7 +1444,7 @@ fn board_picker_commit_edit_rejects_invalid_colors_and_keeps_edit_open() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let selected_row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
@@ -1494,7 +1486,7 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
         buffer: "Draft".to_string(),
     });
 
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(input.pending_onboarding_usage.used_board_picker);
 
     assert!(input.is_board_picker_open());
@@ -1514,7 +1506,7 @@ fn open_board_picker_closes_help_and_clears_transient_picker_state() {
 #[test]
 fn close_board_picker_clears_transient_picker_state() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker.search = "blue".to_string();
     input.board_picker.drag = Some(BoardPickerDrag {
         source_row: 0,
@@ -1547,7 +1539,7 @@ fn close_board_picker_clears_transient_picker_state() {
 #[test]
 fn board_picker_active_index_prefers_hover_over_selected_row() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(0);
 
     if let BoardPickerState::Open { hover_index, .. } = &mut input.board_picker.state {
@@ -1560,7 +1552,7 @@ fn board_picker_active_index_prefers_hover_over_selected_row() {
 #[test]
 fn board_picker_page_panel_board_index_falls_back_to_active_board_for_new_row() {
     let mut input = create_test_input_state();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(input.boards.board_count());
 
     assert_eq!(
@@ -1573,11 +1565,11 @@ fn board_picker_page_panel_board_index_falls_back_to_active_board_for_new_row() 
 fn toggle_board_picker_quick_opens_quick_mode_and_closes_on_second_toggle() {
     let mut input = create_test_input_state();
 
-    input.toggle_board_picker_quick_with(&crate::draw::TextMeasurer::default());
+    input.toggle_board_picker_quick_with(&TextMeasurer::default());
     assert!(input.is_board_picker_open());
     assert_eq!(input.board_picker_mode(), BoardPickerMode::Quick);
 
-    input.toggle_board_picker_quick_with(&crate::draw::TextMeasurer::default());
+    input.toggle_board_picker_quick_with(&TextMeasurer::default());
     assert!(!input.is_board_picker_open());
 }
 
@@ -1585,12 +1577,9 @@ fn toggle_board_picker_quick_opens_quick_mode_and_closes_on_second_toggle() {
 fn board_picker_activate_row_on_new_row_creates_board_and_starts_editing() {
     let mut input = create_test_input_state();
     let initial_count = input.boards.board_count();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
 
-    input.board_picker_activate_row_with_measurer(
-        &crate::draw::TextMeasurer::default(),
-        initial_count,
-    );
+    input.board_picker_activate_row_with_measurer(&TextMeasurer::default(), initial_count);
 
     let active_row = input
         .board_picker_row_for_board(input.boards.active_index())
@@ -1616,14 +1605,14 @@ fn board_picker_activate_page_switches_board_page_and_closes_picker() {
         .position(|board| board.spec.id == "whiteboard")
         .expect("whiteboard board");
     set_board_page_count(&mut input, whiteboard_index, 2);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(whiteboard_index)
             .expect("whiteboard row"),
     );
 
-    input.board_picker_activate_page_with_measurer(&crate::draw::TextMeasurer::default(), 1);
+    input.board_picker_activate_page_with_measurer(&TextMeasurer::default(), 1);
 
     assert_eq!(input.board_id(), "whiteboard");
     assert_eq!(input.boards.active_board().pages.active_index(), 1);
@@ -1640,14 +1629,14 @@ fn board_picker_activate_page_ignores_out_of_range_indices() {
         .position(|board| board.spec.id == "whiteboard")
         .expect("whiteboard board");
     set_board_page_count(&mut input, whiteboard_index, 1);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(whiteboard_index)
             .expect("whiteboard row"),
     );
 
-    input.board_picker_activate_page_with_measurer(&crate::draw::TextMeasurer::default(), 5);
+    input.board_picker_activate_page_with_measurer(&TextMeasurer::default(), 5);
 
     assert_eq!(input.board_id(), "transparent");
     assert!(input.is_board_picker_open());
@@ -1657,9 +1646,9 @@ fn board_picker_activate_page_ignores_out_of_range_indices() {
 fn board_picker_create_new_from_quick_mode_promotes_to_full_and_starts_editing() {
     let mut input = create_test_input_state();
     let initial_count = input.boards.board_count();
-    input.open_board_picker_quick_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_quick_with_measurer(&TextMeasurer::default());
 
-    input.board_picker_create_new_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_create_new_with_measurer(&TextMeasurer::default());
 
     let active_row = input
         .board_picker_row_for_board(input.boards.active_index())
@@ -1686,14 +1675,14 @@ fn board_picker_duplicate_page_uses_selected_page_panel_board() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
     set_board_page_count(&mut input, blackboard_index, 1);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(blackboard_index)
             .expect("blackboard row"),
     );
 
-    input.board_picker_duplicate_page_with_measurer(&crate::draw::TextMeasurer::default(), 0);
+    input.board_picker_duplicate_page_with_measurer(&TextMeasurer::default(), 0);
 
     assert_eq!(
         input.boards.board_states()[blackboard_index]
@@ -1713,14 +1702,14 @@ fn board_picker_add_page_uses_selected_page_panel_board() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
     set_board_page_count(&mut input, blackboard_index, 1);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(blackboard_index)
             .expect("blackboard row"),
     );
 
-    input.board_picker_add_page_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_add_page_with_measurer(&TextMeasurer::default());
 
     assert_eq!(
         input.boards.board_states()[blackboard_index]
@@ -1740,14 +1729,14 @@ fn board_picker_delete_page_requires_confirmation_for_multi_page_boards() {
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
     set_board_page_count(&mut input, blackboard_index, 2);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(
         input
             .board_picker_row_for_board(blackboard_index)
             .expect("blackboard row"),
     );
 
-    input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 1);
+    input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 1);
     assert_eq!(
         input.boards.board_states()[blackboard_index]
             .pages
@@ -1760,7 +1749,7 @@ fn board_picker_delete_page_requires_confirmation_for_multi_page_boards() {
             .is_some_and(|toast| toast.message.contains("Click delete again to confirm."))
     );
 
-    input.board_picker_delete_page_with_measurer(&crate::draw::TextMeasurer::default(), 1);
+    input.board_picker_delete_page_with_measurer(&TextMeasurer::default(), 1);
     assert_eq!(
         input.boards.board_states()[blackboard_index]
             .pages
@@ -1773,10 +1762,10 @@ fn board_picker_delete_page_requires_confirmation_for_multi_page_boards() {
 fn board_picker_delete_selected_ignores_new_row() {
     let mut input = create_test_input_state();
     let initial_count = input.boards.board_count();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(initial_count);
 
-    input.board_picker_delete_selected_with_measurer(&crate::draw::TextMeasurer::default());
+    input.board_picker_delete_selected_with_measurer(&TextMeasurer::default());
 
     assert_eq!(input.boards.board_count(), initial_count);
     assert_eq!(input.board_picker_selected_index(), Some(initial_count));
@@ -1786,7 +1775,7 @@ fn board_picker_delete_selected_ignores_new_row() {
 fn board_picker_toggle_pin_selected_ignores_new_row() {
     let mut input = create_test_input_state();
     let board_count = input.boards.board_count();
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     input.board_picker_set_selected(board_count);
     let pinned_before = input.board_picker_pinned_count();
 
@@ -1799,11 +1788,11 @@ fn board_picker_toggle_pin_selected_ignores_new_row() {
 #[test]
 fn board_pin_runtime_request_is_not_gated_by_config_customization_persistence() {
     let mut input = create_test_input_state();
-    let boards = crate::config::BoardsConfig {
+    let boards = BoardsConfig {
         persist_customizations: false,
-        ..crate::config::BoardsConfig::default()
+        ..BoardsConfig::default()
     };
-    input.boards = crate::input::boards::BoardManager::from_config(boards);
+    input.boards = BoardManager::from_config(boards);
     let whiteboard = input
         .boards
         .board_states()
@@ -1828,12 +1817,12 @@ fn board_picker_activate_existing_row_switches_board_and_closes_picker() {
         .iter()
         .position(|board| board.spec.id == "blackboard")
         .expect("blackboard board");
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     let row = input
         .board_picker_row_for_board(blackboard_index)
         .expect("blackboard row");
 
-    input.board_picker_activate_row_with_measurer(&crate::draw::TextMeasurer::default(), row);
+    input.board_picker_activate_row_with_measurer(&TextMeasurer::default(), row);
 
     assert_eq!(input.board_id(), "blackboard");
     assert!(!input.is_board_picker_open());

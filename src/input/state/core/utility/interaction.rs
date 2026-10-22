@@ -1,6 +1,5 @@
 use super::super::base::{DrawingState, InputState, PasteAnchor};
-use crate::draw::DirtyRegionReport;
-use crate::draw::TextMeasurer;
+use crate::draw::{DirtyRegionReport, TextMeasurer};
 use crate::util::Rect;
 use std::time::Instant;
 
@@ -265,6 +264,8 @@ impl InputState {
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::DirtyFullReason;
+
     use super::*;
     use crate::input::events::MouseButton;
     use crate::input::state::test_support::make_test_input_state;
@@ -337,7 +338,7 @@ mod tests {
 
     #[test]
     fn cancel_text_input_clears_wrap_width_and_returns_to_idle() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.style.text_wrap_width = Some(240);
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
@@ -352,7 +353,7 @@ mod tests {
 
     #[test]
     fn cancel_text_input_releases_an_active_block_drag() {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         let mut state = make_test_input_state();
         state.state = DrawingState::text_input(10, 20, "hello".to_string());
         state.modifiers.alt = true;
@@ -368,7 +369,7 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_reports_false_when_idle() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_text_measurer = TextMeasurer::default();
 
         let mut state = make_test_input_state();
         state.needs_redraw = false;
@@ -381,7 +382,7 @@ mod tests {
 
     #[test]
     fn try_cancel_active_interaction_cancels_drawing_and_ends_drag() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
+        let test_text_measurer = TextMeasurer::default();
 
         let mut state = make_test_input_state();
         state.state = DrawingState::Drawing {
@@ -420,15 +421,12 @@ mod tests {
         state.update_screen_dimensions(100, 50);
         state
             .dirty_tracker
-            .mark_full_for(crate::draw::DirtyFullReason::CanvasClear);
+            .mark_full_for(DirtyFullReason::CanvasClear);
 
         let report = state.take_dirty_region_report();
 
         assert_eq!(report.regions, vec![Rect::new(0, 0, 100, 50).unwrap()]);
-        assert_eq!(
-            report.full_reason,
-            Some(crate::draw::DirtyFullReason::CanvasClear)
-        );
+        assert_eq!(report.full_reason, Some(DirtyFullReason::CanvasClear));
         assert!(state.take_dirty_region_report().regions.is_empty());
     }
 }

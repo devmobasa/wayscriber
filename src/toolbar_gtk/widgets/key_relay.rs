@@ -7,6 +7,8 @@
 //! presses to the backend, which routes them exactly like its own: Escape
 //! closes the open menu, and any other shortcut closes it and then runs.
 
+use gtk4::gdk::{Key, KeyEvent, ModifierType};
+use gtk4::glib::Propagation;
 use gtk4::glib::translate::IntoGlib;
 use gtk4::prelude::*;
 
@@ -36,7 +38,7 @@ pub(super) enum FocusedKeys {
 /// activatable control, so Ctrl+PgUp switches boards even while a slider has
 /// focus; the hex entry keeps its editing chords.
 pub(super) fn key_stays_local(
-    keyval: gtk4::gdk::Key,
+    keyval: Key,
     is_modifier: bool,
     chord: bool,
     focus: FocusedKeys,
@@ -64,7 +66,7 @@ pub(super) fn key_stays_local(
 }
 
 /// Whether Ctrl, Alt, or Super is held, which makes a press a shortcut.
-fn is_chord(state: gtk4::gdk::ModifierType) -> bool {
+fn is_chord(state: ModifierType) -> bool {
     let (ctrl, _shift, alt, logo) = gdk_pointer_modifiers(state);
 
     ctrl || alt || logo
@@ -73,14 +75,11 @@ fn is_chord(state: gtk4::gdk::ModifierType) -> bool {
 /// Whether this press is an Escape the focused widget spends on its own
 /// dismissal. The overlay still has to hear about it, so a second Escape
 /// right behind it does not exit.
-pub(super) fn escape_dismisses_locally(keyval: gtk4::gdk::Key, focus: FocusedKeys) -> bool {
-    focus == FocusedKeys::Slider && keyval == gtk4::gdk::Key::Escape
+pub(super) fn escape_dismisses_locally(keyval: Key, focus: FocusedKeys) -> bool {
+    focus == FocusedKeys::Slider && keyval == Key::Escape
 }
 
-pub(super) fn forwarded_key_feedback(
-    keyval: gtk4::gdk::Key,
-    state: gtk4::gdk::ModifierType,
-) -> GtkToolbarFeedback {
+pub(super) fn forwarded_key_feedback(keyval: Key, state: ModifierType) -> GtkToolbarFeedback {
     let (ctrl, shift, alt, logo) = gdk_pointer_modifiers(state);
     GtkToolbarFeedback::Key {
         keyval: keyval.into_glib(),
@@ -120,7 +119,7 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
     key.connect_key_pressed(move |controller, keyval, _, state| {
         let is_modifier = controller
             .current_event()
-            .and_then(|event| event.downcast::<gtk4::gdk::KeyEvent>().ok())
+            .and_then(|event| event.downcast::<KeyEvent>().ok())
             .is_some_and(|event| event.is_modifier());
         let focus = controller
             .widget()
@@ -132,11 +131,11 @@ pub(in crate::toolbar_gtk) fn install_key_relay(
             if escape_dismisses_locally(keyval, focus) {
                 let _ = feedback.send(GtkToolbarFeedback::EscapeDismissed);
             }
-            return gtk4::glib::Propagation::Proceed;
+            return Propagation::Proceed;
         }
 
         let _ = feedback.send(forwarded_key_feedback(keyval, state));
-        gtk4::glib::Propagation::Stop
+        Propagation::Stop
     });
     widget.as_ref().add_controller(key);
 }

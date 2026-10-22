@@ -1,5 +1,6 @@
 use crate::domain::BoardBackground;
 use crate::input::InputState;
+use crate::input::boards;
 use crate::input::boards::{BoardAppearance, BoardPenOrigin};
 
 impl InputState {
@@ -7,14 +8,14 @@ impl InputState {
     pub(in crate::input::state::core) fn apply_board_appearance_value(
         &mut self,
         index: usize,
-        appearance: BoardAppearance,
+        appearance: &BoardAppearance,
     ) -> bool {
         let active = index == self.boards.active_index();
         let Some(board) = self.boards.board_state_mut(index) else {
             return false;
         };
         let current = BoardAppearance::from_spec(&board.spec);
-        if current == appearance
+        if current == *appearance
             || current.background.is_transparent()
             || appearance.background.is_transparent()
         {
@@ -26,7 +27,7 @@ impl InputState {
             let BoardBackground::Solid(color) = board.spec.background else {
                 unreachable!()
             };
-            let pen = crate::input::runtime_contrast_pen_color(color);
+            let pen = boards::runtime_contrast_pen_color(color);
             board.spec.default_pen_color = Some(pen);
             board.pen_origin = BoardPenOrigin::RuntimeContrast;
             active.then_some(pen)

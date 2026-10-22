@@ -14,8 +14,8 @@ pub(in crate::backend::wayland) struct PerfDamageDiagnostics {
     pub(in crate::backend::wayland) largest_region_area_pct_hundredths: u32,
 }
 
-pub(in crate::backend::wayland) struct PerfFrameDamageContext<'a> {
-    pub(in crate::backend::wayland) damage_screen: &'a [Rect],
+pub(in crate::backend::wayland) struct PerfFrameDamageContext<'damage> {
+    pub(in crate::backend::wayland) damage_screen: &'damage [Rect],
     pub(in crate::backend::wayland) logical_width: u32,
     pub(in crate::backend::wayland) logical_height: u32,
     pub(in crate::backend::wayland) damage_rects: usize,

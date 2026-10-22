@@ -1,3 +1,5 @@
+use crate::test_temp;
+
 use super::*;
 
 /// The recovery twin of the teardown race above: a transient write failure
@@ -10,8 +12,8 @@ use super::*;
 /// exit-time screen.
 #[test]
 fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -21,7 +23,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     use crate::input::state::PendingToolbarPersistence;
     use std::os::unix::fs::PermissionsExt;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let store_dir = temp.path().join("store");
     fs::create_dir(&store_dir).unwrap();
     let runtime_path = store_dir.join("runtime-ui.toml");
@@ -33,7 +35,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     // A transient failure: the store directory briefly refuses writes.
     fs::set_permissions(&store_dir, fs::Permissions::from_mode(0o555)).unwrap();
     commit_display_mode(&mut runtime, &mut input, TopDisplayMode::Micro);
-    wait_for_runtime_mode(&mut runtime, RuntimeUiPersistenceMode::Unhealthy);
+    wait_for_runtime_mode(&mut runtime, &RuntimeUiPersistenceMode::Unhealthy);
     assert!(runtime.mutation_barrier_active());
     fs::set_permissions(&store_dir, fs::Permissions::from_mode(0o755)).unwrap();
 
@@ -66,7 +68,7 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     let prepared = runtime
         .begin_toolbar_mutation_with_rollback(
             ToolbarRuntimeUiPersistenceTarget::ToolbarVisibility,
-            pins_rollback_values(true),
+            &pins_rollback_values(true),
         )
         .expect("visibility permit after recovery settled");
     assert!(matches!(
@@ -79,8 +81,8 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
     let mut restarted_input = input_from_config(&config);
     let mut restarted = test_runtime(&config, &runtime_path);
     restarted.apply_startup_state(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut restarted_input,
     );
     assert_eq!(
@@ -104,8 +106,8 @@ fn an_exit_during_retry_pending_recovery_still_lands_the_deferred_toggle() {
 /// screen agreeing with the rolled-back pins.
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -125,8 +127,8 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
     assert!(input.presenter_mode_active());
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -151,8 +153,8 @@ fn a_deferred_hide_rollback_lands_in_the_presenter_restore_snapshot() {
 /// screen agreeing with the rolled-back pins.
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -182,8 +184,8 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
     assert!(input.focus_mode_active());
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),
@@ -207,8 +209,8 @@ fn a_deferred_hide_rollback_lands_in_the_focus_mode_snapshot() {
 /// toolbar flags and its exit writes the snapshot back).
 #[test]
 fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -230,8 +232,8 @@ fn a_deferred_hide_rollback_lands_in_the_light_mode_snapshot() {
     assert!(input.light_mode_active());
 
     apply_toolbar_runtime_rollback(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         &mut input,
         &mut positions,
         &pins_rollback(true),

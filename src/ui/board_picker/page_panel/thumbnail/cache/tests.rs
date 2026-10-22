@@ -1,3 +1,8 @@
+use std::time::Instant;
+use std::{hint, iter};
+
+use crate::draw::{EraserBrush, EraserKind, RenderCaches};
+
 use super::*;
 use crate::draw::frame::UndoAction;
 use crate::draw::{Color, FontDescriptor, Frame, Shape};
@@ -51,7 +56,7 @@ fn pixels(
         ctx.scale(density, density);
         let engine = UiTextEngine::default();
         let measurer = TextMeasurer::default();
-        let mut draw = crate::draw::RenderCaches::default();
+        let mut draw = RenderCaches::default();
         let mut render = RenderCtx::new(&ctx, &mut draw);
         let args = PageContentArgs {
             render: &mut render,
@@ -111,9 +116,9 @@ fn cached_pixels_follow_edits_rollback_history_and_render_inputs() {
     assert_parity(&frame, &solid, &mut cache);
     frame.add_shape(Shape::EraserStroke {
         points: vec![(50, 100), (180, 140)],
-        brush: crate::draw::EraserBrush {
+        brush: EraserBrush {
             size: 20.0,
-            kind: crate::draw::EraserKind::Circle,
+            kind: EraserKind::Circle,
         },
     });
     assert_parity(&frame, &transparent, &mut cache);
@@ -166,7 +171,7 @@ fn cache_prunes_removed_pages_and_stays_within_entry_and_byte_budgets() {
     }
     assert_eq!(cache.entries.len(), MAX_ENTRIES);
     assert!(cache.bytes <= MAX_BYTES);
-    cache.retain_revisions(std::iter::empty());
+    cache.retain_revisions(iter::empty());
     assert!(cache.entries.is_empty());
     assert_eq!(cache.bytes, 0);
 }
@@ -211,9 +216,9 @@ fn measure_cached_thumbnail_hover() {
     let mut cache = ThumbnailCache::default();
     pixels(&frame, &background, 1.0, true, Some(&mut cache));
     for cached in [false, true] {
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         for _ in 0..100 {
-            std::hint::black_box(pixels(
+            hint::black_box(pixels(
                 &frame,
                 &background,
                 1.0,

@@ -1,3 +1,6 @@
+use std::env;
+use std::path::PathBuf;
+
 use anyhow::Result;
 use wayland_client::Connection;
 
@@ -25,9 +28,9 @@ pub fn run_wayland(
     initial_mode: Option<String>,
     freeze_on_start: bool,
     exit_after_capture_mode: ExitAfterCaptureMode,
-    named_session_file: Option<std::path::PathBuf>,
+    named_session_file: Option<PathBuf>,
 ) -> Result<()> {
-    let mut backend = wayland::WaylandBackend::new(
+    let mut backend = wayland::WaylandBackend::try_new(
         initial_mode,
         freeze_on_start,
         exit_after_capture_mode,
@@ -40,7 +43,7 @@ pub fn run_wayland(
 }
 
 pub fn preflight_wayland_connection() -> Result<()> {
-    if std::env::var(WAYLAND_DISPLAY_ENV).is_err() {
+    if env::var(WAYLAND_DISPLAY_ENV).is_err() {
         return Err(anyhow::anyhow!(
             "{WAYLAND_DISPLAY_ENV} not set - this application requires Wayland."
         ));
@@ -52,10 +55,12 @@ pub fn preflight_wayland_connection() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     #[test]
     #[ignore]
     fn wayland_backend_smoke_test() {
-        if std::env::var(super::WAYLAND_DISPLAY_ENV).is_err() {
+        if env::var(super::WAYLAND_DISPLAY_ENV).is_err() {
             eprintln!(
                 "{} not set; skipping Wayland smoke test",
                 super::WAYLAND_DISPLAY_ENV

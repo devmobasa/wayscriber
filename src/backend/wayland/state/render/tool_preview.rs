@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use super::ui_effect_damage::effect_rect;
 use crate::draw::Color;
 use crate::input::Tool;
@@ -80,14 +82,14 @@ pub(super) fn draw_tool_preview(
     let dot_cy = by + bubble_h / 2.0;
     let dot_r = dot_d / 2.0;
     ctx.set_source_rgba(dr, dg, db, 1.0);
-    ctx.arc(dot_cx, dot_cy, dot_r, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(dot_cx, dot_cy, dot_r, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     // Auto-contrast outline keeps the dot legible against both its own color
     // and the dark bubble (see `theme::cursor_preview_outline`).
     theme::set_color(ctx, theme::cursor_preview_outline(dr, dg, db));
     ctx.set_line_width(1.0);
-    ctx.arc(dot_cx, dot_cy, dot_r + 0.5, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(dot_cx, dot_cy, dot_r + 0.5, 0.0, consts::PI * 2.0);
     let _ = ctx.stroke();
 
     let _ = ctx.restore();
@@ -246,26 +248,20 @@ pub(super) fn draw_stylus_hover_cursor(
 
     let _ = ctx.save();
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.35);
-    ctx.arc(
-        x + 1.0,
-        y + 1.0,
-        radius + 2.0,
-        0.0,
-        std::f64::consts::PI * 2.0,
-    );
+    ctx.arc(x + 1.0, y + 1.0, radius + 2.0, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-    ctx.arc(x, y, radius + 1.4, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius + 1.4, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     ctx.set_source_rgba(r, g, b, 0.95);
-    ctx.arc(x, y, radius, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius, 0.0, consts::PI * 2.0);
     let _ = ctx.fill();
 
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.72);
     ctx.set_line_width(1.0);
-    ctx.arc(x, y, radius + 1.4, 0.0, std::f64::consts::PI * 2.0);
+    ctx.arc(x, y, radius + 1.4, 0.0, consts::PI * 2.0);
     let _ = ctx.stroke();
     let _ = ctx.restore();
 }

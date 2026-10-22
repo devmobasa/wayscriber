@@ -8,10 +8,21 @@
 //! autohide grab (the backend's dismissal policy owns click-away), keys
 //! relayed to the overlay, and `closed` echoing a user dismissal.
 
-use crate::i18n::trf;
+use gtk4::accessible::Property;
 
+use crate::i18n::trf;
+use crate::toolbar_icons;
+
+use super::super::{CaptureSurfaceContent, Updater};
 use super::meter::{MeterBarsSpec, append_meter_bars};
-use super::*;
+use super::{STYLE_PEN_FEEL_W, STYLE_ROW_H, TopBar, set_semantic_widget_id};
+use crate::toolbar_gtk::widgets::{
+    install_click_modifier_capture, install_key_relay, send_event, set_active_class, sized_button,
+};
+use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 impl TopBar {
     /// Appends the Pen feel chip to `pill`, followed by `gap_px` of margin,
@@ -36,7 +47,7 @@ impl TopBar {
         let handle = chip.clone();
         let refresh = move |snapshot: &ToolbarSnapshot| {
             handle.set_tooltip_text(control.tooltip(snapshot).as_deref());
-            handle.update_property(&[gtk4::accessible::Property::Label(
+            handle.update_property(&[Property::Label(
                 &model::StylePillControl::pen_feel_accessible_label(snapshot),
             )]);
             set_active_class(&handle, control.active(snapshot));
@@ -145,10 +156,7 @@ impl TopBar {
         let bars = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         bars.set_margin_top(px(model::PEN_FEEL_ROW_GAP));
         set_semantic_widget_id(&bars, &section.id("bars"));
-        bars.update_property(&[gtk4::accessible::Property::Label(&trf(
-            "{} level",
-            &[&setting.name()],
-        ))]);
+        bars.update_property(&[Property::Label(&trf("{} level", &[&setting.name()]))]);
         updaters.push(append_meter_bars(
             &self.feedback,
             &bars,
@@ -211,7 +219,7 @@ impl SmoothingPreviewArea {
         }
 
         self.area
-            .update_property(&[gtk4::accessible::Property::Label(&preview_label(level))]);
+            .update_property(&[Property::Label(&preview_label(level))]);
         self.area.queue_draw();
     }
 }
@@ -226,14 +234,12 @@ fn smoothing_preview_area(section: &model::PenFeelSection, scale: f64) -> Smooth
     area.set_margin_top(px(model::PEN_FEEL_ROW_GAP));
     area.set_can_target(false);
     set_semantic_widget_id(&area, &section.id("preview"));
-    area.update_property(&[gtk4::accessible::Property::Label(&preview_label(
-        section.level,
-    ))]);
+    area.update_property(&[Property::Label(&preview_label(section.level))]);
 
     let level = Rc::new(Cell::new(section.level));
     let draw_level = level.clone();
     area.set_draw_func(move |_, ctx, width, height| {
-        crate::toolbar_icons::draw_smoothing_preview(
+        toolbar_icons::draw_smoothing_preview(
             ctx,
             (0.0, 0.0, f64::from(width), f64::from(height)),
             draw_level.get(),

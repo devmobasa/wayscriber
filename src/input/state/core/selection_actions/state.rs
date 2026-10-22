@@ -1,7 +1,6 @@
 use super::super::base::InputState;
-use crate::draw::DirtyFullReason;
-use crate::draw::TextMeasurer;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::draw::{DirtyFullReason, TextMeasurer};
 use crate::util::Rect;
 
 const SELECTION_DAMAGE_PADDING: i32 = 8;

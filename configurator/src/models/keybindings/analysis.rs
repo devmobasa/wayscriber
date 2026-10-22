@@ -3,13 +3,13 @@ use super::conflicts::{ShortcutClaim, legacy_action_for, shortcuts_conflict};
 use super::{KeybindingField, KeybindingsDraft, parse_keybindings};
 use wayscriber::config::Shortcut;
 
-pub(super) struct ParsedShortcuts<'a> {
-    pub(super) draft: &'a KeybindingsDraft,
+pub(super) struct ParsedShortcuts<'draft> {
+    pub(super) draft: &'draft KeybindingsDraft,
     entries: Vec<(KeybindingField, Result<Vec<Shortcut>, String>)>,
 }
 
-impl<'a> ParsedShortcuts<'a> {
-    pub(super) fn new(draft: &'a KeybindingsDraft) -> Self {
+impl<'draft> ParsedShortcuts<'draft> {
+    pub(super) fn new(draft: &'draft KeybindingsDraft) -> Self {
         Self {
             draft,
             entries: draft
@@ -73,12 +73,13 @@ impl<'a> ParsedShortcuts<'a> {
 
 #[cfg(test)]
 mod tests {
+    use wayscriber::config::KeybindingsConfig;
+
     use super::super::keybinding_fields;
     use super::*;
     #[test]
     fn summary_parses_each_field_once_per_draft_even_with_many_conflicts() {
-        let defaults =
-            KeybindingsDraft::from_config(&wayscriber::config::KeybindingsConfig::default());
+        let defaults = KeybindingsDraft::from_config(&KeybindingsConfig::default());
         let mut draft = defaults.clone();
         for field in keybinding_fields() {
             draft.set(field, "Ctrl+Q, Ctrl+Q > C, Ctrl+Q".into());

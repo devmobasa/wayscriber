@@ -3,6 +3,7 @@
 //! while one is pending), the way back to the home session, and the
 //! recent-session list.
 
+use gtk4::pango::EllipsizeMode;
 use gtk4::prelude::*;
 
 use crate::i18n::{tr, trf};
@@ -24,14 +25,14 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     let name_label = gtk4::Label::new(Some(&session.active_name));
     name_label.set_xalign(0.0);
-    name_label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    name_label.set_ellipsize(EllipsizeMode::Middle);
     column.append(&name_label);
     // Keep the tail of the path — the leading directories are the least
     // informative part of a session path.
     let path_label = gtk4::Label::new(Some(&session.active_path_label));
     path_label.add_css_class("hint");
     path_label.set_xalign(0.0);
-    path_label.set_ellipsize(gtk4::pango::EllipsizeMode::Start);
+    path_label.set_ellipsize(EllipsizeMode::Start);
     column.append(&path_label);
 
     // A pending Save-As overwrite confirmation replaces the button grid.
@@ -110,7 +111,7 @@ fn overwrite_confirmation_rows(
     let rows = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(5.0));
     let message = gtk4::Label::new(Some(&trf("Replace {}?", &[&confirmation.label])));
     message.set_xalign(0.0);
-    message.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    message.set_ellipsize(EllipsizeMode::Middle);
     rows.append(&message);
 
     let buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(5.0));
@@ -140,7 +141,7 @@ fn home_button(ctx: &SectionCtx, home: &model::session::ToolbarSessionHome) -> g
     let button = gtk4::Button::new();
     button.set_size_request(-1, ctx.px(24.0));
     let label = gtk4::Label::new(Some(&home.label));
-    label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    label.set_ellipsize(EllipsizeMode::Middle);
     button.set_child(Some(&label));
     button.set_tooltip_text(Some(&home.label));
     button.set_sensitive(home.enabled);
@@ -165,7 +166,7 @@ fn recent_row(ctx: &SectionCtx, recent: &model::ToolbarSessionRecent) -> gtk4::B
     let label = gtk4::Label::new(Some(strip_session_extension(&recent.label)));
     label.set_xalign(0.0);
     label.set_hexpand(true);
-    label.set_ellipsize(gtk4::pango::EllipsizeMode::Middle);
+    label.set_ellipsize(EllipsizeMode::Middle);
     row.append(&label);
     button.set_child(Some(&row));
     button.set_tooltip_text(Some(&format_binding_label(

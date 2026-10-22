@@ -1,5 +1,4 @@
-use crate::draw::TextMeasurer;
-use crate::draw::{ArrowStyle, Shape};
+use crate::draw::{ArrowStyle, Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::core::base::InputState;
 use crate::input::state::core::properties::apply_selection::constants::{
@@ -59,7 +58,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("arrow head"))
+        self.report_selection_apply_result(&result, tr("arrow head"))
     }
 
     /// Steps the style of every selected arrow.
@@ -73,7 +72,7 @@ impl InputState {
         direction: i32,
     ) -> bool {
         let target = self.selection_arrow_style_target(direction);
-        self.restyle_selected_arrows(measurer, target)
+        self.restyle_selected_arrows(measurer, &target)
     }
 
     /// Sets every editable selected arrow to `style`, as picking one of the
@@ -87,15 +86,15 @@ impl InputState {
             ArrowStyleTarget::Style(_) => ArrowStyleTarget::Style(style),
             other => other,
         };
-        self.restyle_selected_arrows(measurer, target)
+        self.restyle_selected_arrows(measurer, &target)
     }
 
     fn restyle_selected_arrows(
         &mut self,
         measurer: &TextMeasurer,
-        target: ArrowStyleTarget,
+        target: &ArrowStyleTarget,
     ) -> bool {
-        let target = match target {
+        let target = match *target {
             ArrowStyleTarget::NoArrows => {
                 self.push_toast(
                     ToastPriority::Info,
@@ -133,7 +132,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("arrow style"))
+        self.report_selection_apply_result(&result, tr("arrow style"))
     }
 
     /// The style a restyle should move the selection to.
@@ -194,7 +193,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("arrow length"))
+        self.report_selection_apply_result(&result, tr("arrow length"))
     }
 
     pub(in crate::input::state::core::properties) fn apply_selection_arrow_angle(
@@ -220,23 +219,25 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("arrow angle"))
+        self.report_selection_apply_result(&result, tr("arrow angle"))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::Action;
+    use crate::draw::ShapeId;
+    use crate::input::SelectionPropertyKind;
+    use crate::input::state::test_support;
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
 
     fn make_state() -> InputState {
-        crate::input::state::test_support::make_test_input_state()
+        test_support::make_test_input_state()
     }
 
-    fn add_arrow(
-        state: &mut InputState,
-        head_at_end: bool,
-        arrow_angle: f64,
-    ) -> crate::draw::ShapeId {
+    fn add_arrow(state: &mut InputState, head_at_end: bool, arrow_angle: f64) -> ShapeId {
         add_styled_arrow(state, head_at_end, arrow_angle, ArrowStyle::Standard, 0.0)
     }
 
@@ -246,7 +247,7 @@ mod tests {
         arrow_angle: f64,
         style: ArrowStyle,
         bend: f64,
-    ) -> crate::draw::ShapeId {
+    ) -> ShapeId {
         state.boards.active_frame_mut().add_shape(Shape::Arrow {
             x1: 0,
             y1: 0,
@@ -263,14 +264,14 @@ mod tests {
         })
     }
 
-    fn arrow_style(state: &InputState, id: crate::draw::ShapeId) -> ArrowStyle {
+    fn arrow_style(state: &InputState, id: ShapeId) -> ArrowStyle {
         match &state.boards.active_frame().shape(id).expect("arrow").shape {
             Shape::Arrow { style, .. } => *style,
             other => panic!("expected arrow, got {other:?}"),
         }
     }
 
-    fn arrow_bend(state: &InputState, id: crate::draw::ShapeId) -> f64 {
+    fn arrow_bend(state: &InputState, id: ShapeId) -> f64 {
         match &state.boards.active_frame().shape(id).expect("arrow").shape {
             Shape::Arrow { bend, .. } => *bend,
             other => panic!("expected arrow, got {other:?}"),
@@ -379,8 +380,8 @@ mod tests {
 
     #[test]
     fn cycle_arrow_style_reports_a_locked_arrow_while_its_property_control_stays_disabled() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &test_text_measurer,
             ui_engine: &test_ui_engine,
@@ -402,7 +403,7 @@ mod tests {
         let style_entry = state
             .build_selection_property_entries(&[id])
             .into_iter()
-            .find(|entry| entry.kind == crate::input::SelectionPropertyKind::ArrowStyle)
+            .find(|entry| entry.kind == SelectionPropertyKind::ArrowStyle)
             .expect("locked arrow style property");
         assert!(
             style_entry.disabled,
@@ -410,10 +411,7 @@ mod tests {
         );
         assert_eq!(style_entry.value, "Locked");
 
-        state.handle_action_with_resources(
-            test_text_resources,
-            crate::domain::Action::CycleArrowStyle,
-        );
+        state.handle_action_with_resources(test_text_resources, Action::CycleArrowStyle);
         assert_eq!(
             state.active_toast().map(|toast| toast.message.as_str()),
             Some("All arrow style shapes are locked.")

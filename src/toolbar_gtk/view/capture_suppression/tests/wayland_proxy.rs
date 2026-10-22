@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use std::{env, fs, io, thread};
 
 /// Names the control socket for the GTK test running behind the proxy.
 pub(super) const CONTROL_ENV: &str = "WAYSCRIBER_GTK_WAYLAND_CONTROL";
@@ -123,11 +124,11 @@ impl Weston {
         while !is_socket(&self.socket) {
             let exited = self.process.try_wait().expect("poll Weston").is_some();
             if exited || Instant::now() >= deadline {
-                let log = std::fs::read_to_string(log_path).unwrap_or_default();
+                let log = fs::read_to_string(log_path).unwrap_or_default();
                 panic!("private Weston did not create its socket:\n{log}");
             }
 
-            std::thread::sleep(POLL_INTERVAL);
+            thread::sleep(POLL_INTERVAL);
         }
     }
 }
@@ -149,14 +150,14 @@ impl Drop for Weston {
 }
 
 fn is_socket(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
+    fs::metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
 }
 
 fn run_test_session(runtime: &Path, child_env: &str, test_name: &str) -> Output {
     let mut command = Command::new("dbus-run-session");
     command
         .arg("--")
-        .arg(std::env::current_exe().expect("test binary"))
+        .arg(env::current_exe().expect("test binary"))
         .args([test_name, "--exact", "--test-threads=1", "--nocapture"]);
     private_environment(&mut command, runtime, PROXY_SOCKET)
         .env(child_env, "1")
@@ -187,10 +188,10 @@ fn run_test_session(runtime: &Path, child_env: &str, test_name: &str) -> Output 
     }
 }
 
-fn start_session() -> std::io::Result<()> {
+fn start_session() -> io::Result<()> {
     // SAFETY: setsid has no memory-safety preconditions.
     if unsafe { libc::setsid() } < 0 {
-        return Err(std::io::Error::last_os_error());
+        return Err(io::Error::last_os_error());
     }
 
     Ok(())
@@ -228,14 +229,14 @@ fn kill_session(leader: &Child) {
 
 fn drain(pipe: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
     let mut pipe = pipe.expect("piped test output");
-    std::thread::spawn(move || {
+    thread::spawn(move || {
         let mut bytes = Vec::new();
         pipe.read_to_end(&mut bytes).expect("read test output");
         bytes
     })
 }
 
-fn wait_until(process: &mut Child, timeout: Duration) -> std::io::Result<Option<ExitStatus>> {
+fn wait_until(process: &mut Child, timeout: Duration) -> io::Result<Option<ExitStatus>> {
     let deadline = Instant::now() + timeout;
     loop {
         if let Some(status) = process.try_wait()? {
@@ -245,6 +246,6 @@ fn wait_until(process: &mut Child, timeout: Duration) -> std::io::Result<Option<
             return Ok(None);
         }
 
-        std::thread::sleep(POLL_INTERVAL);
+        thread::sleep(POLL_INTERVAL);
     }
 }

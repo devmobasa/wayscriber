@@ -44,6 +44,7 @@ pub struct BoardState {
 }
 
 impl BoardState {
+    #[must_use]
     pub fn new(spec: BoardSpec) -> Self {
         Self {
             configured_appearance: BoardAppearance::from_spec(&spec),

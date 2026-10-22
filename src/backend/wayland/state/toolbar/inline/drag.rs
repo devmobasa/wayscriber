@@ -1,4 +1,6 @@
-use super::*;
+use crate::backend::wayland::toolbar_intent::ToolbarIntent;
+
+use super::super::{MoveDragKind, WaylandState};
 
 impl WaylandState {
     /// Generate a drag intent from the active toolbar move drag state.
@@ -8,7 +10,7 @@ impl WaylandState {
         &self,
         x: f64,
         y: f64,
-    ) -> Option<crate::backend::wayland::toolbar_intent::ToolbarIntent> {
+    ) -> Option<ToolbarIntent> {
         use crate::backend::wayland::toolbar_intent::ToolbarIntent;
         use crate::ui::toolbar::ToolbarEvent;
 

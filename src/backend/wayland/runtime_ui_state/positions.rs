@@ -1,4 +1,12 @@
-use super::*;
+use std::collections::BTreeMap;
+
+use super::ToolbarPositionSnapshot;
+use crate::backend::wayland::state::MoveDragKind;
+use crate::runtime_ui_state::{
+    InteractionSeedTarget, InteractionSeedValue, PreviewRollbackSnapshot,
+    RuntimeStateFailurePathEffect, RuntimeStateIoError, RuntimeStateObservedPathEffect,
+    RuntimeUiMutationValues, SourceMutationId, SourceMutationResult, ToolbarPositionSeed,
+};
 
 /// The toolbar position a move drag can write.
 ///
@@ -46,7 +54,7 @@ pub(super) fn position_rollback(
     kind: MoveDragKind,
     positions: ToolbarPositionSnapshot,
 ) -> PreviewRollbackSnapshot {
-    let mut values = std::collections::BTreeMap::new();
+    let mut values = BTreeMap::new();
     for target in position_drag_targets(kind) {
         let (x, y) = target.offsets(positions);
         if let Some(position) = ToolbarPositionSeed::new(x, y) {

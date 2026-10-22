@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::config::{Action, action_meta_iter};
+use crate::config::{Action, QuickColorPalette, action_meta_iter};
 use crate::input::{InputState, Tool};
 use crate::label_format::join_binding_labels;
 
@@ -17,10 +17,12 @@ pub struct ToolbarBindingHints {
 }
 
 impl ToolbarBindingHints {
+    #[must_use]
     pub fn for_tool(&self, tool: Tool) -> Option<&str> {
         action_for_tool(tool).and_then(|action| self.binding_for_action(action))
     }
 
+    #[must_use]
     pub fn badge_for_tool(&self, tool: Tool) -> Option<&str> {
         action_for_tool(tool).and_then(|action| self.badge_for_action(action))
     }
@@ -28,7 +30,8 @@ impl ToolbarBindingHints {
     pub fn from_input_state(state: &InputState) -> Self {
         let mut bindings = HashMap::new();
         let mut badges = HashMap::new();
-        for meta in action_meta_iter().filter(|meta| meta.in_toolbar) {
+        let toolbar_actions = action_meta_iter().filter(|meta| meta.in_toolbar);
+        for meta in toolbar_actions {
             let labels = state.action_binding_labels(meta.action);
             if let Some(label) = join_binding_labels(&labels) {
                 bindings.insert(meta.action, label);
@@ -48,27 +51,32 @@ impl ToolbarBindingHints {
         self.badges.get(&action).map(String::as_str)
     }
 
+    #[must_use]
     pub fn quick_color_badge(&self, index: usize) -> Option<&str> {
-        crate::config::QuickColorPalette::action_for_index(index)
-            .and_then(|action| self.badge_for_action(action))
+        QuickColorPalette::action_for_index(index).and_then(|action| self.badge_for_action(action))
     }
 
+    #[must_use]
     pub fn apply_preset(&self, slot: usize) -> Option<&str> {
         action_for_apply_preset(slot).and_then(|action| self.binding_for_action(action))
     }
 
+    #[must_use]
     pub fn save_preset(&self, slot: usize) -> Option<&str> {
         action_for_save_preset(slot).and_then(|action| self.binding_for_action(action))
     }
 
+    #[must_use]
     pub fn clear_preset(&self, slot: usize) -> Option<&str> {
         action_for_clear_preset(slot).and_then(|action| self.binding_for_action(action))
     }
 
+    #[must_use]
     pub fn binding_for_event(&self, event: &ToolbarEvent) -> Option<&str> {
         action_for_event(event).and_then(|action| self.binding_for_action(action))
     }
 
+    #[must_use]
     pub fn badge_for_event(&self, event: &ToolbarEvent) -> Option<&str> {
         action_for_event(event).and_then(|action| self.badge_for_action(action))
     }

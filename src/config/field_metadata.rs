@@ -40,6 +40,7 @@ pub enum ScalarConstraint {
 }
 
 impl ScalarConstraint {
+    #[must_use]
     pub const fn accepts_u32(self, value: u32) -> bool {
         match self {
             Self::Boolean => false,
@@ -57,6 +58,7 @@ impl ScalarConstraint {
         }
     }
 
+    #[must_use]
     pub const fn unsigned_range(self) -> Option<(u32, u32)> {
         match self {
             Self::Unsigned { min, max } => Some((min, max)),
@@ -64,6 +66,7 @@ impl ScalarConstraint {
         }
     }
 
+    #[must_use]
     pub const fn unsigned_choices(self) -> Option<&'static [u32]> {
         match self {
             Self::UnsignedChoice(values) => Some(values),
@@ -143,6 +146,7 @@ pub const PERFORMANCE_FIELD_METADATA: &[PerformanceFieldMetadata] = &[
     PERFORMANCE_UI_ANIMATION_FPS,
 ];
 
+#[must_use]
 pub fn performance_field_metadata(id: PerformanceFieldId) -> &'static PerformanceFieldMetadata {
     match id {
         PerformanceFieldId::BufferCount => &PERFORMANCE_BUFFER_COUNT,

@@ -1,4 +1,5 @@
 use crate::domain::{MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
+use crate::draw;
 
 use super::super::ToolbarEvent;
 
@@ -172,9 +173,9 @@ impl ToolbarSliderSpec {
         ticks: &[],
     };
     pub(crate) const SPOTLIGHT_MAGNIFICATION: Self = Self {
-        min: crate::draw::MIN_SPOTLIGHT_MAGNIFICATION,
-        max: crate::draw::MAX_SPOTLIGHT_MAGNIFICATION,
-        step: Some(crate::draw::SPOTLIGHT_MAGNIFICATION_STEP),
+        min: draw::MIN_SPOTLIGHT_MAGNIFICATION,
+        max: draw::MAX_SPOTLIGHT_MAGNIFICATION,
+        step: Some(draw::SPOTLIGHT_MAGNIFICATION_STEP),
         snap_to_step: true,
         curve: SliderCurve::Linear,
         ticks: &[],

@@ -1,13 +1,11 @@
-use smithay_client_toolkit::{
-    shell::{
-        WaylandSurface,
-        wlr_layer::{Anchor, LayerSurface},
-    },
-    shm::slot::SlotPool,
-};
-use wayland_client::{Proxy, protocol::wl_surface};
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::{Anchor, LayerSurface};
+use smithay_client_toolkit::shm::slot::SlotPool;
+use wayland_client::Proxy;
+use wayland_client::protocol::wl_surface;
 
 use crate::backend::wayland::toolbar::events::ToolbarCursorHint;
+use crate::backend::wayland::toolbar::hit;
 use crate::backend::wayland::toolbar::hit::HitRegion;
 
 #[derive(Debug)]
@@ -88,11 +86,10 @@ impl ToolbarSurface {
     /// Get cursor hint for the current hover position.
     pub fn cursor_hint(&self) -> Option<ToolbarCursorHint> {
         let (hx, hy) = self.hover?;
-        let hint =
-            crate::backend::wayland::toolbar::hit::resolve_hit_index(&self.hit_regions, hx, hy)
-                .map_or(ToolbarCursorHint::Default, |index| {
-                    self.hit_regions[index].kind.cursor_hint()
-                });
+        let hint = hit::resolve_hit_index(&self.hit_regions, hx, hy)
+            .map_or(ToolbarCursorHint::Default, |index| {
+                self.hit_regions[index].kind.cursor_hint()
+            });
         Some(hint)
     }
 }

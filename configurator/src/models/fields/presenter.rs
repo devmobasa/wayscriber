@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{PresenterToolBehavior, PresenterToolbarMode};
@@ -47,8 +50,8 @@ impl PresenterToolBehaviorOption {
     }
 }
 
-impl std::fmt::Display for PresenterToolBehaviorOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PresenterToolBehaviorOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -89,8 +92,8 @@ impl PresenterToolbarModeOption {
     }
 }
 
-impl std::fmt::Display for PresenterToolbarModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for PresenterToolbarModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

@@ -1,3 +1,8 @@
+use std::env;
+use std::path::Path;
+
+use crate::{env_vars, test_env, test_temp, tray_action};
+
 use super::*;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
@@ -24,7 +29,7 @@ fn a_starting_daemon_waits_out_a_brief_lock_probe() {
 
 #[test]
 fn an_unusable_process_broker_ends_the_daemon_loop() {
-    let guard = crate::process_broker::start_for_runtime().unwrap();
+    let guard = process_broker::start_for_runtime().unwrap();
 
     ensure_process_broker_usable(None).unwrap();
     ensure_process_broker_usable(Some(guard.broker())).unwrap();
@@ -36,8 +41,8 @@ fn an_unusable_process_broker_ends_the_daemon_loop() {
 
 #[test]
 fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
-    let wake = RuntimeWakeSource::new().unwrap();
-    let deadline = BootDeadlineSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
+    let deadline = BootDeadlineSource::try_new().unwrap();
     deadline
         .arm(
             super::super::protocol_v2::BootClock::now()
@@ -59,9 +64,9 @@ fn daemon_lifecycle_wait_wakes_for_v2_maintenance_deadline() {
 
 #[test]
 fn action_admission_retry_uses_the_existing_v2_deadline_source() {
-    let wake = RuntimeWakeSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
     let mut daemon = Daemon::new(None, false, None, None);
-    daemon.v2_deadline_source = Some(BootDeadlineSource::new().unwrap());
+    daemon.v2_deadline_source = Some(BootDeadlineSource::try_new().unwrap());
     daemon.action_admission_retry_at = Some(BootDeadline::from_nanos(1));
     daemon.arm_v2_lifecycle_deadline().unwrap();
 
@@ -80,18 +85,18 @@ fn action_admission_retry_uses_the_existing_v2_deadline_source() {
 #[cfg(unix)]
 #[test]
 fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
-    let _signal_guard = crate::unix_signals::test_signal_lock();
-    let _env_guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    let _signal_guard = unix_signals::test_signal_lock();
+    let _env_guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
+    let previous_runtime_dir = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
     // SAFETY: this test holds the process environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+        env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
     }
 
-    let wake = RuntimeWakeSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
     let wake_handle = wake.handle();
-    let listener = crate::unix_signals::spawn_listener(
+    let listener = unix_signals::spawn_listener(
         &[libc::SIGWINCH],
         |_| {},
         move || wake_handle.wake().unwrap(),
@@ -103,14 +108,14 @@ fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
     let mut daemon = Daemon::new(None, false, None, None);
     daemon.protocol_mode = DaemonControlProtocolMode::rollback_compatibility();
     daemon.signal_listener = Some(listener);
-    crate::daemon::write_daemon_pid_file(std::process::id(), &daemon.instance_token).unwrap();
-    assert!(crate::paths::daemon_pid_file().exists());
+    daemon::write_daemon_pid_file(process::id(), &daemon.instance_token).unwrap();
+    assert!(paths::daemon_pid_file().exists());
 
     let err = daemon
         .run_control_loop_and_invalidate_on_failure(&wake)
         .unwrap_err();
     assert!(err.to_string().contains("daemon signal listener failed"));
-    assert!(!crate::paths::daemon_pid_file().exists());
+    assert!(!paths::daemon_pid_file().exists());
 
     let cleanup_err = daemon.shutdown_after_run().unwrap_err();
     assert!(cleanup_err.to_string().contains("failed before teardown"));
@@ -120,8 +125,8 @@ fn listener_failure_invalidates_v1_readiness_and_runs_existing_cleanup() {
     // SAFETY: this test still holds the process environment mutex.
     unsafe {
         match previous_runtime_dir {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+            Some(value) => env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
 }
@@ -177,7 +182,7 @@ fn visible_overlay_rejects_different_named_session_request() {
             assert_eq!(daemon.test_state(), OverlayState::Visible);
             assert_eq!(
                 daemon.overlay.active_named_session_file(),
-                Some(std::path::Path::new("/tmp/current.wayscriber-session"))
+                Some(Path::new("/tmp/current.wayscriber-session"))
             );
         },
     );
@@ -214,7 +219,7 @@ fn visible_overlay_is_in_the_session_it_switched_to() {
 
 #[test]
 fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
-    let temp = crate::test_temp::tempdir().expect("tempdir");
+    let temp = test_temp::tempdir().expect("tempdir");
     super::super::overlay::tests::with_visible_overlay(
         Some(PathBuf::from("/tmp/current.wayscriber-session")),
         false,
@@ -222,7 +227,7 @@ fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
             let command = DaemonToggleCommand {
                 daemon_token: "daemon-token".into(),
                 request: DaemonToggleRequest {
-                    session_file: Some(std::path::PathBuf::from("/tmp/other.wayscriber-session")),
+                    session_file: Some(PathBuf::from("/tmp/other.wayscriber-session")),
                     ..Default::default()
                 },
                 request_path: temp.path().join("request.json"),
@@ -230,10 +235,7 @@ fn visible_overlay_rejection_writes_daemon_toggle_error_response() {
             };
 
             let mut suppress_overlay_action_signal = false;
-            daemon.process_queued_toggle_command(
-                command.clone(),
-                &mut suppress_overlay_action_signal,
-            );
+            daemon.process_queued_toggle_command(&command, &mut suppress_overlay_action_signal);
 
             let err = read_daemon_toggle_response(&command.response_path)
                 .expect_err("visible target mismatch should be written to response");
@@ -292,12 +294,12 @@ fn duplicate_plain_toggle_requests_are_debounced() {
 
 #[test]
 fn typed_visibility_toggle_request_is_not_debounced() {
-    let modes = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let modes = Arc::new(Mutex::new(Vec::new()));
     let modes_clone = Arc::clone(&modes);
     let runner: Arc<BackendRunner> = Arc::new(move |mode| {
         modes_clone
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("recorded backend modes")
             .push(mode);
         Ok(())
     });
@@ -317,9 +319,7 @@ fn typed_visibility_toggle_request_is_not_debounced() {
         )
         .unwrap();
 
-    let modes = modes
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let modes = modes.lock().expect("recorded backend modes");
     assert_eq!(modes.as_slice(), &[None, Some("whiteboard".to_string())]);
     assert_eq!(daemon.test_state(), OverlayState::Hidden);
 }
@@ -386,12 +386,12 @@ fn plain_toggle_after_debounce_window_is_processed() {
 
 #[test]
 fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
-    let _env_guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    let _env_guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
+    let previous_runtime_dir = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
     // SAFETY: this test holds the process environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+        env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
     }
 
     let token = ProtocolToken::generate().unwrap();
@@ -400,7 +400,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     let queue_path = owner.queue_path();
     let action_journal = ActionJournal::open().unwrap();
     let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
-    super::super::protocol_v2::write_runtime_record_v2(&crate::paths::daemon_pid_file(), &runtime)
+    super::super::protocol_v2::write_runtime_record_v2(&paths::daemon_pid_file(), &runtime)
         .unwrap();
     let _daemon_lock = hold_daemon_lock();
 
@@ -409,7 +409,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     let runner: Arc<BackendRunner> = Arc::new(move |mode| {
         runner_modes
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("recorded backend modes")
             .push(mode);
         Ok(())
     });
@@ -419,23 +419,23 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     daemon.v2_command_owner = Some(owner);
     daemon.v2_action_journal = Some(action_journal);
 
-    std::thread::scope(|scope| {
+    thread::scope(|scope| {
         let caller = scope.spawn(|| {
-            crate::daemon::send_daemon_toggle_request(&DaemonToggleRequest {
+            daemon::send_daemon_toggle_request(&DaemonToggleRequest {
                 mode: Some("whiteboard".into()),
                 ..Default::default()
             })
         });
         let deadline = Instant::now() + Duration::from_secs(2);
-        while std::fs::read_dir(&queue_path).unwrap().next().is_none() {
+        while fs::read_dir(&queue_path).unwrap().next().is_none() {
             assert!(Instant::now() < deadline, "v2 caller did not publish");
-            std::thread::sleep(Duration::from_millis(2));
+            thread::sleep(Duration::from_millis(2));
         }
         loop {
             daemon.process_v2_commands().unwrap();
             if !observed_modes
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .expect("recorded backend modes")
                 .is_empty()
             {
                 break;
@@ -444,7 +444,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
                 Instant::now() < deadline,
                 "v2 daemon did not claim the published request"
             );
-            std::thread::sleep(Duration::from_millis(2));
+            thread::sleep(Duration::from_millis(2));
         }
         caller.join().unwrap().unwrap();
     });
@@ -452,7 +452,7 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     assert_eq!(
         observed_modes
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("recorded backend modes")
             .as_slice(),
         &[Some("whiteboard".into())]
     );
@@ -461,8 +461,8 @@ fn published_v2_runtime_drives_a_typed_request_to_terminal_response() {
     // SAFETY: this test still holds the process environment mutex.
     unsafe {
         match previous_runtime_dir {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+            Some(value) => env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
 }
@@ -475,11 +475,8 @@ fn a_visible_v2_action_retains_only_the_pending_activation_token() {
         let mut runtime =
             DaemonRuntimeRecordV2::current(ProtocolToken::generate().unwrap()).unwrap();
         runtime.v2_instance_token = daemon.instance_token.clone();
-        super::super::protocol_v2::write_runtime_record_v2(
-            &crate::paths::daemon_pid_file(),
-            &runtime,
-        )
-        .unwrap();
+        super::super::protocol_v2::write_runtime_record_v2(&paths::daemon_pid_file(), &runtime)
+            .unwrap();
         let _daemon_lock = hold_daemon_lock();
         daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
         daemon.v2_command_owner = Some(owner);
@@ -518,12 +515,12 @@ fn a_visible_v2_action_retains_only_the_pending_activation_token() {
 
 #[test]
 fn failed_anonymous_action_admission_does_not_allow_the_tail_to_overtake() {
-    let _env_guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    let _env_guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
+    let previous_runtime_dir = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
     // SAFETY: this test holds the process environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+        env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
     }
 
     let token = ProtocolToken::generate().unwrap().to_string();
@@ -535,7 +532,7 @@ fn failed_anonymous_action_admission_does_not_allow_the_tail_to_overtake() {
     daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
     daemon.instance_token = token.clone();
     daemon.v2_action_journal = Some(journal.clone());
-    let wake = RuntimeWakeSource::new().unwrap();
+    let wake = RuntimeWakeSource::try_new().unwrap();
     let publisher = daemon.overlay_action_intents.publisher(wake.handle());
     publisher.publish(TrayAction::ToggleFreeze).unwrap();
     publisher.publish(TrayAction::ToggleHelp).unwrap();
@@ -600,19 +597,19 @@ fn failed_anonymous_action_admission_does_not_allow_the_tail_to_overtake() {
     // SAFETY: this test still holds the process environment mutex.
     unsafe {
         match previous_runtime_dir {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+            Some(value) => env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
 }
 
 fn with_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
-    let _env_guard = crate::test_env::lock();
-    let temp = crate::test_temp::tempdir().unwrap();
-    let previous_runtime_dir = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+    let _env_guard = test_env::lock();
+    let temp = test_temp::tempdir().unwrap();
+    let previous_runtime_dir = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
     // SAFETY: this helper holds the process environment mutex.
     unsafe {
-        std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
+        env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path());
     }
 
     let result = run();
@@ -620,8 +617,8 @@ fn with_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
     // SAFETY: this helper still holds the process environment mutex.
     unsafe {
         match previous_runtime_dir {
-            Some(value) => std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, value),
-            None => std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV),
+            Some(value) => env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, value),
+            None => env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV),
         }
     }
     result
@@ -629,9 +626,9 @@ fn with_runtime_dir<T>(run: impl FnOnce() -> T) -> T {
 
 /// Holds the single-instance lock as a running daemon does, so clients reach
 /// the harness instead of reporting that no daemon is running.
-fn hold_daemon_lock() -> std::fs::File {
+fn hold_daemon_lock() -> File {
     let path = daemon_lock_file();
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
     let lock = OpenOptions::new()
         .create(true)
         .read(true)
@@ -664,11 +661,8 @@ fn typed_v2_requests_during_spawn_backoff_fail_without_an_effect() {
         let owner = CommandOwner::open(&token_text).unwrap();
         let journal = ActionJournal::open().unwrap();
         let runtime = DaemonRuntimeRecordV2::current(token).unwrap();
-        super::super::protocol_v2::write_runtime_record_v2(
-            &crate::paths::daemon_pid_file(),
-            &runtime,
-        )
-        .unwrap();
+        super::super::protocol_v2::write_runtime_record_v2(&paths::daemon_pid_file(), &runtime)
+            .unwrap();
         let _daemon_lock = hold_daemon_lock();
         let mut daemon = daemon_in_spawn_backoff();
         daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
@@ -686,13 +680,13 @@ fn typed_v2_requests_during_spawn_backoff_fail_without_an_effect() {
                 ..Default::default()
             },
         ] {
-            let result = std::thread::scope(|scope| {
-                let caller = scope.spawn(|| crate::daemon::send_daemon_toggle_request(&request));
+            let result = thread::scope(|scope| {
+                let caller = scope.spawn(|| daemon::send_daemon_toggle_request(&request));
                 let deadline = Instant::now() + Duration::from_secs(5);
                 while !caller.is_finished() {
                     daemon.process_v2_commands().unwrap();
                     assert!(Instant::now() < deadline, "v2 caller did not finish");
-                    std::thread::sleep(Duration::from_millis(2));
+                    thread::sleep(Duration::from_millis(2));
                 }
                 caller.join().unwrap()
             });
@@ -722,7 +716,7 @@ fn anonymous_action_during_spawn_backoff_is_abandoned_rather_than_replayed() {
         daemon.protocol_mode = DaemonControlProtocolMode::dark_harness();
         daemon.instance_token = token.clone();
         daemon.v2_action_journal = Some(journal.clone());
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let publisher = daemon.overlay_action_intents.publisher(wake.handle());
         publisher.publish(TrayAction::CaptureFull).unwrap();
 
@@ -759,13 +753,13 @@ fn legacy_action_during_spawn_backoff_fails_without_queueing_it() {
 
         assert!(format!("{error:#}").contains("backing off"), "{error:#}");
         assert!(daemon.pending_launch.is_none());
-        assert!(crate::tray_action::take_pending_actions().is_empty());
+        assert!(tray_action::take_pending_actions().is_empty());
     });
 }
 
 #[test]
 fn a_failed_runner_does_not_replay_launch_options_or_leak_resume_override() {
-    let _env_guard = crate::test_env::lock();
+    let _env_guard = test_env::lock();
     let previous_override = crate::runtime_session_override();
     crate::set_runtime_session_override(Some(true));
 

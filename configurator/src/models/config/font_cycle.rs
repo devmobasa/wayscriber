@@ -131,7 +131,7 @@ impl FontCycleDraft {
     }
 
     /// Set one row's family without allowing a blank or repeated identity.
-    pub(crate) fn set(&mut self, index: usize, family: String) -> Result<bool, FontCycleEditError> {
+    pub(crate) fn set(&mut self, index: usize, family: &str) -> Result<bool, FontCycleEditError> {
         let Some(current) = self.entries.get(index) else {
             return Err(FontCycleEditError::MissingEntry);
         };
@@ -202,12 +202,12 @@ mod tests {
         let mut draft = draft(&["Sans", "Serif"]);
 
         assert_eq!(
-            draft.set(1, "sans".to_string()),
+            draft.set(1, "sans"),
             Err(FontCycleEditError::DuplicateFamily("sans".to_string()))
         );
         assert_eq!(draft.entries(), ["Sans", "Serif"]);
 
-        assert_eq!(draft.set(1, "Monospace".to_string()), Ok(true));
+        assert_eq!(draft.set(1, "Monospace"), Ok(true));
         assert_eq!(draft.entries(), ["Sans", "Monospace"]);
     }
 
@@ -215,14 +215,8 @@ mod tests {
     fn blank_and_missing_row_edits_are_rejected() {
         let mut draft = draft(&["Sans"]);
 
-        assert_eq!(
-            draft.set(0, "   ".to_string()),
-            Err(FontCycleEditError::BlankFamily)
-        );
-        assert_eq!(
-            draft.set(4, "Serif".to_string()),
-            Err(FontCycleEditError::MissingEntry)
-        );
+        assert_eq!(draft.set(0, "   "), Err(FontCycleEditError::BlankFamily));
+        assert_eq!(draft.set(4, "Serif"), Err(FontCycleEditError::MissingEntry));
         assert_eq!(draft.entries(), ["Sans"]);
     }
 

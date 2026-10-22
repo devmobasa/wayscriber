@@ -1,11 +1,17 @@
+use std::ffi::OsString;
+use std::os::unix::fs::OpenOptionsExt;
+use std::{env, io, process};
+
 use anyhow::{Context, Result, anyhow};
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::paths;
 
 use super::lock::{lock_exclusive, open_runtime_lock_file, unlock};
 mod hooks;
@@ -67,6 +73,7 @@ impl Default for CatalogFile {
 }
 
 /// Path to the session catalog under the configured XDG data root.
+#[must_use]
 pub fn catalog_path() -> PathBuf {
     catalog_dir().join("sessions.json")
 }
@@ -328,7 +335,7 @@ fn save_catalog_atomic_with_temp_path(
         let mut open_options = OpenOptions::new();
         open_options.write(true).create_new(true);
         #[cfg(unix)]
-        std::os::unix::fs::OpenOptionsExt::mode(&mut open_options, 0o600);
+        OpenOptionsExt::mode(&mut open_options, 0o600);
         let mut file = open_options.open(tmp_path).with_context(|| {
             format!(
                 "failed to open temporary session catalog {}",
@@ -362,14 +369,14 @@ fn save_catalog_atomic_with_temp_path(
 }
 
 fn catalog_dir() -> PathBuf {
-    crate::paths::data_dir()
-        .unwrap_or_else(|| crate::paths::home_dir().unwrap_or_else(std::env::temp_dir))
+    paths::data_dir()
+        .unwrap_or_else(|| paths::home_dir().unwrap_or_else(env::temp_dir))
         .join("wayscriber")
 }
 
 /// Creates missing directories with mode 0700, as the XDG base directory spec asks.
 #[cfg(unix)]
-fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
+fn create_private_dir_all(dir: &Path) -> io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
 
     fs::DirBuilder::new()
@@ -384,7 +391,7 @@ fn create_private_dir_all(dir: &Path) -> std::io::Result<()> {
 }
 
 fn catalog_lock_path(path: &Path) -> PathBuf {
-    let mut raw = std::ffi::OsString::from(path.as_os_str());
+    let mut raw = OsString::from(path.as_os_str());
     raw.push(".lock");
     PathBuf::from(raw)
 }
@@ -403,7 +410,7 @@ fn catalog_temp_path(path: &Path) -> Result<PathBuf> {
             )
         })?;
     let id = NEXT_CATALOG_TEMP_ID.fetch_add(1, Ordering::Relaxed);
-    Ok(parent.join(format!(".{file_name}.{}-{id}.tmp", std::process::id())))
+    Ok(parent.join(format!(".{file_name}.{}-{id}.tmp", process::id())))
 }
 
 #[cfg(unix)]
@@ -431,7 +438,7 @@ fn apply_event(entry: &mut CatalogEntry, event: CatalogEvent, now: u64) {
 
 fn generated_catalog_id(now: u64) -> String {
     let counter = NEXT_CATALOG_ID.fetch_add(1, Ordering::Relaxed);
-    format!("s-{:x}-{:x}-{counter:x}", std::process::id(), now)
+    format!("s-{:x}-{:x}-{counter:x}", process::id(), now)
 }
 
 fn now_epoch_millis() -> u64 {

@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +19,7 @@ impl RuntimeStateResolvedParent {
         Self { path, identity }
     }
 
-    pub(crate) fn path(&self) -> &std::path::Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
@@ -63,7 +63,7 @@ impl RuntimeStatePathIdentity {
         }
     }
 
-    pub(crate) fn source_path(&self) -> &std::path::Path {
+    pub(crate) fn source_path(&self) -> &Path {
         &self.source_path
     }
 
@@ -198,10 +198,10 @@ pub(crate) struct RuntimeStateSourceObservation {
 
 impl RuntimeStateSourceObservation {
     pub(crate) fn missing(revision: RuntimeStateSourceRevision) -> Self {
-        debug_assert!(matches!(
-            revision,
-            RuntimeStateSourceRevision::Missing { .. }
-        ));
+        debug_assert!(
+            matches!(revision, RuntimeStateSourceRevision::Missing { .. }),
+            "a missing-source observation needs a missing revision, got {revision:?}"
+        );
         Self {
             revision,
             envelope: RuntimeStateObservedEnvelope::Missing,

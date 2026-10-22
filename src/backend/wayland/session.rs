@@ -3,10 +3,15 @@
 //! Tracks the current session options and whether a snapshot has been loaded
 //! so WaylandState can coordinate persistence without storing extra fields.
 
+use std::mem;
+
 use anyhow::{Result, anyhow};
 
+#[cfg(test)]
 use crate::input::InputState;
-use crate::session::{self as stored_session, LoadSnapshotOutcome, SessionOptions};
+#[cfg(test)]
+use crate::session::LoadSnapshotOutcome;
+use crate::session::{self as stored_session, SessionOptions};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -103,7 +108,7 @@ impl SessionState {
     /// Allow one synchronous initial load from the surface callback. Drawing
     /// may already exist; the caller must retain it instead of replacing it.
     pub(in crate::backend::wayland) fn begin_initial_load(&mut self) -> bool {
-        !std::mem::replace(&mut self.initial_load_attempted, true)
+        !mem::replace(&mut self.initial_load_attempted, true)
     }
 
     /// Whether the active logical session source has been resolved this run.
@@ -389,7 +394,10 @@ impl SessionState {
         request_id: RequestId,
         window: DirtyWindow,
     ) {
-        debug_assert!(self.in_flight_autosave.is_none());
+        debug_assert!(
+            self.in_flight_autosave.is_none(),
+            "submit one autosave at a time; the previous request is still in flight"
+        );
         self.in_flight_autosave = Some(InFlightAutosave { request_id, window });
         self.dirty = false;
         self.dirty_since = None;
@@ -594,14 +602,19 @@ pub(in crate::backend::wayland) use home::HomeSession;
 pub(in crate::backend::wayland) use home::{
     OutputSessionLoad, SessionHome, SessionLaunch, load_output_session, session_target,
 };
+pub(in crate::backend::wayland) use load_outcome::{ExpandedTooLarge, commit_output_load};
+#[cfg(test)]
 pub(in crate::backend::wayland) use load_outcome::{
-    ExpandedTooLarge, apply_load_outcome, commit_output_load, replace_output_session_snapshot,
+    apply_load_outcome, replace_output_session_snapshot,
 };
 pub(in crate::backend::wayland) use persistence::{
     PersistenceCompletion, PersistenceController, PersistenceOperation, PersistenceOutcome,
     RequestId, SaveCompletion, SaveStrategy, SubmitFailure,
 };
 
+pub(super) use runtime::{
+    ContentlessSaveCheck, has_session_artifact, should_skip_unloaded_contentless_save,
+};
 pub(in crate::backend::wayland) use runtime::{
     QueuedSessionCommand, SessionCommand, SessionCommandAborted, SessionCommandReport,
     SessionCommandTransaction, SessionTransaction, TransactionStep,
@@ -611,7 +624,6 @@ pub(in crate::backend::wayland) use runtime::{
     RuntimeClearSessionReport, RuntimeClearToolStateReport, RuntimeOpenSessionReport,
     RuntimeSaveAsSessionReport,
 };
-pub(super) use runtime::{has_session_artifact, should_skip_unloaded_contentless_save};
 pub(in crate::backend::wayland) use write_policy::SourceWriteRefused;
 
 #[cfg(test)]

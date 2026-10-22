@@ -1,3 +1,5 @@
+use std::f64::consts;
+
 use cairo::Context;
 use std::f64::consts::{FRAC_1_SQRT_2, PI};
 
@@ -478,7 +480,7 @@ pub fn draw_icon_pencil(ctx: &Context, x: f64, y: f64, size: f64) {
     // Additive fills only (the gaps merely reveal the row background), so it is
     // safe on any surface and reads clearly at the ~16px palette size, where the
     // old thin-outline parallelogram with no point just looked like a bar.
-    let inv_sqrt2 = std::f64::consts::FRAC_1_SQRT_2;
+    let inv_sqrt2 = consts::FRAC_1_SQRT_2;
     let ax = x + s * 0.76; // axis origin = center of the eraser end
     let ay = y + s * 0.24;
     let (ux, uy) = (-inv_sqrt2, inv_sqrt2); // down the pencil (toward the nib)

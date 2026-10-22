@@ -1,10 +1,13 @@
-use super::super::{Config, float::finite_or_default};
+use crate::config::UiConfig;
+
+use super::super::Config;
+use super::super::float::finite_or_default;
 
 impl Config {
     /// These styling fields have no load-time finite bounds. Preserve authored
     /// finite values, but keep NaN/infinity out of layout and Cairo consumers.
     pub(super) fn validate_ui_styles(&mut self) {
-        let defaults = crate::config::UiConfig::default();
+        let defaults = UiConfig::default();
         for (field, value, fallback) in [
             (
                 "ui.toolbar.top_offset",

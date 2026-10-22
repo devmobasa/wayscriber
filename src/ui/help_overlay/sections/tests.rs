@@ -1,19 +1,30 @@
+use crate::domain::Language;
+use crate::{i18n, label_format, test_env};
+
 use super::super::types::{Badge, Section, row};
-use super::{HelpOverlayBindings, build_section_sets, hide_unbound_rows};
+use super::{HelpContentOptions, HelpOverlayBindings, build_section_sets, hide_unbound_rows};
 use crate::config::{Action, action_label};
 use crate::label_format::NOT_BOUND_LABEL;
 
 #[test]
 fn chinese_help_search_finds_undo_without_reordering_sections() {
-    crate::test_env::in_language_isolated_child(
+    test_env::in_language_isolated_child(
         concat!(
             module_path!(),
             "::chinese_help_search_finds_undo_without_reordering_sections"
         ),
         || {
-            crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
-            let sections =
-                build_section_sets(&HelpOverlayBindings::default(), false, false, true, true).all;
+            i18n::set_language(Language::SimplifiedChinese);
+            let sections = build_section_sets(
+                &HelpOverlayBindings::default(),
+                HelpContentOptions {
+                    frozen_enabled: false,
+                    context_filter: false,
+                    board_enabled: true,
+                    capture_enabled: true,
+                },
+            )
+            .all;
             let titles: Vec<_> = sections.iter().map(|section| section.title).collect();
             let filtered = super::filter_sections_for_search(sections, "撤销");
             assert!(
@@ -40,7 +51,16 @@ fn chinese_help_search_finds_undo_without_reordering_sections() {
 #[test]
 fn gesture_hints_remain_present() {
     let bindings = HelpOverlayBindings::default();
-    let sections = build_section_sets(&bindings, false, false, true, true).all;
+    let sections = build_section_sets(
+        &bindings,
+        HelpContentOptions {
+            frozen_enabled: false,
+            context_filter: false,
+            board_enabled: true,
+            capture_enabled: true,
+        },
+    )
+    .all;
     let rows: Vec<(&str, &str)> = sections
         .iter()
         .flat_map(|section| section.rows.iter())
@@ -71,7 +91,16 @@ fn gesture_hints_remain_present() {
 #[test]
 fn canvas_export_rows_remain_visible_when_capture_context_is_disabled() {
     let bindings = HelpOverlayBindings::default();
-    let sections = build_section_sets(&bindings, false, true, true, false).all;
+    let sections = build_section_sets(
+        &bindings,
+        HelpContentOptions {
+            frozen_enabled: false,
+            context_filter: true,
+            board_enabled: true,
+            capture_enabled: false,
+        },
+    )
+    .all;
     let rows: Vec<&str> = sections
         .iter()
         .flat_map(|section| section.rows.iter())
@@ -100,7 +129,16 @@ fn canvas_export_rows_remain_visible_when_capture_context_is_disabled() {
 #[test]
 fn interactive_region_capture_has_a_help_row_when_capture_is_enabled() {
     let bindings = HelpOverlayBindings::default();
-    let sections = build_section_sets(&bindings, false, true, true, true).all;
+    let sections = build_section_sets(
+        &bindings,
+        HelpContentOptions {
+            frozen_enabled: false,
+            context_filter: true,
+            board_enabled: true,
+            capture_enabled: true,
+        },
+    )
+    .all;
     let rows = sections
         .iter()
         .flat_map(|section| section.rows.iter())
@@ -108,22 +146,30 @@ fn interactive_region_capture_has_a_help_row_when_capture_is_enabled() {
 
     assert!(rows.iter().any(|row| {
         row.action == action_label(Action::CaptureRegionInteractive)
-            && row.key == crate::label_format::NOT_BOUND_LABEL
+            && row.key == label_format::NOT_BOUND_LABEL
     }));
 }
 
 #[test]
 fn capture_free_measure_mode_stays_visible_when_capture_is_disabled() {
     let bindings = HelpOverlayBindings::default();
-    let sections = build_section_sets(&bindings, false, true, true, false).all;
+    let sections = build_section_sets(
+        &bindings,
+        HelpContentOptions {
+            frozen_enabled: false,
+            context_filter: true,
+            board_enabled: true,
+            capture_enabled: false,
+        },
+    )
+    .all;
     let rows = sections
         .iter()
         .flat_map(|section| section.rows.iter())
         .collect::<Vec<_>>();
 
     assert!(rows.iter().any(|row| {
-        row.action == action_label(Action::MeasureMode)
-            && row.key == crate::label_format::NOT_BOUND_LABEL
+        row.action == action_label(Action::MeasureMode) && row.key == label_format::NOT_BOUND_LABEL
     }));
 }
 

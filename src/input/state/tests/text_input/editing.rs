@@ -4,6 +4,9 @@
 //! unit-tested in `actions::key_press::caret_edit`; these assert the wiring:
 //! key rerouting, selection, and clipboard intent capture.
 
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::super::*;
 
 fn text_state(buffer: &str) -> InputState {
@@ -152,7 +155,7 @@ fn collapsing_a_selection_at_its_caret_boundary_marks_an_external_change() {
 
 #[test]
 fn keyboard_pointer_and_paste_changes_mark_an_external_ime_update() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     use crate::input::MouseButton;
 
     let mut state = text_state("abc");
@@ -272,7 +275,7 @@ fn ctrl_x_without_a_selection_falls_through_without_editing() {
 
 #[test]
 fn ctrl_x_deletes_the_selection_only_after_clipboard_publication() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -317,7 +320,7 @@ fn repeated_ctrl_x_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn stale_cut_completion_never_deletes_later_edits() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.shift = true;
     state.on_key_press(Key::Home);
@@ -337,7 +340,7 @@ fn stale_cut_completion_never_deletes_later_edits() {
 
 #[test]
 fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -373,7 +376,7 @@ fn cut_completion_is_invalid_after_intervening_edits_restore_the_same_selection(
 
 #[test]
 fn ctrl_v_requests_a_paste_that_inserts_at_the_caret() {
-    let route_measurer = crate::draw::TextMeasurer::default();
+    let route_measurer = TextMeasurer::default();
     let mut state = text_state("ac");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('v'));
@@ -410,7 +413,7 @@ fn repeated_ctrl_v_requests_are_retained_before_backend_draining() {
 
 #[test]
 fn delayed_paste_replaces_the_selection_captured_at_invocation() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = text_state("hello");
     state.modifiers.ctrl = true;
     state.on_key_press(Key::Char('a'));
@@ -433,8 +436,8 @@ fn delayed_paste_replaces_the_selection_captured_at_invocation() {
 
 #[test]
 fn paste_generation_does_not_match_a_later_text_edit() {
-    let measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &measurer,
         ui_engine: &test_ui_engine,
@@ -459,8 +462,8 @@ fn paste_generation_does_not_match_a_later_text_edit() {
 
 #[test]
 fn first_click_places_a_new_empty_text_block() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -641,7 +644,7 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
         .style
         .font_descriptor
         .to_pango_string(state.style.current_font_size);
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let geometry = measurer
         .caret_geometry_text(preview, &font, None, 11)
         .expect("preview caret geometry is measurable");
@@ -657,7 +660,7 @@ fn click_after_visible_preedit_maps_back_to_the_committed_buffer() {
 
 #[test]
 fn edit_ghost_is_hidden_in_place_and_shown_after_moving() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     use crate::draw::Shape;
 

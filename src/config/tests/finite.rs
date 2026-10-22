@@ -1,4 +1,9 @@
 //! Load-policy contracts, inventoried independently against the declaration-derived schema.
+use std::fs;
+
+use crate::config::SaveValidationError;
+use crate::test_temp;
+
 use super::{Config, ConfigDocument};
 use toml::Value;
 
@@ -247,7 +252,7 @@ fn fixture(path: &str) -> Value {
 
 #[test]
 fn document_load_enforces_finite_policy_for_every_float_and_array_component() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let file = temp.path().join("config.toml");
     for case in cases() {
         let mut inputs = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
@@ -263,7 +268,7 @@ fn document_load_enforces_finite_policy_for_every_float_and_array_component() {
             let mut raw = fixture(&case.path);
             set(&mut raw, &case.path, Value::Float(input));
             let source = toml::to_string(&raw).unwrap();
-            std::fs::write(&file, &source).unwrap();
+            fs::write(&file, &source).unwrap();
             let document = ConfigDocument::load_from_path(&file).unwrap();
             assert!(
                 document.section_errors().is_empty(),
@@ -286,7 +291,7 @@ fn document_load_enforces_finite_policy_for_every_float_and_array_component() {
             };
             assert_eq!(actual, expected, "{} input={input}", case.path);
             assert_eq!(
-                std::fs::read_to_string(&file).unwrap(),
+                fs::read_to_string(&file).unwrap(),
                 source,
                 "load must not rewrite authored non-finite values"
             );
@@ -297,14 +302,14 @@ fn document_load_enforces_finite_policy_for_every_float_and_array_component() {
 #[cfg(feature = "tablet-input")]
 #[test]
 fn tablet_normalizes_nonfinite_values_before_ordering_and_clamping() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let file = temp.path().join("config.toml");
     for (min, max, expected) in [
         ("nan", "inf", (1.0, 8.0)),
         ("60.0", "-10.0", (1.0, 50.0)),
         ("45.0", "nan", (8.0, 45.0)),
     ] {
-        std::fs::write(
+        fs::write(
             &file,
             format!("[tablet]\nmin_thickness = {min}\nmax_thickness = {max}\n"),
         )
@@ -319,9 +324,7 @@ fn tablet_normalizes_nonfinite_values_before_ordering_and_clamping() {
 fn authored_save_rejects_nonfinite_float_with_a_field_level_correction() {
     let mut edited = Config::default();
     edited.drawing.default_thickness = f64::NAN;
-    let Err(crate::config::SaveValidationError::CorrectedValues(corrections)) =
-        edited.validate_for_save()
-    else {
+    let Err(SaveValidationError::CorrectedValues(corrections)) = edited.validate_for_save() else {
         panic!("authored save must report the invalid numeric input");
     };
     assert_eq!(corrections.len(), 1);

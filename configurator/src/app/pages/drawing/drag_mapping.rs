@@ -86,7 +86,7 @@ fn build_drag_button_section(page: &mut PageBuilder, button: DragMouseButton) {
             &list,
             field.label(),
             tools.clone(),
-            tool_labels.clone(),
+            &tool_labels,
             move |app| drag_tool_for_field(drag_button_config(app, button), field),
             move |option| Message::DrawingMouseDragToolChanged(button, field, option),
         );
@@ -95,7 +95,7 @@ fn build_drag_button_section(page: &mut PageBuilder, button: DragMouseButton) {
             &list,
             &trf("{} color", &[&field.label()]),
             colors.clone(),
-            color_labels.clone(),
+            &color_labels,
             move |app| drag_color_for_field(drag_button_config(app, button), field),
             move |option| Message::DrawingMouseDragColorChanged(button, field, option),
         );

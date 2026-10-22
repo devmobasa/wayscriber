@@ -1,3 +1,5 @@
+use crate::input::DragToolBindings;
+
 use super::super::base::{
     DrawingState, InputState, PRESET_FEEDBACK_DURATION_MS, PRESET_TOAST_DURATION_MS,
     PresetFeedbackKind,
@@ -5,7 +7,8 @@ use super::super::base::{
 use super::super::default_step_marker_size;
 use crate::config::{PresetSlotsConfig, PresetToolStatesConfig, ToolPresetConfig};
 use crate::draw::TextMeasurer;
-use crate::input::{DragModifier, tool::Tool};
+use crate::input::DragModifier;
+use crate::input::tool::Tool;
 use std::time::{Duration, Instant};
 
 impl InputState {
@@ -95,8 +98,7 @@ impl InputState {
             let drag_tools = drag_tools
                 .clone()
                 .resolve_with_left_defaults(&left_defaults);
-            let _ = self
-                .set_drag_tool_bindings(crate::input::DragToolBindings::from_config(&drag_tools));
+            let _ = self.set_drag_tool_bindings(DragToolBindings::from_config(&drag_tools));
         }
 
         self.preset_slots.activate(slot);

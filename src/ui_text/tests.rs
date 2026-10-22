@@ -15,7 +15,7 @@ fn uncached_text_extents(
     text: &str,
     wrap_width: Option<f64>,
 ) -> UiTextExtents {
-    let layout = pangocairo::functions::create_layout(ctx);
+    let layout = functions::create_layout(ctx);
     let font_desc = font_description(style);
     layout.set_font_description(Some(&font_desc));
     layout.set_text(text);

@@ -124,7 +124,11 @@ impl ImageSurfaceCache {
     fn evict_if_needed(&mut self) {
         while self.entries.len() > self.max_entries || self.cached_bytes > self.max_bytes {
             let Some(oldest) = self.access_order.pop_front() else {
-                debug_assert!(self.entries.is_empty());
+                debug_assert!(
+                    self.entries.is_empty(),
+                    "every cached image has an access-order slot, but {} entries have none",
+                    self.entries.len()
+                );
                 self.cached_bytes = 0;
                 break;
             };
@@ -260,12 +264,16 @@ fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Weak;
+
+    use crate::draw::EmbeddedImage;
+
     use super::{ImageBytesIdentity, ImageCacheKey, ImageSurfaceCache};
     use cairo::{Format, ImageSurface};
     use std::rc::Rc;
     use std::sync::Arc;
 
-    fn cache_key(marker: u8) -> (ImageCacheKey, std::sync::Weak<[u8]>) {
+    fn cache_key(marker: u8) -> (ImageCacheKey, Weak<[u8]>) {
         let bytes: Arc<[u8]> = vec![marker].into();
         let weak = Arc::downgrade(&bytes);
         (
@@ -357,7 +365,7 @@ mod tests {
     fn decoded_cache_reuses_only_shared_payload_and_matching_metadata() {
         let mut bytes = Vec::new();
         surface().write_to_png(&mut bytes).unwrap();
-        let data = crate::draw::EmbeddedImage {
+        let data = EmbeddedImage {
             mime_type: "image/png".into(),
             width: 1,
             height: 1,
@@ -367,13 +375,13 @@ mod tests {
         let first = super::cached_surface(&mut cache, &data).unwrap();
         let shared = super::cached_surface(&mut cache, &data.clone()).unwrap();
         assert!(Rc::ptr_eq(&first, &shared));
-        let separate_payload = crate::draw::EmbeddedImage {
+        let separate_payload = EmbeddedImage {
             bytes: bytes.into(),
             ..data.clone()
         };
         let distinct = super::cached_surface(&mut cache, &separate_payload).unwrap();
         assert!(!Rc::ptr_eq(&first, &distinct));
-        let different_metadata = crate::draw::EmbeddedImage {
+        let different_metadata = EmbeddedImage {
             mime_type: String::new(),
             ..data
         };
@@ -388,7 +396,7 @@ mod tests {
             .unwrap()
             .write_to_png(&mut bytes)
             .unwrap();
-        let recorded = crate::draw::EmbeddedImage {
+        let recorded = EmbeddedImage {
             mime_type: "image/png".into(),
             width: 2,
             height: 2,
@@ -396,7 +404,7 @@ mod tests {
         };
         let mut cache = ImageSurfaceCache::default();
 
-        let tampered = crate::draw::EmbeddedImage {
+        let tampered = EmbeddedImage {
             width: 1,
             ..recorded.clone()
         };

@@ -1,5 +1,8 @@
 //! Focus mode: snapshot-hide of every chrome surface and exact restore.
 
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::create_test_input_state;
 use crate::config::{
     Action, ColorSpec, StatusBarItem, StatusBarStyle, StatusPosition, ToolPresetConfig,
@@ -10,8 +13,8 @@ use crate::input::state::{Toast, ToastPriority};
 
 #[test]
 fn focus_mode_hides_all_chrome_and_restores_exactly() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -56,8 +59,8 @@ fn focus_mode_hides_all_chrome_and_restores_exactly() {
 
 #[test]
 fn focus_mode_toast_offers_restore_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -78,8 +81,8 @@ fn focus_mode_toast_offers_restore_action() {
 
 #[test]
 fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -110,8 +113,8 @@ fn focus_mode_suppresses_fallback_mode_badges_but_keeps_restore_toast() {
 
 #[test]
 fn manual_chrome_toggle_breaks_focus_mode() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -145,8 +148,8 @@ fn manual_chrome_toggle_breaks_focus_mode() {
 
 #[test]
 fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -182,8 +185,8 @@ fn breaking_focus_mode_retracts_a_restore_toast_queued_behind_a_warning() {
 
 #[test]
 fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -230,8 +233,8 @@ fn preset_status_bar_update_stays_hidden_until_focus_mode_restores_it() {
 
 #[test]
 fn focus_mode_rescues_a_fully_hidden_ui() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -276,8 +279,8 @@ fn focus_mode_rescues_a_fully_hidden_ui() {
 
 #[test]
 fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -289,8 +292,8 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
     state.ui_visibility.show_zoom_chip = false;
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
@@ -324,8 +327,8 @@ fn focus_mode_rescues_when_the_enabled_status_bar_has_no_visible_content() {
 
 #[test]
 fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -355,8 +358,8 @@ fn focus_mode_hides_a_floating_badge_when_it_is_the_only_visible_chrome() {
 
 #[test]
 fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -384,8 +387,8 @@ fn focus_mode_hides_a_zoom_badge_when_it_is_the_only_visible_chrome() {
 
 #[test]
 fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -398,8 +401,8 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
     state.set_zoom_status(true, false, 2.0, (0.0, 0.0));
     for item in StatusBarItem::ALL {
         state.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
@@ -424,8 +427,8 @@ fn focus_mode_hides_a_fallback_badge_when_the_enabled_status_bar_is_empty() {
 
 #[test]
 fn focus_mode_never_enqueues_persistence() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -450,8 +453,8 @@ fn focus_mode_never_enqueues_persistence() {
 /// transient and neither of them queues durable work.
 #[test]
 fn visibility_toggles_stay_process_only_across_focus_mode() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -480,8 +483,8 @@ fn visibility_toggles_stay_process_only_across_focus_mode() {
 
 #[test]
 fn presenter_mode_gates_focus_mode() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let route_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let route_ui_engine = UiTextEngine::default();
     let route_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &route_ui_engine,
@@ -499,8 +502,8 @@ fn presenter_mode_gates_focus_mode() {
 
 #[test]
 fn focus_mode_exits_light_mode_before_taking_ownership() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -524,8 +527,8 @@ fn focus_mode_exits_light_mode_before_taking_ownership() {
 
 #[test]
 fn light_mode_exits_focus_mode_before_taking_ownership() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -549,8 +552,8 @@ fn light_mode_exits_focus_mode_before_taking_ownership() {
 
 #[test]
 fn unsupported_light_mode_does_not_break_focus_mode() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -573,8 +576,8 @@ fn unsupported_light_mode_does_not_break_focus_mode() {
 
 #[test]
 fn light_mode_drawing_exits_focus_mode_before_taking_ownership() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,

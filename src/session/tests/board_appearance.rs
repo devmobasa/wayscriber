@@ -1,3 +1,8 @@
+use crate::draw::{Frame, TextMeasurer};
+use crate::input::Tool;
+use crate::session;
+use crate::session::{BoardPagesSnapshot, BoardSnapshot, SessionSnapshot};
+
 use super::helpers::dummy_input_state;
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{BLACK, RED};
@@ -48,7 +53,7 @@ fn board_appearance_same_id_restore_resolves_pen_then_tool_state_wins() {
     let mut target = dummy_input_state();
     target.switch_board_force("whiteboard");
     apply_snapshot(&mut target, snapshot, &options);
-    assert_eq!(target.color_for_tool(crate::input::Tool::Pen), RED);
+    assert_eq!(target.color_for_tool(Tool::Pen), RED);
     assert_eq!(
         target.boards.active_board().pen_origin,
         BoardPenOrigin::RuntimeContrast
@@ -62,7 +67,7 @@ fn board_appearance_same_id_restore_resolves_pen_then_tool_state_wins() {
     tools.tool_settings = None;
     tools.board_previous_color = Some(RED);
     apply_snapshot(&mut target, snapshot, &options);
-    assert_eq!(target.color_for_tool(crate::input::Tool::Pen), BLACK);
+    assert_eq!(target.color_for_tool(Tool::Pen), BLACK);
     assert_eq!(target.board_previous_color(), Some(RED));
 }
 
@@ -89,37 +94,37 @@ fn board_appearance_named_replacement_clears_absent_overrides_and_failed_replace
     input.switch_board_force("whiteboard");
     let seed = BoardAppearance::from_spec(&input.boards.active_board().spec);
     input.set_board_background_color(input.boards.active_index(), RED);
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
-    input.board_picker_edit_color_selected_with_measurer(&crate::draw::TextMeasurer::default());
-    let empty = crate::session::SessionSnapshot {
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
+    input.board_picker_edit_color_selected_with_measurer(&TextMeasurer::default());
+    let empty = SessionSnapshot {
         active_board_id: "whiteboard".into(),
         boards: Vec::new(),
         tool_state: None,
     };
     let mut too_many = empty.clone();
     for index in 0..input.boards.max_count() + 1 {
-        too_many.boards.push(crate::session::BoardSnapshot {
+        too_many.boards.push(BoardSnapshot {
             id: format!("overflow-{index}"),
             appearance: None,
-            pages: crate::session::BoardPagesSnapshot {
-                pages: vec![crate::draw::Frame::new()],
+            pages: BoardPagesSnapshot {
+                pages: vec![Frame::new()],
                 active: 0,
             },
         });
     }
     assert!(
-        crate::session::apply_snapshot_replacing_boards(
+        session::apply_snapshot_replacing_boards(
             &mut input,
-            &crate::draw::TextMeasurer::default(),
+            &TextMeasurer::default(),
             too_many,
             &options()
         )
         .is_err()
     );
     assert!(input.board_appearance_edit().is_some());
-    crate::session::apply_snapshot_replacing_boards(
+    session::apply_snapshot_replacing_boards(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         empty,
         &options(),
     )

@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::config::ZoomChipDisplay;
 use crate::ui::{ZoomChipButtonKind, ZoomChipLayout, ZoomChipPress};
 
@@ -74,7 +76,7 @@ impl ZoomChipState {
     }
 
     pub(in crate::input::state) fn take_press_pending(&mut self) -> ZoomChipPress {
-        std::mem::replace(&mut self.press_pending, ZoomChipPress::None)
+        mem::replace(&mut self.press_pending, ZoomChipPress::None)
     }
 }
 

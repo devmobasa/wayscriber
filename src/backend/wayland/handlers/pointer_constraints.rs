@@ -1,11 +1,8 @@
 use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsHandler;
-use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_pointer, wl_surface},
-};
-use wayland_protocols::wp::pointer_constraints::zv1::client::{
-    zwp_confined_pointer_v1::ZwpConfinedPointerV1, zwp_locked_pointer_v1::ZwpLockedPointerV1,
-};
+use wayland_client::protocol::{wl_pointer, wl_surface};
+use wayland_client::{Connection, QueueHandle};
+use wayland_protocols::wp::pointer_constraints::zv1::client::zwp_confined_pointer_v1::ZwpConfinedPointerV1;
+use wayland_protocols::wp::pointer_constraints::zv1::client::zwp_locked_pointer_v1::ZwpLockedPointerV1;
 
 use super::super::state::WaylandState;
 

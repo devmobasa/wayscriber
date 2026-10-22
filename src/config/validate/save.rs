@@ -1,3 +1,8 @@
+use std::fmt::{Display, Formatter};
+use std::{error, fmt};
+
+use toml::ser;
+
 use super::{Config, ConfigValidationReport};
 
 /// Why an authored configuration cannot be saved without losing user input.
@@ -6,7 +11,7 @@ pub enum SaveValidationError {
     /// Validation would change these values on their way to disk. Never
     /// empty: an unchanged configuration is accepted.
     CorrectedValues(Vec<CorrectedValue>),
-    Representation(toml::ser::Error),
+    Representation(ser::Error),
 }
 
 /// One persisted value that validation would change on save.
@@ -26,6 +31,7 @@ pub struct CorrectedValue {
 
 impl CorrectedValue {
     /// The change without the path, for a caller that shows the path itself.
+    #[must_use]
     pub fn summary(&self) -> String {
         match (&self.authored, &self.corrected) {
             (Some(authored), Some(corrected)) => format!(
@@ -44,8 +50,8 @@ impl CorrectedValue {
     }
 }
 
-impl std::fmt::Display for CorrectedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for CorrectedValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.path, self.summary())
     }
 }
@@ -63,8 +69,8 @@ fn describe_value(value: &toml::Value) -> String {
     }
 }
 
-impl std::fmt::Display for SaveValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SaveValidationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::CorrectedValues(values) => {
                 f.write_str("Some values would be changed on save. Fix them before saving:")?;
@@ -80,16 +86,16 @@ impl std::fmt::Display for SaveValidationError {
         }
     }
 }
-impl std::error::Error for SaveValidationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for SaveValidationError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Representation(error) => Some(error),
             Self::CorrectedValues(_) => None,
         }
     }
 }
-impl From<toml::ser::Error> for SaveValidationError {
-    fn from(error: toml::ser::Error) -> Self {
+impl From<ser::Error> for SaveValidationError {
+    fn from(error: ser::Error) -> Self {
         Self::Representation(error)
     }
 }

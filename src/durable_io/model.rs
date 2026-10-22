@@ -1,8 +1,7 @@
-use std::fmt;
-use std::fs;
-use std::io;
 use std::path::PathBuf;
+use std::{fmt, fs, io};
 
+use std::error;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
@@ -79,8 +78,8 @@ impl fmt::Display for DurableIoError {
     }
 }
 
-impl std::error::Error for DurableIoError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl error::Error for DurableIoError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),
             _ => None,
@@ -116,6 +115,7 @@ pub struct FileIdentity;
 
 impl FileIdentity {
     #[cfg(unix)]
+    #[must_use]
     pub fn of(metadata: &fs::Metadata) -> Self {
         Self {
             device: metadata.dev(),
@@ -139,14 +139,14 @@ impl FileIdentity {
 /// catch an editor that truncates and rewrites the same file in place. Carrying
 /// both makes the rename conditional on the complete revision the caller read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DestinationExpectation<'a> {
+pub enum DestinationExpectation<'contents> {
     /// The path named nothing when the caller looked. Anything there now was
     /// put there by somebody else, and creating over it would discard it.
     Absent,
     /// It named this regular file with exactly these contents.
     Present {
         identity: FileIdentity,
-        contents: &'a [u8],
+        contents: &'contents [u8],
     },
 }
 
@@ -172,6 +172,7 @@ pub struct AtomicWriteOptions {
 }
 
 impl AtomicWriteOptions {
+    #[must_use]
     pub const fn private_runtime_file() -> Self {
         Self {
             overwrite: OverwriteMode::Replace,
@@ -182,6 +183,7 @@ impl AtomicWriteOptions {
         }
     }
 
+    #[must_use]
     pub const fn user_config_file() -> Self {
         Self {
             overwrite: OverwriteMode::Replace,

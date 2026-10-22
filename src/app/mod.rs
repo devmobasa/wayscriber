@@ -3,13 +3,23 @@ mod languages;
 mod session;
 mod usage;
 
+use std::env as std_env;
+use std::os::fd::RawFd;
+use std::{fs, io};
+
 use crate::backend::ExitAfterCaptureMode;
 use crate::cli::Cli;
-use crate::daemon::DaemonToggleRequest;
+use crate::daemon::{Daemon, DaemonToggleRequest, protocol_v2};
 use crate::env_vars::{DETACHED_ENV, NO_DETACH_ENV, NO_TRAY_ENV, WAYLAND_DISPLAY_ENV};
 use crate::paths::overlay_lock_file;
+use crate::process_broker::{HelperKind, HelperLifetime};
+use crate::session as stored_session;
 use crate::session::try_lock_exclusive;
 use crate::session_override::set_runtime_session_override;
+use crate::{
+    about_window, backend, daemon, i18n, launch_environment, process_broker, runtime_capabilities,
+    update_check,
+};
 use anyhow::Context;
 use env::env_flag_enabled;
 use session::run_session_cli_commands;
@@ -22,7 +32,7 @@ use usage::{log_overlay_controls, print_usage};
 fn acquire_overlay_lock() -> anyhow::Result<Option<File>> {
     let lock_path = overlay_lock_file();
     if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
 
     let lock_file = OpenOptions::new()
@@ -46,17 +56,17 @@ fn maybe_detach_active(cli: &Cli) -> anyhow::Result<bool> {
     if !(cli.active || cli.freeze) {
         return Ok(false);
     }
-    if env_flag_enabled(NO_DETACH_ENV) || std::env::var_os(DETACHED_ENV).is_some() {
+    if env_flag_enabled(NO_DETACH_ENV) || std_env::var_os(DETACHED_ENV).is_some() {
         return Ok(false);
     }
-    let exe = std::env::current_exe()?;
-    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
-    crate::process_broker::current()?.spawn(
-        crate::process_broker::HelperKind::InitialDetach,
-        crate::process_broker::HelperLifetime::DetachedAfterExec,
+    let exe = std_env::current_exe()?;
+    let args: Vec<OsString> = std_env::args_os().skip(1).collect();
+    process_broker::current()?.spawn(
+        HelperKind::InitialDetach,
+        HelperLifetime::DetachedAfterExec,
         exe.as_os_str(),
         args,
-        detach_environment(crate::launch_environment::var_os),
+        detach_environment(launch_environment::var_os),
     )?;
     Ok(true)
 }
@@ -70,7 +80,7 @@ fn detach_environment(
 ) -> Vec<(OsString, Option<OsString>)> {
     let mut environment = vec![(DETACHED_ENV.into(), Some("1".into()))];
 
-    for name in crate::launch_environment::STARTUP_NOTIFICATION_VARIABLES {
+    for name in launch_environment::STARTUP_NOTIFICATION_VARIABLES {
         if let Some(value) = launched_with(name) {
             environment.push((name.into(), Some(value)));
         }
@@ -86,14 +96,14 @@ fn normalized_named_session_file(cli: &Cli) -> anyhow::Result<Option<PathBuf>> {
     let raw = raw_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("--session-file path must be valid UTF-8"))?;
-    Ok(Some(crate::session::normalize_named_session_file_arg(raw)))
+    Ok(Some(stored_session::normalize_named_session_file_arg(raw)))
 }
 
 fn daemon_request_session_file(path: Option<PathBuf>) -> anyhow::Result<Option<PathBuf>> {
     let Some(path) = path else {
         return Ok(None);
     };
-    let current_dir = std::env::current_dir()
+    let current_dir = std_env::current_dir()
         .context("failed to resolve current directory for daemon session file")?;
     Ok(Some(anchor_session_file_for_daemon_request(
         path,
@@ -114,10 +124,10 @@ fn preflight_named_overlay_session(cli: &Cli, path: Option<&Path>) -> anyhow::Re
         return Ok(());
     };
     if cli.active || cli.freeze || cli.daemon || cli.daemon_toggle {
-        crate::session::validate_named_session_file_for_foreground(path)?;
+        stored_session::validate_named_session_file_for_foreground(path)?;
     }
     if cli.active || cli.freeze {
-        crate::backend::preflight_wayland_connection()?;
+        backend::preflight_wayland_connection()?;
     }
     Ok(())
 }
@@ -178,7 +188,7 @@ fn detach_from_tty() {
 
 /// Replaces `fd` with a descriptor for /dev/null, keeping the number in use.
 #[cfg(unix)]
-fn redirect_to_dev_null(fd: std::os::fd::RawFd) -> std::io::Result<()> {
+fn redirect_to_dev_null(fd: RawFd) -> io::Result<()> {
     use std::os::fd::AsRawFd;
 
     let null = OpenOptions::new()
@@ -188,7 +198,7 @@ fn redirect_to_dev_null(fd: std::os::fd::RawFd) -> std::io::Result<()> {
     // SAFETY: both descriptors are open. dup2 atomically replaces `fd` and
     // leaves `null` open for its owner to close.
     if unsafe { libc::dup2(null.as_raw_fd(), fd) } < 0 {
-        return Err(std::io::Error::last_os_error());
+        return Err(io::Error::last_os_error());
     }
     Ok(())
 }
@@ -197,8 +207,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     if cli.runtime_capabilities {
         print!(
             "{}",
-            crate::runtime_capabilities::render_runtime_capabilities(
-                crate::runtime_capabilities::current_runtime_capabilities()
+            runtime_capabilities::render_runtime_capabilities(
+                runtime_capabilities::current_runtime_capabilities()
             )
         );
         return Ok(());
@@ -207,7 +217,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     // Before anything selects a language, so every selection in this run,
     // and the overlays and About windows it starts, use it.
     if let Some(language) = languages::given_language(&cli) {
-        crate::i18n::set_command_line_language(language);
+        i18n::set_command_line_language(language);
     }
     if cli.list_languages {
         languages::print_languages();
@@ -217,12 +227,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     // Runtime and update-checking modes create their process broker before
     // acquiring locks or starting threads. The guard spans the complete run.
     let _process_broker = needs_process_broker(&cli)
-        .then(crate::process_broker::start_for_runtime)
+        .then(process_broker::start_for_runtime)
         .transpose()?;
-    crate::daemon::protocol_v2::start_daemon_watchdog_from_environment()?;
+    protocol_v2::start_daemon_watchdog_from_environment()?;
 
     #[cfg(unix)]
-    if std::env::var_os(DETACHED_ENV).is_some() {
+    if std_env::var_os(DETACHED_ENV).is_some() {
         detach_from_tty();
     }
 
@@ -240,7 +250,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     };
 
     if cli.about {
-        crate::about_window::run_about_window()?;
+        about_window::run_about_window()?;
         return Ok(());
     }
 
@@ -252,7 +262,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .daemon_overlay_action()
         .map_err(|err| anyhow::anyhow!(err))?
     {
-        crate::daemon::send_daemon_overlay_action(action)?;
+        daemon::send_daemon_overlay_action(action)?;
         return Ok(());
     }
 
@@ -268,7 +278,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             session_file,
             overlay_action: None,
         };
-        crate::daemon::send_daemon_toggle_request(&request)?;
+        daemon::send_daemon_toggle_request(&request)?;
         return Ok(());
     }
 
@@ -279,7 +289,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     // Check for Wayland environment
-    if std::env::var(WAYLAND_DISPLAY_ENV).is_err() && (cli.daemon || cli.active || cli.freeze) {
+    if std_env::var(WAYLAND_DISPLAY_ENV).is_err() && (cli.daemon || cli.active || cli.freeze) {
         return Err(anyhow::anyhow!(
             "{WAYLAND_DISPLAY_ENV} not set - this application requires Wayland."
         ));
@@ -292,7 +302,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         if tray_disabled {
             log::info!("Tray disabled via --no-tray / {NO_TRAY_ENV}");
         }
-        let mut daemon = crate::daemon::Daemon::new(
+        let mut daemon = Daemon::new(
             cli.mode,
             !tray_disabled,
             session_override,
@@ -308,7 +318,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             Some(lock) => lock,
             None => return Ok(()),
         };
-        crate::daemon::protocol_v2::publish_ready_from_environment()
+        protocol_v2::publish_ready_from_environment()
             .context("failed to publish daemon overlay readiness")?;
         // One-shot mode: show overlay immediately and exit when done
         log_overlay_controls(cli.freeze);
@@ -324,7 +334,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         };
 
         // Run Wayland backend
-        crate::backend::run_wayland(
+        backend::run_wayland(
             cli.mode,
             cli.freeze,
             exit_after_capture_mode,
@@ -347,11 +357,18 @@ fn needs_process_broker(cli: &Cli) -> bool {
         // About's URL and clipboard helpers need the broker even when network
         // update checks were compiled out of this build.
         || cli.about
-        || (cli.check_update && !crate::update_check::compiled_out())
+        || (cli.check_update && !update_check::compiled_out())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use crate::durable_io::AtomicWriteOptions;
+    use crate::{durable_io, env_vars, test_env, test_temp};
+
     use super::*;
 
     #[test]
@@ -398,7 +415,7 @@ mod tests {
         use std::io::Write;
         use std::os::fd::AsRawFd;
 
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let path = temp.path().join("was-a-terminal");
         let mut file = File::create(&path).unwrap();
         file.write_all(b"before ").unwrap();
@@ -408,7 +425,7 @@ mod tests {
 
         // SAFETY: F_GETFD only inspects the descriptor the file still owns.
         assert!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } >= 0);
-        assert_eq!(std::fs::read(&path).unwrap(), b"before ");
+        assert_eq!(fs::read(&path).unwrap(), b"before ");
     }
 
     /// Names the report file, and so marks the detached child run, of the
@@ -417,14 +434,14 @@ mod tests {
     const DETACH_LAUNCH_TOKEN: &str = "detach-launch-token";
 
     fn launched_with_token(name: &str) -> Option<OsString> {
-        (name == crate::env_vars::XDG_ACTIVATION_TOKEN_ENV).then(|| DETACH_LAUNCH_TOKEN.into())
+        (name == env_vars::XDG_ACTIVATION_TOKEN_ENV).then(|| DETACH_LAUNCH_TOKEN.into())
     }
 
     #[test]
     fn the_detached_relaunch_forwards_the_launch_startup_notification() {
         let detached = (OsString::from(DETACHED_ENV), Some(OsString::from("1")));
         let token = (
-            OsString::from(crate::env_vars::XDG_ACTIVATION_TOKEN_ENV),
+            OsString::from(env_vars::XDG_ACTIVATION_TOKEN_ENV),
             Some(OsString::from(DETACH_LAUNCH_TOKEN)),
         );
 
@@ -440,18 +457,18 @@ mod tests {
     /// token reaches the detached process.
     #[test]
     fn a_detached_relaunch_keeps_the_launch_token_only_when_forwarded() {
-        if let Some(report) = std::env::var_os(DETACH_CHILD_REPORT_ENV) {
-            let token = crate::launch_environment::startup_activation_token().unwrap_or_default();
-            crate::durable_io::write_atomic(
+        if let Some(report) = std_env::var_os(DETACH_CHILD_REPORT_ENV) {
+            let token = launch_environment::startup_activation_token().unwrap_or_default();
+            durable_io::write_atomic(
                 Path::new(&report),
                 token.as_bytes(),
-                crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+                AtomicWriteOptions::private_runtime_file(),
             )
             .unwrap();
             return;
         }
 
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let report = temp.path().join("detached-token");
         let test_name = concat!(
             module_path!(),
@@ -459,36 +476,36 @@ mod tests {
         )
         .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
         .expect("test path contains the crate prefix");
-        let removed = crate::launch_environment::STARTUP_NOTIFICATION_VARIABLES
-            .map(|name| (name, None::<&std::ffi::OsStr>));
+        let removed =
+            launch_environment::STARTUP_NOTIFICATION_VARIABLES.map(|name| (name, None::<&OsStr>));
         let mut variables = vec![(DETACH_CHILD_REPORT_ENV, Some(report.as_os_str()))];
         variables.extend(removed);
 
-        crate::test_env::with_env_vars(&variables, || {
-            let guard = crate::process_broker::start_for_runtime().unwrap();
+        test_env::with_env_vars(&variables, || {
+            let guard = process_broker::start_for_runtime().unwrap();
             let relaunch = |environment| {
-                let _ = std::fs::remove_file(&report);
+                let _ = fs::remove_file(&report);
                 guard
                     .broker()
                     .spawn(
-                        crate::process_broker::HelperKind::InitialDetach,
-                        crate::process_broker::HelperLifetime::DetachedAfterExec,
-                        std::env::current_exe().unwrap().as_os_str(),
+                        HelperKind::InitialDetach,
+                        HelperLifetime::DetachedAfterExec,
+                        std_env::current_exe().unwrap().as_os_str(),
                         [test_name, "--exact", "--test-threads=1"],
                         environment,
                     )
                     .unwrap();
 
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                let deadline = Instant::now() + Duration::from_secs(10);
                 loop {
-                    if let Ok(token) = std::fs::read_to_string(&report) {
+                    if let Ok(token) = fs::read_to_string(&report) {
                         break token;
                     }
                     assert!(
-                        std::time::Instant::now() < deadline,
+                        Instant::now() < deadline,
                         "the detached child did not report"
                     );
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    thread::sleep(Duration::from_millis(10));
                 }
             };
 

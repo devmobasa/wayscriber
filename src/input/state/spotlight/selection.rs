@@ -1,4 +1,6 @@
 //! Spotlight queries for selection controls.
+use crate::draw;
+
 use super::InputState;
 use crate::draw::{DrawnShape, Shape};
 
@@ -19,9 +21,9 @@ impl InputState {
         selected
             .iter()
             .filter_map(|drawn| match drawn.shape {
-                Shape::Spotlight { magnification, .. } => Some(
-                    crate::draw::normalize_spotlight_magnification(magnification),
-                ),
+                Shape::Spotlight { magnification, .. } => {
+                    Some(draw::normalize_spotlight_magnification(magnification))
+                }
                 _ => None,
             })
             .reduce(f64::max)

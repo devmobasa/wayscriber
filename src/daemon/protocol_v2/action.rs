@@ -1,20 +1,27 @@
-use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
+use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::LazyLock;
+#[cfg(test)]
+use std::sync::Mutex;
 
 use anyhow::{Context, Result, anyhow, bail};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::durable_io;
+use crate::durable_io::AtomicWriteOptions;
+
 use super::digest::sha256_hex;
-use super::linux::create_private_directory;
 use super::wire::{
-    ACTION_ENVELOPE_PROTOCOL_VERSION, MAX_ACTION_ENVELOPE_BYTES, bounded_reason, canonical_json,
-    fresh_id, parse_canonical_json, validate_digest, validate_id, validate_reason, validate_token,
+    ACTION_ENVELOPE_PROTOCOL_VERSION, MAX_ACTION_ENVELOPE_BYTES, canonical_json, fresh_id,
+    parse_canonical_json, validate_digest, validate_id, validate_reason, validate_token,
 };
-use super::{BootClock, BootIdentity, NamespaceIdentity};
 use crate::tray_action::TrayAction;
 
 mod abandon;
@@ -26,8 +33,8 @@ const MAX_ACTIONS: usize = 2048;
 const MAX_ACTION_QUARANTINE: usize = 1024;
 
 #[cfg(test)]
-static ANONYMOUS_PUBLISH_FAILURES: std::sync::LazyLock<std::sync::Mutex<BTreeMap<PathBuf, usize>>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(BTreeMap::new()));
+static ANONYMOUS_PUBLISH_FAILURES: LazyLock<Mutex<BTreeMap<PathBuf, usize>>> =
+    LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "owner", deny_unknown_fields)]
@@ -66,11 +73,11 @@ struct ActionRecord {
 }
 
 #[derive(Serialize)]
-struct ActionDigestPayload<'a> {
+struct ActionDigestPayload<'action> {
     protocol_version: u16,
-    action_id: &'a str,
+    action_id: &'action str,
     action_order: u64,
-    owner: &'a ActionOwner,
+    owner: &'action ActionOwner,
     action: TrayAction,
 }
 
@@ -125,7 +132,7 @@ fn action_root() -> PathBuf {
 fn consume_anonymous_publish_failure(root: &Path) -> bool {
     let mut failures = ANONYMOUS_PUBLISH_FAILURES
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .expect("injected publish failures");
     let remove = match failures.get_mut(root) {
         Some(remaining) => {
             *remaining -= 1;
@@ -217,8 +224,8 @@ fn try_open_journal_lock(root: &Path, nonblocking: bool) -> Result<Option<File>>
     if !file.metadata()?.is_file() {
         bail!("action journal lock is not a regular file");
     }
-    // SAFETY: file owns the descriptor; flock retains no pointer.
     let operation = libc::LOCK_EX | if nonblocking { libc::LOCK_NB } else { 0 };
+    // SAFETY: file owns the descriptor; flock retains no pointer.
     if unsafe { libc::flock(file.as_raw_fd(), operation) } != 0 {
         let error = io::Error::last_os_error();
         if nonblocking && error.kind() == ErrorKind::WouldBlock {
@@ -240,15 +247,11 @@ fn unlock(file: &File) -> Result<()> {
 
 fn write_record<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let bytes = canonical_json(value, MAX_ACTION_ENVELOPE_BYTES)?;
-    crate::durable_io::write_atomic(
-        path,
-        &bytes,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
-    )
-    .with_context(|| format!("failed to write action record {}", path.display()))
+    durable_io::write_atomic(path, &bytes, AtomicWriteOptions::private_runtime_file())
+        .with_context(|| format!("failed to write action record {}", path.display()))
 }
 
-fn read_record<T: serde::de::DeserializeOwned + Serialize>(path: &Path) -> Result<T> {
+fn read_record<T: DeserializeOwned + Serialize>(path: &Path) -> Result<T> {
     let bytes = super::linux::read_bounded_regular_file(path, MAX_ACTION_ENVELOPE_BYTES)?;
     parse_canonical_json(&bytes, MAX_ACTION_ENVELOPE_BYTES)
 }

@@ -1,8 +1,8 @@
 use wayscriber::config::PRESET_SLOTS_MAX;
 
 use crate::models::{
-    ColorMode, NamedColorOption, PresetEraserKindOption, PresetEraserModeOption, PresetTextField,
-    PresetToggleField,
+    ColorMode, NamedColorOption, OverrideOption, PresetEraserKindOption, PresetEraserModeOption,
+    PresetTextField, PresetToggleField, ToolOption,
 };
 
 use super::super::effects::Effect;
@@ -73,7 +73,7 @@ impl ConfiguratorApp {
     pub(super) fn handle_preset_tool_changed(
         &mut self,
         slot_index: usize,
-        tool: crate::models::ToolOption,
+        tool: ToolOption,
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {
@@ -167,7 +167,7 @@ impl ConfiguratorApp {
         &mut self,
         slot_index: usize,
         field: PresetToggleField,
-        value: crate::models::OverrideOption,
+        value: OverrideOption,
     ) -> Vec<Effect> {
         self.status = StatusMessage::idle();
         if let Some(slot) = self.draft.presets.slot_mut(slot_index) {

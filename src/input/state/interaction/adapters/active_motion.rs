@@ -1,3 +1,5 @@
+use crate::draw::{TextMeasurer, shape};
+
 use super::super::event::PointerPoints;
 use super::super::outcome::{
     ActiveInteractionKind, InteractionSideEffect, NoRouteReason, PointerSideEffect, RoutingOutcome,
@@ -10,7 +12,7 @@ use std::sync::Arc;
 
 pub(crate) fn handle_active_motion(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> Option<RoutingOutcome> {
     let canvas = points.canvas();
@@ -176,7 +178,7 @@ pub(crate) fn handle_active_motion(
 
 pub(crate) fn handle_drawing_or_idle_motion(
     state: &mut InputState,
-    measurer: &crate::draw::TextMeasurer,
+    measurer: &TextMeasurer,
     points: PointerPoints,
 ) -> RoutingOutcome {
     let canvas = points.canvas();
@@ -195,7 +197,7 @@ pub(crate) fn handle_drawing_or_idle_motion(
     {
         if let Some(thickness) = sample_size {
             if !matches!(tool, Tool::Pen | Tool::Marker | Tool::LiveShape)
-                || crate::draw::shape::keep_stroke_sample(points, canvas.position())
+                || shape::keep_stroke_sample(points, canvas.position())
             {
                 points.push(canvas.position());
                 point_thicknesses.push(thickness as f32);

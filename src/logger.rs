@@ -2,7 +2,7 @@ mod file;
 mod filter;
 mod panic;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt::Write as _;
 use std::io::{self, Write as IoWrite};
 use std::sync::Mutex;
@@ -17,8 +17,11 @@ const INITIAL_RECORD_CAPACITY: usize = 256;
 const MAX_RETAINED_RECORD_CAPACITY: usize = 64 * 1024;
 
 thread_local! {
-    /// Whether this thread is inside [`SimpleLogger::log`], holding its lock.
+    /// Whether this thread is inside [`SimpleLogger::log`].
     static WRITING_RECORD: Cell<bool> = const { Cell::new(false) };
+
+    /// This thread's reusable line buffer for [`SimpleLogger::log`].
+    static RECORD_BUFFER: RefCell<RecordBuffer> = RefCell::new(RecordBuffer::new());
 }
 
 pub(crate) fn init(log_to_file: bool) {
@@ -34,10 +37,7 @@ pub(crate) fn init(log_to_file: bool) {
 
     let logger = SimpleLogger {
         filter,
-        state: Mutex::new(LoggerState {
-            sink,
-            record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
-        }),
+        sink: Mutex::new(sink),
         include_timestamp: log_to_file,
     };
 
@@ -49,41 +49,44 @@ pub(crate) fn init(log_to_file: bool) {
 
 struct SimpleLogger {
     filter: LogFilter,
-    state: Mutex<LoggerState>,
+    sink: Mutex<LogSink>,
     include_timestamp: bool,
 }
 
-struct LoggerState {
-    sink: LogSink,
-    record_buffer: String,
-}
+/// One formatted log line, reused for the next record on the same thread.
+struct RecordBuffer(String);
 
-impl LoggerState {
-    fn write_record(&mut self, record: &Record<'_>, include_timestamp: bool) {
-        self.record_buffer.clear();
+impl RecordBuffer {
+    fn new() -> Self {
+        Self(String::with_capacity(INITIAL_RECORD_CAPACITY))
+    }
+
+    /// Formats `record` as one physical line, replacing the previous one.
+    fn format(&mut self, record: &Record<'_>, include_timestamp: bool) -> &[u8] {
+        let line = &mut self.0;
+        line.clear();
         if include_timestamp {
             let _ = write!(
-                self.record_buffer,
+                line,
                 "{} {} {}: ",
                 timestamp_millis(),
                 record.level(),
                 record.target()
             );
         } else {
-            let _ = write!(
-                self.record_buffer,
-                "{} {}: ",
-                record.level(),
-                record.target()
-            );
+            let _ = write!(line, "{} {}: ", record.level(), record.target());
         }
-        let _ = write!(self.record_buffer, "{}", record.args());
-        escape_record_line_breaks(&mut self.record_buffer);
-        self.record_buffer.push('\n');
+        let _ = write!(line, "{}", record.args());
+        escape_record_line_breaks(line);
+        line.push('\n');
 
-        self.sink.write_record(self.record_buffer.as_bytes());
-        if self.record_buffer.capacity() > MAX_RETAINED_RECORD_CAPACITY {
-            self.record_buffer = String::with_capacity(INITIAL_RECORD_CAPACITY);
+        line.as_bytes()
+    }
+
+    /// Releases an allocation one oversized record grew, instead of keeping it.
+    fn shrink_oversized(&mut self) {
+        if self.0.capacity() > MAX_RETAINED_RECORD_CAPACITY {
+            self.0 = String::with_capacity(INITIAL_RECORD_CAPACITY);
         }
     }
 }
@@ -122,17 +125,25 @@ impl Log for SimpleLogger {
             return;
         };
 
-        let mut state = match self.state.lock() {
-            Ok(state) => state,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        RECORD_BUFFER.with_borrow_mut(|buffer| {
+            // Formatting runs `Display` impls, which may panic. Doing it
+            // before taking the lock keeps such a panic from poisoning the
+            // sink, so only a sink that panicked mid-write is ever poisoned.
+            let line = buffer.format(record, self.include_timestamp);
 
-        state.write_record(record, self.include_timestamp);
+            // A poisoned sink is in an unknown state, so the record is
+            // dropped instead of written through it.
+            if let Ok(mut sink) = self.sink.lock() {
+                sink.write_record(line);
+            }
+
+            buffer.shrink_oversized();
+        });
     }
 
     fn flush(&self) {
-        if let Ok(mut state) = self.state.lock() {
-            state.sink.flush();
+        if let Ok(mut sink) = self.sink.lock() {
+            sink.flush();
         }
     }
 }
@@ -192,9 +203,15 @@ impl LogSink {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
+    use std::fmt::{Display, Formatter};
+
+    use crate::test_env;
+
     use super::*;
     use log::Level;
     use std::sync::{Arc, Mutex};
+    use std::thread;
 
     #[derive(Clone, Default)]
     struct SharedWriter {
@@ -333,15 +350,11 @@ mod tests {
 
     #[test]
     fn file_record_keeps_timestamp_and_message_in_one_line() {
-        let output = SharedWriter::default();
-        let mut state = LoggerState {
-            sink: LogSink::single(Box::new(output.clone())),
-            record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
-        };
+        let mut buffer = RecordBuffer::new();
 
-        state.write_record(&warning_record(), true);
+        let line = buffer.format(&warning_record(), true);
 
-        let line = String::from_utf8(output.bytes()).expect("valid log output");
+        let line = String::from_utf8(line.to_vec()).expect("valid log output");
         let (timestamp, message) = line.split_once(' ').expect("timestamp separator");
 
         assert!(timestamp.parse::<u128>().is_ok());
@@ -350,45 +363,36 @@ mod tests {
 
     #[test]
     fn multiline_record_is_escaped_to_one_physical_line() {
-        let output = SharedWriter::default();
-        let mut state = LoggerState {
-            sink: LogSink::single(Box::new(output.clone())),
-            record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
-        };
+        let mut buffer = RecordBuffer::new();
         let record = Record::builder()
             .args(format_args!("first\r\nsecond\nthird\r"))
             .level(Level::Error)
             .target("wayscriber::ocr\nworker")
             .build();
 
-        state.write_record(&record, true);
+        let line = buffer.format(&record, true);
 
-        let line = String::from_utf8(output.bytes()).expect("valid log output");
+        let line = String::from_utf8(line.to_vec()).expect("valid log output");
         assert_eq!(line.lines().count(), 1);
         assert!(line.ends_with("ERROR wayscriber::ocr\\nworker: first\\r\\nsecond\\nthird\\r\n"));
     }
 
     #[test]
     fn a_record_logged_while_the_thread_writes_one_is_dropped_instead_of_deadlocking() {
-        struct LogsWhileFormatting<'a>(&'a SimpleLogger);
+        struct LogsWhileFormatting<'logger>(&'logger SimpleLogger);
 
-        impl std::fmt::Display for LogsWhileFormatting<'_> {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl Display for LogsWhileFormatting<'_> {
+            fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
                 self.0.log(&warning_record());
                 formatter.write_str("outer record")
             }
         }
 
         let output = SharedWriter::default();
-        let filter = crate::test_env::with_env_var("RUST_LOG", Some("warn".as_ref()), || {
-            LogFilter::from_env()
-        });
+        let filter = test_env::with_env_var("RUST_LOG", Some("warn".as_ref()), LogFilter::from_env);
         let logger = SimpleLogger {
             filter,
-            state: Mutex::new(LoggerState {
-                sink: LogSink::single(Box::new(output.clone())),
-                record_buffer: String::with_capacity(INITIAL_RECORD_CAPACITY),
-            }),
+            sink: Mutex::new(LogSink::single(Box::new(output.clone()))),
             include_timestamp: false,
         };
 
@@ -413,14 +417,53 @@ mod tests {
 
     #[test]
     fn oversized_record_buffer_is_not_retained() {
+        let mut buffer = RecordBuffer(String::with_capacity(MAX_RETAINED_RECORD_CAPACITY + 1));
+
+        buffer.format(&warning_record(), false);
+        buffer.shrink_oversized();
+
+        assert!(buffer.0.capacity() <= MAX_RETAINED_RECORD_CAPACITY);
+    }
+
+    #[test]
+    fn a_record_whose_formatting_panics_does_not_stop_later_records() {
+        struct PanicsWhileFormatting;
+
+        impl Display for PanicsWhileFormatting {
+            fn fmt(&self, _formatter: &mut Formatter<'_>) -> fmt::Result {
+                panic!("formatting panic");
+            }
+        }
+
         let output = SharedWriter::default();
-        let mut state = LoggerState {
-            sink: LogSink::single(Box::new(output)),
-            record_buffer: String::with_capacity(MAX_RETAINED_RECORD_CAPACITY + 1),
+        let filter = test_env::with_env_var("RUST_LOG", Some("warn".as_ref()), LogFilter::from_env);
+        let logger = SimpleLogger {
+            filter,
+            sink: Mutex::new(LogSink::single(Box::new(output.clone()))),
+            include_timestamp: false,
         };
 
-        state.write_record(&warning_record(), false);
+        let panicked = thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    logger.log(
+                        &Record::builder()
+                            .args(format_args!("{}", PanicsWhileFormatting))
+                            .level(Level::Warn)
+                            .target("wayscriber::daemon")
+                            .build(),
+                    );
+                })
+                .join()
+                .is_err()
+        });
+        logger.log(&warning_record());
 
-        assert!(state.record_buffer.capacity() <= MAX_RETAINED_RECORD_CAPACITY);
+        assert!(panicked);
+        let output = String::from_utf8(output.bytes()).expect("valid log output");
+        assert_eq!(
+            output.lines().collect::<Vec<_>>(),
+            ["WARN wayscriber::daemon: sink failure record"]
+        );
     }
 }

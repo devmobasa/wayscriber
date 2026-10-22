@@ -1,5 +1,6 @@
 use super::super::types::DrawingState;
 use super::structs::InputState;
+use crate::config::ChordModifiers;
 use crate::input::Modifiers;
 
 impl InputState {
@@ -30,12 +31,12 @@ impl InputState {
     ///
     /// This lets us correct cases where a key release event was missed but the compositor's
     /// authoritative modifier state is still accurate. Returns whether any modifier changed.
-    pub fn sync_modifiers(&mut self, shift: bool, ctrl: bool, alt: bool, logo: bool) -> bool {
+    pub fn sync_modifiers(&mut self, reported: ChordModifiers) -> bool {
         self.update_modifiers(|modifiers| {
-            modifiers.shift = shift;
-            modifiers.ctrl = ctrl;
-            modifiers.alt = alt;
-            modifiers.logo = logo;
+            modifiers.shift = reported.shift;
+            modifiers.ctrl = reported.ctrl;
+            modifiers.alt = reported.alt;
+            modifiers.logo = reported.logo;
             // Tab has no direct compositor flag; leave it unchanged.
         })
     }
@@ -69,8 +70,11 @@ impl InputState {
 mod tests {
     use std::time::Instant;
 
+    use crate::config::ChordModifiers;
+    use crate::draw::TextMeasurer;
     use crate::input::state::test_support::make_test_input_state;
     use crate::input::{Key, Tool};
+    use crate::ui_text::UiTextEngine;
 
     #[test]
     fn a_modifier_only_sync_redraws_the_tool_chrome_without_dirtying_the_canvas() {
@@ -80,7 +84,11 @@ mod tests {
         let _ = state.take_dirty_regions();
         state.needs_redraw = false;
 
-        assert!(state.sync_modifiers(false, true, false, false));
+        let ctrl_held = ChordModifiers {
+            ctrl: true,
+            ..ChordModifiers::default()
+        };
+        assert!(state.sync_modifiers(ctrl_held));
         assert!(
             state.needs_redraw,
             "the Ctrl drag tool must reach the status bar"
@@ -88,7 +96,7 @@ mod tests {
         assert_eq!(state.active_tool(), Tool::Rect);
 
         state.needs_redraw = false;
-        assert!(state.sync_modifiers(false, false, false, false));
+        assert!(state.sync_modifiers(ChordModifiers::default()));
         assert!(
             state.needs_redraw,
             "releasing Ctrl must restore the status bar"
@@ -100,10 +108,14 @@ mod tests {
     #[test]
     fn an_unchanged_modifier_sync_requests_no_redraw() {
         let mut state = make_test_input_state();
-        state.sync_modifiers(true, false, false, false);
+        let shift_held = ChordModifiers {
+            shift: true,
+            ..ChordModifiers::default()
+        };
+        state.sync_modifiers(shift_held);
         state.needs_redraw = false;
 
-        assert!(!state.sync_modifiers(true, false, false, false));
+        assert!(!state.sync_modifiers(shift_held));
         assert!(!state.needs_redraw);
     }
 
@@ -125,8 +137,8 @@ mod tests {
 
     #[test]
     fn focus_loss_clears_modal_repeats_and_modifiers() {
-        let route_measurer = crate::draw::TextMeasurer::default();
-        let route_ui_engine = crate::ui_text::UiTextEngine::default();
+        let route_measurer = TextMeasurer::default();
+        let route_ui_engine = UiTextEngine::default();
         let route_resources = crate::input::state::InputTextResources {
             measurer: &route_measurer,
             ui_engine: &route_ui_engine,
@@ -134,7 +146,12 @@ mod tests {
         let mut state = make_test_input_state();
         state.toggle_command_palette();
         assert!(state.handle_command_palette_key_with_resources(route_resources, Key::Down));
-        state.sync_modifiers(true, true, true, true);
+        state.sync_modifiers(ChordModifiers {
+            ctrl: true,
+            shift: true,
+            alt: true,
+            logo: true,
+        });
         state.modifiers.tab = true;
         assert!(
             state

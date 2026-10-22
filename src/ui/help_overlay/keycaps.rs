@@ -1,3 +1,5 @@
+use crate::ui_text::UiTextEngine;
+
 use super::super::primitives::{
     draw_rounded_rect, keycap_size_with_engine, text_extents_for_with_engine,
 };
@@ -5,8 +7,8 @@ use crate::ui::primitives::draw_keycap_with_engine;
 use crate::ui::theme::toolbar;
 use crate::ui_text::UiTextStyle;
 
-pub(crate) struct KeyComboStyle<'a> {
-    pub(crate) font_family: &'a str,
+pub(crate) struct KeyComboStyle<'font> {
+    pub(crate) font_family: &'font str,
     pub(crate) font_size: f64,
     pub(crate) text_color: [f64; 4],
     pub(crate) separator_color: [f64; 4],
@@ -41,7 +43,7 @@ fn for_each_key_token(combo: &str, mut emit: impl FnMut(&str)) {
 /// used (`baseline - font_size / 2`), so replacing the cap did not shift the
 /// rows or the highlight geometry in [`draw_key_combo_highlight`].
 fn draw_single_keycap(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,
@@ -66,7 +68,7 @@ fn draw_single_keycap(
 
 /// Measure the width of a key combination string with keycap styling
 pub(crate) fn measure_key_combo(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     key_str: &str,
     font_family: &str,
@@ -130,7 +132,7 @@ pub(crate) fn measure_key_combo(
 
 /// Draw a key combination string with keycap styling, returns total width
 pub(crate) fn draw_key_combo(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,

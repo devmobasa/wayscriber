@@ -1,8 +1,12 @@
+use crate::config::TopDisplayMode;
+use crate::input::state::test_support;
+use crate::onboarding::OnboardingSaveError;
+
 use super::first_run::{
-    FirstRunAdvance, FirstRunEnvironment, ReplayStart, advance_first_run_steps,
-    apply_persisted_usage_signals, background_mode_prompt_active, color_thickness_completed,
-    first_run_card_hidden_by_ui_state, first_run_card_key_action, first_run_holds_toolbar,
-    first_run_skip_allowed, quick_access_completed, replay_start,
+    FirstRunAdvance, FirstRunCardUiState, FirstRunEnvironment, ReplayStart,
+    advance_first_run_steps, apply_persisted_usage_signals, background_mode_prompt_active,
+    color_thickness_completed, first_run_card_hidden_by_ui_state, first_run_card_key_action,
+    first_run_holds_toolbar, first_run_skip_allowed, quick_access_completed, replay_start,
 };
 use super::first_run_card::{first_run_step_eyebrow, toolbar_exit_body};
 use super::{
@@ -11,8 +15,8 @@ use super::{
 };
 use crate::config::RadialMenuMouseBinding;
 use crate::domain::{Action, OnboardingTip};
-use crate::input::state::{CompositorCapabilities, ToastCommand};
-use crate::input::{Key, state::PendingOnboardingUsage};
+use crate::input::Key;
+use crate::input::state::{CompositorCapabilities, PendingOnboardingUsage, ToastCommand};
 use crate::onboarding::{DEFERRED_HINT_REPEAT_MAX, FirstRunStep, OnboardingState};
 use crate::ui::OnboardingCardAction;
 use std::time::{Duration, Instant};
@@ -28,18 +32,36 @@ fn first_run_skip_requires_active_onboarding_and_visible_card() {
 #[test]
 fn first_run_card_hides_for_each_modal_state() {
     let modal_cases = [
-        (true, false, false, false, false, false), // presenter
-        (false, true, false, false, false, false), // palette
-        (false, false, true, false, false, false), // help
-        (false, false, false, true, false, false), // radial
-        (false, false, false, false, true, false), // context menu
-        (false, false, false, false, false, true), // zoom
+        FirstRunCardUiState {
+            presenter_mode: true,
+            ..FirstRunCardUiState::default()
+        },
+        FirstRunCardUiState {
+            command_palette_open: true,
+            ..FirstRunCardUiState::default()
+        },
+        FirstRunCardUiState {
+            show_help: true,
+            ..FirstRunCardUiState::default()
+        },
+        FirstRunCardUiState {
+            radial_menu_open: true,
+            ..FirstRunCardUiState::default()
+        },
+        FirstRunCardUiState {
+            context_menu_open: true,
+            ..FirstRunCardUiState::default()
+        },
+        FirstRunCardUiState {
+            zoom_engaged: true,
+            ..FirstRunCardUiState::default()
+        },
     ];
 
     for case in modal_cases {
         assert!(
-            first_run_card_hidden_by_ui_state(case.0, case.1, case.2, case.3, case.4, case.5),
-            "expected modal case to hide onboarding card"
+            first_run_card_hidden_by_ui_state(case),
+            "expected modal case to hide onboarding card: {case:?}"
         );
     }
 }
@@ -47,7 +69,7 @@ fn first_run_card_hides_for_each_modal_state() {
 #[test]
 fn first_run_card_remains_visible_without_modal_states() {
     assert!(!first_run_card_hidden_by_ui_state(
-        false, false, false, false, false, false
+        FirstRunCardUiState::default()
     ));
 }
 
@@ -86,7 +108,7 @@ fn automatic_tip_controls_acknowledge_the_exact_tip_before_optional_settings() {
 #[test]
 fn tip_settings_navigation_survives_an_acknowledgement_write_failure() {
     let outcome = acknowledge_tip_command(
-        Err(crate::onboarding::OnboardingSaveError::Unavailable),
+        Err(OnboardingSaveError::Unavailable),
         Some(Action::OpenConfiguratorOnboardingHints),
     );
 
@@ -224,12 +246,9 @@ fn shortcut_coach_suppressed_once_learned_or_capped() {
 
 #[test]
 fn canvas_hint_requires_reachable_full_top_strip() {
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.test_set_toolbar_visibility_state(true, true, input.toolbar_top_pinned());
-    input.test_set_toolbar_display_state(
-        crate::config::TopDisplayMode::Full,
-        input.toolbar_top_minimized(),
-    );
+    input.test_set_toolbar_display_state(TopDisplayMode::Full, input.toolbar_top_minimized());
     input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), false);
     assert!(canvas_popover_hint_relevant(&input));
 
@@ -239,16 +258,13 @@ fn canvas_hint_requires_reachable_full_top_strip() {
         "the minimized restore tab has no Canvas overflow entry"
     );
     input.test_set_toolbar_display_state(input.toolbar_top_display_mode(), false);
-    input.test_set_toolbar_display_state(
-        crate::config::TopDisplayMode::Micro,
-        input.toolbar_top_minimized(),
-    );
+    input.test_set_toolbar_display_state(TopDisplayMode::Micro, input.toolbar_top_minimized());
     assert!(!canvas_popover_hint_relevant(&input));
 }
 
 #[test]
 fn status_bar_hint_requires_a_visible_board_picker_segment() {
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     assert!(input.boards.create_board(), "test needs multiple boards");
     input.ui_visibility.show_status_bar = true;
     input.ui_visibility.status_bar_interactive = true;
@@ -351,11 +367,13 @@ fn quick_access_completes_when_radial_unavailable_and_context_disabled() {
     let state = OnboardingState::default();
     assert!(quick_access_completed(
         &state,
-        false,
-        RadialMenuMouseBinding::Middle,
-        false,
-        false,
-        true,
+        FirstRunEnvironment {
+            context_enabled: false,
+            radial_binding: RadialMenuMouseBinding::Middle,
+            radial_available: false,
+            context_keyboard_available: false,
+            toolbar_visible: true,
+        },
     ));
 }
 
@@ -367,11 +385,13 @@ fn quick_access_waives_context_when_radial_uses_right_click_without_context_shor
     };
     assert!(quick_access_completed(
         &state,
-        true,
-        RadialMenuMouseBinding::Right,
-        true,
-        false,
-        true,
+        FirstRunEnvironment {
+            context_enabled: true,
+            radial_binding: RadialMenuMouseBinding::Right,
+            radial_available: true,
+            context_keyboard_available: false,
+            toolbar_visible: true,
+        },
     ));
 }
 
@@ -381,23 +401,16 @@ fn quick_access_blocks_when_toolbar_required_and_still_hidden() {
         quick_access_requires_toolbar: true,
         ..OnboardingState::default()
     };
-    assert!(!quick_access_completed(
-        &state,
-        false,
-        RadialMenuMouseBinding::Middle,
-        false,
-        false,
-        false,
-    ));
+    let hidden_toolbar = FirstRunEnvironment {
+        context_enabled: false,
+        radial_binding: RadialMenuMouseBinding::Middle,
+        radial_available: false,
+        context_keyboard_available: false,
+        toolbar_visible: false,
+    };
+    assert!(!quick_access_completed(&state, hidden_toolbar));
     state.used_toolbar_toggle = true;
-    assert!(quick_access_completed(
-        &state,
-        false,
-        RadialMenuMouseBinding::Middle,
-        false,
-        false,
-        false,
-    ));
+    assert!(quick_access_completed(&state, hidden_toolbar));
 }
 
 fn limited_caps() -> CompositorCapabilities {
@@ -412,7 +425,7 @@ fn limited_caps() -> CompositorCapabilities {
 
 #[test]
 fn capability_warning_shows_once_per_session() {
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let caps = limited_caps();
 
     assert!(
@@ -424,7 +437,7 @@ fn capability_warning_shows_once_per_session() {
 
 #[test]
 fn capability_warning_returns_when_capabilities_change() {
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let caps = limited_caps();
     let first = input.note_capability_toast(caps);
 
@@ -437,7 +450,7 @@ fn capability_warning_returns_when_capabilities_change() {
 
 #[test]
 fn capability_warning_skipped_when_everything_available() {
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let caps = CompositorCapabilities {
         layer_shell: true,
         screencopy: true,

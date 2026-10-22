@@ -1,3 +1,9 @@
+use std::time::Duration;
+
+use crate::backend::wayland::toolbar;
+use crate::input::state::test_support;
+use crate::ui::toolbar::snapshot::fade;
+
 use super::*;
 use crate::backend::wayland::toolbar::view::WidgetTree;
 use crate::backend::wayland::toolbar::view::node::{
@@ -91,14 +97,14 @@ fn retained_widget_text_matches_fresh_targets() {
 #[test]
 fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() {
     let engine = UiTextEngine::default();
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.set_toolbar_use_icons(false);
     let mut snapshot =
         ToolbarSnapshot::from_input_with_bindings(&input, ToolbarBindingHints::default());
     snapshot.settings_popover_open = true;
     for fade in [1.0, 0.45] {
         snapshot.top_fade = fade;
-        let (width, height) = crate::backend::wayland::toolbar::top_size(&engine, &snapshot);
+        let (width, height) = toolbar::top_size(&engine, &snapshot);
         let tree = view::top::build_top_view(&engine, &snapshot, width as f64, height as f64);
         let planned_hits = tree.to_hit_regions();
         let hovered = planned_hits
@@ -111,9 +117,7 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
         ));
         for density in [1, 2, 1] {
             let mut hits = Vec::new();
-            let start = Some(
-                Instant::now() - super::super::TOOLTIP_DELAY - std::time::Duration::from_secs(1),
-            );
+            let start = Some(Instant::now() - super::super::TOOLTIP_DELAY - Duration::from_secs(1));
             let actual = pixels(density, |ctx| {
                 render_top_strip(
                     &engine,
@@ -175,7 +179,7 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
                     width as f64,
                     height as f64,
                     false,
-                    Some(Instant::now() + std::time::Duration::from_secs(60)),
+                    Some(Instant::now() + Duration::from_secs(60)),
                 )
             });
             assert!(hidden.iter().all(|byte| *byte == 0));
@@ -186,10 +190,10 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
 #[test]
 fn idle_hidden_strip_paints_nothing_but_keeps_its_hits() {
     let engine = UiTextEngine::default();
-    let input = crate::input::state::test_support::make_test_input_state();
+    let input = test_support::make_test_input_state();
     let mut snapshot =
         ToolbarSnapshot::from_input_with_bindings(&input, ToolbarBindingHints::default());
-    let (width, height) = crate::backend::wayland::toolbar::top_size(&engine, &snapshot);
+    let (width, height) = toolbar::top_size(&engine, &snapshot);
     let render = |snapshot: &ToolbarSnapshot, hits: &mut Vec<HitRegion>| {
         pixels(1, |ctx| {
             render_top_strip(
@@ -210,7 +214,7 @@ fn idle_hidden_strip_paints_nothing_but_keeps_its_hits() {
     let shown = render(&snapshot, &mut shown_hits);
     assert!(shown.iter().any(|byte| *byte != 0));
 
-    snapshot.top_fade = crate::ui::toolbar::snapshot::fade::TOP_STRIP_HIDDEN_LEVEL;
+    snapshot.top_fade = fade::TOP_STRIP_HIDDEN_LEVEL;
     let mut hidden_hits = Vec::new();
     let hidden = render(&snapshot, &mut hidden_hits);
     assert!(hidden.iter().all(|byte| *byte == 0), "no ghosted strip");

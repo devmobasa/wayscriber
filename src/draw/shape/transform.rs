@@ -1,5 +1,7 @@
 //! Pure geometry transforms owned by `Shape`.
 
+use crate::util;
+
 use super::Shape;
 
 impl Shape {
@@ -198,7 +200,7 @@ impl Shape {
                     // carries the arc for free — but a non-uniform one has to
                     // scale the arc itself, or the bulge (the only part of a
                     // flat curved arrow with any height) ignores the drag.
-                    bend: crate::util::scaled_arrow_bend(
+                    bend: util::scaled_arrow_bend(
                         (*x1 as f64, *y1 as f64),
                         (*x2 as f64, *y2 as f64),
                         (nx1 as f64, ny1 as f64),

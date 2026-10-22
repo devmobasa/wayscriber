@@ -1,3 +1,8 @@
+use std::path::PathBuf;
+use std::thread;
+
+use crate::session;
+
 use super::marker::read_marker_generation;
 use super::probe::{
     PROBE_READ_BYTES, PROBE_SCAN_BYTES, inflate_probe_prefix, probe_payload_header,
@@ -5,7 +10,8 @@ use super::probe::{
 };
 
 use super::*;
-use crate::session::snapshot::{load, save, tests::sample_snapshot};
+use crate::session::snapshot::tests::sample_snapshot;
+use crate::session::snapshot::{load, save};
 use crate::session::{CompressionMode, SessionOptions};
 use crate::test_temp::tempdir;
 use std::fs::{self, File};
@@ -177,13 +183,13 @@ fn marker_format_round_trips_and_rejects_wrong_kind_or_version() {
     }
 }
 
-fn options(path: &std::path::Path) -> SessionOptions {
+fn options(path: &Path) -> SessionOptions {
     let mut options = SessionOptions::new(path.to_path_buf(), "generation");
     options.persist_transparent = true;
     options.compression = CompressionMode::Off;
     options
 }
-fn generation(path: std::path::PathBuf) -> Generation {
+fn generation(path: PathBuf) -> Generation {
     payload_prefix_generation(&fs::read(path).unwrap())
 }
 
@@ -272,7 +278,7 @@ fn concurrent_writers_allocate_in_exclusive_lock_order() {
     let mut threads = vec![];
     for _ in 0..2 {
         let options = options.clone();
-        threads.push(std::thread::spawn(move || {
+        threads.push(thread::spawn(move || {
             (0..20)
                 .map(|_| {
                     save::save_snapshot_with_report(&sample_snapshot(), &options)
@@ -479,7 +485,7 @@ fn writer_header_restart_output_isolation_and_clear_reset_are_stable() {
             .generation,
         Some(1)
     );
-    crate::session::clear_session(&first).unwrap();
+    session::clear_session(&first).unwrap();
     assert_eq!(
         save::save_snapshot_with_report(&snapshot, &first)
             .unwrap()
@@ -518,7 +524,8 @@ fn each_marker_slot_advances_the_next_real_save() {
 
 #[test]
 fn socket_and_symlink_sidecars_are_classified_without_blocking_autosave() {
-    use std::os::unix::{fs::symlink, net::UnixListener};
+    use std::os::unix::fs::symlink;
+    use std::os::unix::net::UnixListener;
     for slot in ["clear", "recovery", "backup"] {
         for kind in ["socket", "socket link", "loop", "regular link"] {
             let short_root = [Path::new("/tmp"), Path::new(".")]

@@ -1,18 +1,26 @@
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+
 use super::{
-    OutputTransitionStart, live_source_reconciliation_ready, output_transition_retry_at,
-    output_transition_start,
+    LiveSourceReconcileContext, OutputTransitionContext, OutputTransitionStart,
+    live_source_reconciliation_ready, output_transition_retry_at, output_transition_start,
 };
-use crate::backend::wayland::session::replace_output_session_snapshot;
-use crate::{
-    backend::wayland::session::SessionState,
-    draw::{Color, Frame, Shape},
-    input::state::test_support::make_test_input_state,
-    session::{BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot},
-};
+use crate::backend::wayland::session::{SessionState, replace_output_session_snapshot};
+use crate::draw::{Color, Frame, Shape};
+use crate::input::state::test_support::make_test_input_state;
+use crate::session::{BoardPagesSnapshot, BoardSnapshot, SessionOptions, SessionSnapshot};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-fn add_test_line(input: &mut crate::input::InputState) {
+/// A pending live-source resolution with nothing in its way.
+const IDLE_PENDING_RESOLUTION: LiveSourceReconcileContext = LiveSourceReconcileContext {
+    live_source_resolution_pending: true,
+    output_transition_pending: false,
+    interaction_active: false,
+    worker_healthy: true,
+};
+
+fn add_test_line(input: &mut InputState) {
     input.boards.active_frame_mut().add_shape(Shape::Line {
         x1: 0,
         y1: 0,
@@ -35,13 +43,8 @@ fn empty_output_load_replaces_source_board_contents() {
     add_test_line(&mut input);
     assert_eq!(input.boards.active_frame().shapes.len(), 1);
 
-    replace_output_session_snapshot(
-        &mut input,
-        &crate::draw::TextMeasurer::default(),
-        None,
-        &options,
-    )
-    .expect("empty output replacement");
+    replace_output_session_snapshot(&mut input, &TextMeasurer::default(), None, &options)
+        .expect("empty output replacement");
 
     assert!(input.boards.active_frame().shapes.is_empty());
 }
@@ -68,7 +71,7 @@ fn partial_output_load_clears_boards_omitted_from_snapshot() {
 
     replace_output_session_snapshot(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         Some(snapshot),
         &options,
     )
@@ -101,7 +104,7 @@ fn failed_output_replacement_preserves_source_board_contents() {
 
     let err = replace_output_session_snapshot(
         &mut input,
-        &crate::draw::TextMeasurer::default(),
+        &TextMeasurer::default(),
         Some(snapshot),
         &options,
     )
@@ -114,7 +117,11 @@ fn failed_output_replacement_preserves_source_board_contents() {
 #[test]
 fn configure_retry_keeps_matching_epoch_bound_transition() {
     assert_eq!(
-        output_transition_start(false, false, true, true, false, false),
+        output_transition_start(OutputTransitionContext {
+            matching_pending: true,
+            same_epoch_pending: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::KeepPending
     );
 }
@@ -122,11 +129,20 @@ fn configure_retry_keeps_matching_epoch_bound_transition() {
 #[test]
 fn initial_and_loaded_transitions_defer_for_active_interaction() {
     assert_eq!(
-        output_transition_start(false, true, false, false, false, true),
+        output_transition_start(OutputTransitionContext {
+            target_changed: true,
+            interaction_active: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::DeferForInteraction
     );
     assert_eq!(
-        output_transition_start(true, true, false, false, false, true),
+        output_transition_start(OutputTransitionContext {
+            loaded: true,
+            target_changed: true,
+            interaction_active: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::DeferForInteraction
     );
 }
@@ -134,11 +150,18 @@ fn initial_and_loaded_transitions_defer_for_active_interaction() {
 #[test]
 fn transition_start_distinguishes_initial_load_and_loaded_switch() {
     assert_eq!(
-        output_transition_start(false, true, false, false, false, false),
+        output_transition_start(OutputTransitionContext {
+            target_changed: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::LoadInitial
     );
     assert_eq!(
-        output_transition_start(true, true, false, false, false, false),
+        output_transition_start(OutputTransitionContext {
+            loaded: true,
+            target_changed: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::ResolveTransition
     );
 }
@@ -168,14 +191,13 @@ fn unloaded_dirty_source_with_nonmatching_pending_transition_resolves_before_loa
     assert!(session.is_dirty());
     assert!(!matching_pending);
     assert_eq!(
-        output_transition_start(
-            session.is_loaded(),
-            changed,
+        output_transition_start(OutputTransitionContext {
+            loaded: session.is_loaded(),
+            target_changed: changed,
             matching_pending,
             same_epoch_pending,
-            false,
-            false,
-        ),
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::ResolveTransition
     );
     assert!(session.is_dirty());
@@ -196,7 +218,11 @@ fn active_stroke_return_keeps_an_unloaded_dirty_source_protected() {
     );
     let committed_epoch = committed.target_epoch();
     assert_eq!(
-        output_transition_start(false, false, false, true, false, true),
+        output_transition_start(OutputTransitionContext {
+            same_epoch_pending: true,
+            interaction_active: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::IgnoreCurrentTarget
     );
     assert!(
@@ -207,7 +233,11 @@ fn active_stroke_return_keeps_an_unloaded_dirty_source_protected() {
     assert!(!committed.is_loaded());
     assert!(committed.resolve_live_source_resolution(false, true));
     assert_eq!(
-        output_transition_start(false, false, false, false, true, true),
+        output_transition_start(OutputTransitionContext {
+            live_source_resolution_pending: true,
+            interaction_active: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::IgnoreCurrentTarget
     );
 
@@ -217,7 +247,10 @@ fn active_stroke_return_keeps_an_unloaded_dirty_source_protected() {
     assert!(committed.resolve_live_source_resolution(false, false));
     assert_eq!(committed.target_epoch(), committed_epoch);
     assert_eq!(
-        output_transition_start(true, false, false, false, false, false),
+        output_transition_start(OutputTransitionContext {
+            loaded: true,
+            ..OutputTransitionContext::default()
+        }),
         OutputTransitionStart::IgnoreCurrentTarget
     );
 
@@ -248,18 +281,38 @@ fn active_stroke_return_keeps_an_unloaded_dirty_source_protected() {
     assert!(!canceled.is_dirty());
     assert_eq!(canceled.target_epoch(), canceled_epoch);
     assert_eq!(
-        output_transition_start(false, false, false, false, false, false),
+        output_transition_start(OutputTransitionContext::default()),
         OutputTransitionStart::LoadInitial
     );
 }
 
 #[test]
 fn live_source_reconciliation_runs_only_when_idle_without_a_destination() {
-    assert!(live_source_reconciliation_ready(true, false, false, true));
-    assert!(!live_source_reconciliation_ready(false, false, false, true));
-    assert!(!live_source_reconciliation_ready(true, true, false, true));
-    assert!(!live_source_reconciliation_ready(true, false, true, true));
-    assert!(!live_source_reconciliation_ready(true, false, false, false));
+    assert!(live_source_reconciliation_ready(IDLE_PENDING_RESOLUTION));
+    assert!(!live_source_reconciliation_ready(
+        LiveSourceReconcileContext {
+            live_source_resolution_pending: false,
+            ..IDLE_PENDING_RESOLUTION
+        }
+    ));
+    assert!(!live_source_reconciliation_ready(
+        LiveSourceReconcileContext {
+            output_transition_pending: true,
+            ..IDLE_PENDING_RESOLUTION
+        }
+    ));
+    assert!(!live_source_reconciliation_ready(
+        LiveSourceReconcileContext {
+            interaction_active: true,
+            ..IDLE_PENDING_RESOLUTION
+        }
+    ));
+    assert!(!live_source_reconciliation_ready(
+        LiveSourceReconcileContext {
+            worker_healthy: false,
+            ..IDLE_PENDING_RESOLUTION
+        }
+    ));
 }
 
 #[test]
@@ -270,12 +323,12 @@ fn clean_unloaded_cancellation_arms_immediate_source_resolution() {
 
     assert!(session.cancel_output_transition_for_live_source().is_some());
     assert!(session.has_pending_live_source_resolution());
-    assert!(live_source_reconciliation_ready(true, false, false, true));
+    assert!(live_source_reconciliation_ready(IDLE_PENDING_RESOLUTION));
     assert!(!session.resolve_live_source_resolution(false, false));
     assert!(!session.is_loaded());
     assert!(!session.has_pending_live_source_resolution());
     assert_eq!(
-        output_transition_start(false, false, false, false, false, false),
+        output_transition_start(OutputTransitionContext::default()),
         OutputTransitionStart::LoadInitial
     );
 }

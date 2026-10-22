@@ -2,6 +2,7 @@ use crate::config::BoardColorConfig;
 use crate::domain::Color;
 use crate::domain::color::{PALETTE_BLACK, PALETTE_WHITE};
 
+#[must_use]
 pub fn runtime_contrast_pen_color(background: Color) -> Color {
     let [r, g, b] = runtime_contrast_pen_rgb([background.r, background.g, background.b]);
     Color { r, g, b, a: 1.0 }
@@ -10,6 +11,7 @@ pub fn runtime_contrast_pen_color(background: Color) -> Color {
 /// Picks the auto-adjust pen color for a solid board background. The tuned
 /// palette constants are used so the assigned pen bit-matches the default
 /// black/white quick color slots and keeps swatch selection intact.
+#[must_use]
 pub fn runtime_contrast_pen_rgb(background: [f64; 3]) -> [f64; 3] {
     let luminance = 0.2126 * background[0] + 0.7152 * background[1] + 0.0722 * background[2];
     if luminance > 0.5 {
@@ -19,6 +21,7 @@ pub fn runtime_contrast_pen_rgb(background: [f64; 3]) -> [f64; 3] {
     }
 }
 
+#[must_use]
 pub fn board_color_from_config(config: &BoardColorConfig) -> Color {
     let rgb = config.rgb();
     Color {
@@ -29,6 +32,7 @@ pub fn board_color_from_config(config: &BoardColorConfig) -> Color {
     }
 }
 
+#[must_use]
 pub fn board_color_to_config(color: Color) -> BoardColorConfig {
     BoardColorConfig::Rgb([color.r, color.g, color.b])
 }
@@ -37,6 +41,8 @@ pub use crate::domain::clamp_board_rgb;
 
 #[cfg(test)]
 mod tests {
+    use crate::config::QuickColorPalette;
+
     use super::*;
 
     #[test]
@@ -53,7 +59,7 @@ mod tests {
 
     #[test]
     fn auto_adjust_pen_colors_bit_match_default_quick_color_slots() {
-        let palette = crate::config::QuickColorPalette::default();
+        let palette = QuickColorPalette::default();
 
         let light_board_pen = runtime_contrast_pen_color(Color {
             r: 1.0,

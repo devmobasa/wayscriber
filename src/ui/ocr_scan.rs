@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use crate::input::state::{OcrScanOutcome, result_opacity};
-use crate::ui::theme::{self, Rgba, overlay};
+use crate::ui::theme::{self, Rgba, overlay, popup};
 use crate::util::Rect;
 
 use super::primitives::draw_rounded_rect;
@@ -205,7 +207,7 @@ pub(crate) fn render_ocr_scan_result(
     ctx: &cairo::Context,
     region: Rect,
     outcome: OcrScanOutcome,
-    shown: std::time::Duration,
+    shown: Duration,
     screen: (u32, u32),
 ) {
     let opacity = result_opacity(shown);
@@ -227,10 +229,10 @@ pub(crate) fn render_ocr_scan_result(
         1.0,
     );
 
-    theme::set_color(ctx, crate::ui::theme::popup::bg_context_menu());
+    theme::set_color(ctx, popup::bg_context_menu());
     draw_rounded_rect(ctx, card.x, card.y, card.width, card.height, CARD_RADIUS);
     let _ = ctx.fill();
-    theme::set_color(ctx, crate::ui::theme::popup::border_context_menu());
+    theme::set_color(ctx, popup::border_context_menu());
     ctx.set_line_width(1.0);
     draw_rounded_rect(
         ctx,

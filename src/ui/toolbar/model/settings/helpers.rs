@@ -1,5 +1,15 @@
-use super::*;
+use super::super::activation::ToolbarControlId;
+use super::super::control::{ToolbarIcon, ToolbarTooltip};
+use super::{ToolbarSettingsButton, ToolbarSettingsCustomizeGroup, ids};
+use crate::config::{
+    Action, ToolbarGroupId, ToolbarItemCategory, ToolbarItemDefinition, ToolbarItemId,
+    ToolbarItemOrderConfig, ToolbarItemOrderGroup, ToolbarItemSurface, action_label,
+    action_short_label, factory_individual_toolbar_item_visibility_settings,
+    item_visibility_setting, toolbar_item_order_group, toolbar_item_visibility_override_allowed,
+};
 use crate::i18n::tr;
+use crate::ui::toolbar::{ToolbarEvent, ToolbarItemCustomizeGroup, ToolbarSnapshot};
+use std::borrow::Cow;
 
 pub(super) fn settings_buttons(snapshot: &ToolbarSnapshot) -> Vec<ToolbarSettingsButton> {
     let mut buttons = vec![

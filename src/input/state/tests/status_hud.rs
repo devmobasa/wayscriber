@@ -4,6 +4,11 @@
 //! contract: the press side reports a hit without side effects, activation
 //! happens on release-inside, and releases outside are ignored.
 
+use crate::draw::TextMeasurer;
+use crate::ui::ZoomChipButtonKind;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::config::{StatusBarItem, StatusBarStyle, StatusPosition};
 use crate::input::state::core::board_picker::BoardPickerFocus;
@@ -55,7 +60,7 @@ fn status_hud_hover_tracks_segments_and_requests_redraw() {
     assert!(input.needs_redraw, "hover transition requests a redraw");
 
     input.needs_redraw = false;
-    input.zoom_chip.hover = Some(crate::ui::ZoomChipButtonKind::In);
+    input.zoom_chip.hover = Some(ZoomChipButtonKind::In);
     input.clear_chrome_hover();
     assert_eq!(input.status_hud.hover, None);
     assert_eq!(input.zoom_chip.hover, None);
@@ -118,8 +123,8 @@ fn status_hud_layout_rebuild_preserves_cleared_hover_after_pointer_leave() {
     input.set_toolbar_visible(false);
     input.update_status_hud_layout_for_pointer_with_resources(
         crate::input::state::InputTextResources {
-            measurer: &crate::draw::TextMeasurer::default(),
-            ui_engine: &crate::ui_text::UiTextEngine::default(),
+            measurer: &TextMeasurer::default(),
+            ui_engine: &UiTextEngine::default(),
         },
         StatusPosition::BottomLeft,
         &StatusBarStyle::default(),
@@ -151,7 +156,7 @@ fn status_hud_press_reports_hit_without_side_effect() {
 
 #[test]
 fn status_hud_click_board_segment_toggles_board_picker() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -168,7 +173,7 @@ fn status_hud_click_board_segment_toggles_board_picker() {
 
 #[test]
 fn status_hud_click_page_segment_opens_board_picker_page_panel() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -185,7 +190,7 @@ fn status_hud_click_page_segment_opens_board_picker_page_panel() {
 
 #[test]
 fn status_hud_click_color_dot_opens_color_picker_popup() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -199,7 +204,7 @@ fn status_hud_click_color_dot_opens_color_picker_popup() {
 
 #[test]
 fn status_hud_click_tool_segment_opens_radial_menu() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -213,7 +218,7 @@ fn status_hud_click_tool_segment_opens_radial_menu() {
 
 #[test]
 fn status_hud_click_size_segment_opens_radial_menu() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -227,7 +232,7 @@ fn status_hud_click_size_segment_opens_radial_menu() {
 
 #[test]
 fn status_hud_click_help_segment_returns_toggle_help_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -247,7 +252,7 @@ fn status_hud_click_help_segment_returns_toggle_help_action() {
 /// dispatch the action rather than open a surface in place.
 #[test]
 fn status_hud_click_version_chip_returns_open_about_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     // The version chip is opt-in.
@@ -287,7 +292,7 @@ fn a_narrow_status_hud_sheds_the_version_chip_first() {
 
 #[test]
 fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
 
@@ -323,8 +328,8 @@ fn status_hud_click_toolbar_hint_returns_toggle_toolbar_action() {
 /// no-op.
 #[test]
 fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -365,7 +370,7 @@ fn status_hud_toolbar_hint_recovers_cycle_hidden_top_strip() {
 
 #[test]
 fn status_hud_click_between_segments_consumes_without_action() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -393,7 +398,7 @@ fn status_hud_click_between_segments_consumes_without_action() {
 
 #[test]
 fn status_hud_click_outside_is_ignored() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -408,7 +413,7 @@ fn status_hud_click_outside_is_ignored() {
 
 #[test]
 fn status_hud_ignores_clicks_when_not_interactive() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     input.ui_visibility.status_bar_interactive = false;
@@ -431,8 +436,8 @@ fn disabling_every_content_item_removes_the_hud_and_restores_badge_fallback() {
     input.boards.new_page();
     for item in StatusBarItem::ALL {
         input.set_status_bar_item_visible_with_resources(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             item,
             false,
         );
@@ -464,8 +469,8 @@ fn changing_status_hud_content_leaves_damage_to_the_effect_pass() {
     let _ = input.take_dirty_region_report();
 
     assert!(input.set_status_bar_item_visible_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         StatusBarItem::Help,
         false
     ));
@@ -484,17 +489,13 @@ fn changing_status_hud_master_or_interactivity_leaves_damage_to_the_effect_pass(
     update_hud_layout(&mut input, 1280, 720);
     let _ = input.take_dirty_region_report();
 
-    assert!(
-        input.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SetStatusBarInteractive(
-            false,
-        ))
-    );
+    assert!(input.apply_toolbar_event(ToolbarEvent::SetStatusBarInteractive(false,)));
     assert!(
         input.take_dirty_region_report().regions.is_empty(),
         "interactivity only changes pixels inside the HUD footprint"
     );
 
-    assert!(input.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::ToggleStatusBar(false)));
+    assert!(input.apply_toolbar_event(ToolbarEvent::ToggleStatusBar(false)));
     assert!(
         input.take_dirty_region_report().regions.is_empty(),
         "the effect pass owns HUD and fallback transitions"
@@ -520,7 +521,7 @@ fn status_hud_press_routing_consumes_left_press_over_interactive_hud() {
 
 #[test]
 fn status_hud_ignored_while_radial_menu_overlays_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -552,7 +553,7 @@ fn status_hud_ignored_while_radial_menu_overlays_it() {
 
 #[test]
 fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut input = create_test_input_state();
     update_hud_layout(&mut input, 1280, 720);
@@ -561,7 +562,7 @@ fn status_hud_ignored_while_other_eclipsing_overlays_are_open() {
 
     // Board picker (also covers a picker opened between press and release:
     // check_status_hud_click shares the same guard).
-    input.open_board_picker_with_measurer(&crate::draw::TextMeasurer::default());
+    input.open_board_picker_with_measurer(&TextMeasurer::default());
     assert!(!input.status_hud_contains(x, y));
     assert!(
         !input

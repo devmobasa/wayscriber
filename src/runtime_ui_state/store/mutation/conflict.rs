@@ -1,4 +1,10 @@
-use super::*;
+use super::super::{RuntimeUiStateInspection, RuntimeUiStateStore};
+use super::result::{artifact_for, failed, is_expected_missing, observation_changed_retained};
+use super::{ClaimedSource, MutationTarget, store_fs};
+use crate::runtime_ui_state::{
+    RuntimeStateFailurePathEffect, RuntimeStateObservedPathEffect, RuntimeStatePostClaimPathEffect,
+    SourceMutationId, SourceMutationResult,
+};
 
 impl RuntimeUiStateStore {
     pub(super) fn restore_or_retain_changed_claim(
@@ -14,13 +20,13 @@ impl RuntimeUiStateStore {
         match self.inspect() {
             Ok(active) if is_expected_missing(&active, &target.expected_path) => {}
             Ok(active) => {
-                return observation_changed_retained(id, active.observation, quarantine, claimed);
+                return observation_changed_retained(id, active.observation, &quarantine, &claimed);
             }
             Err(error) => {
                 return self.retained_after_claim(
                     id,
-                    quarantine,
-                    claimed,
+                    &quarantine,
+                    &claimed,
                     format!(
                         "could not verify the path before restoring changed runtime state: {}",
                         error.message()
@@ -62,8 +68,8 @@ impl RuntimeUiStateStore {
             }
             Err(error) => self.retained_after_claim(
                 id,
-                quarantine,
-                claimed,
+                &quarantine,
+                &claimed,
                 format!("could not restore changed claimed source without replacement: {error}"),
             ),
         }
@@ -72,11 +78,11 @@ impl RuntimeUiStateStore {
     pub(super) fn retained_after_claim(
         &self,
         id: SourceMutationId,
-        quarantine: store_fs::PinnedPath,
-        claimed: RuntimeUiStateInspection,
+        quarantine: &store_fs::PinnedPath,
+        claimed: &RuntimeUiStateInspection,
         reason: impl Into<String>,
     ) -> SourceMutationResult {
-        let artifacts = artifact_for(quarantine.clone(), claimed);
+        let artifacts = artifact_for(quarantine, claimed);
         if artifacts.is_empty() {
             return failed(
                 id,

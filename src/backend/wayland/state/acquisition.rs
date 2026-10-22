@@ -5,10 +5,12 @@ use crate::backend::wayland::acquisition::{
     ScreenAcquisitionId, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
     ScreenAcquisitionRegistry,
 };
+use crate::backend::wayland::capture::RegionCapturePhase;
 use crate::backend::wayland::zoom::{
     ZoomSourceOutcome, ZoomSourceTerminal, ZoomWaiter, ZoomWaiterOwner, ZoomWaiterRegistry,
 };
-use crate::input::state::{EyedropperCaptureSource, ScreenCaptureSource};
+use crate::input::InputState;
+use crate::input::state::{EyedropperCaptureSource, RegionPurposeTag, ScreenCaptureSource};
 
 use transaction::{
     AcquisitionTransactionRuntime, cancel_modal_owner_resources, release_owned_generation,
@@ -129,7 +131,7 @@ impl AcquisitionTransactionRuntime for WaylandState {
         self.validate_owner_waiter(record, completion)
     }
 
-    fn input_state(&mut self) -> &mut crate::input::InputState {
+    fn input_state(&mut self) -> &mut InputState {
         &mut self.input_state
     }
 
@@ -219,11 +221,11 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn resolve_zoom_waiter(
         &mut self,
-        terminal: ZoomSourceTerminal,
+        terminal: &ZoomSourceTerminal,
     ) {
-        let Some((waiter, matches)) = self.acquisition.take_zoom_waiter_for_terminal(&terminal)
+        let Some((waiter, matches)) = self.acquisition.take_zoom_waiter_for_terminal(terminal)
         else {
-            report_zoom_terminal_to(&mut self.input_state, None, &terminal);
+            report_zoom_terminal_to(&mut self.input_state, None, terminal);
             return;
         };
         if !matches {
@@ -231,13 +233,13 @@ impl WaylandState {
             report_inconsistent_capture_to(&mut self.input_state);
             return;
         }
-        if !self.validate_zoom_waiter(waiter, &terminal) {
+        if !self.validate_zoom_waiter(waiter, terminal) {
             self.cancel_zoom_owner_ui_only(waiter.owner);
             report_inconsistent_capture_to(&mut self.input_state);
             return;
         }
 
-        self.report_zoom_terminal(waiter.owner, &terminal);
+        self.report_zoom_terminal(waiter.owner, terminal);
         match terminal.outcome {
             ZoomSourceOutcome::Ready {
                 installed_generation,
@@ -271,7 +273,7 @@ impl WaylandState {
 
     pub(in crate::backend::wayland) fn resolve_pending_zoom_terminal(&mut self) {
         if let Some(terminal) = self.zoom.take_source_terminal() {
-            self.resolve_zoom_waiter(terminal);
+            self.resolve_zoom_waiter(&terminal);
         }
     }
 
@@ -282,7 +284,7 @@ impl WaylandState {
                     == Some(EyedropperCaptureSource::Zoom)
             }
             ZoomWaiterOwner::Ocr => self.region_capture.active().is_some_and(|region| {
-                region.purpose() == crate::input::state::RegionPurposeTag::Ocr
+                region.purpose() == RegionPurposeTag::Ocr
                     && matches!(
                         region,
                         super::region_capture::ActiveScreenRegion::PendingZoom { .. }
@@ -294,10 +296,7 @@ impl WaylandState {
                         region,
                         super::region_capture::ActiveScreenRegion::PendingZoom { .. }
                     )
-                    && matches!(
-                        self.capture.region_phase(),
-                        crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
-                    )
+                    && matches!(self.capture.region_phase(), RegionCapturePhase::Reserved(_))
             }),
         };
         if !waiting {
@@ -337,7 +336,10 @@ impl WaylandState {
         owner: ScreenAcquisitionOwner,
         outcome: ScreenAcquisitionOutcome,
     ) {
-        debug_assert!(!matches!(outcome, ScreenAcquisitionOutcome::Ready { .. }));
+        debug_assert!(
+            !matches!(outcome, ScreenAcquisitionOutcome::Ready { .. }),
+            "a queued acquisition never started, so it cannot be ready, got {outcome:?}"
+        );
         self.route_acquisition_completion(ScreenAcquisitionCompletion { id, owner, outcome });
     }
 
@@ -356,22 +358,23 @@ impl WaylandState {
         let waiting = match completion.owner {
             ScreenAcquisitionOwner::UserFreeze => true,
             ScreenAcquisitionOwner::Eyedropper => {
-                debug_assert_eq!(record.owner, ScreenAcquisitionOwner::Eyedropper);
+                debug_assert_eq!(
+                    record.owner,
+                    ScreenAcquisitionOwner::Eyedropper,
+                    "the completion and its acquisition record name different owners"
+                );
                 self.input_state.eyedropper_state().pending_source()
                     == Some(EyedropperCaptureSource::Frozen)
             }
             ScreenAcquisitionOwner::Ocr => self.region_capture.active().is_some_and(|region| {
-                region.purpose() == crate::input::state::RegionPurposeTag::Ocr
+                region.purpose() == RegionPurposeTag::Ocr
                     && region.waits_for_acquisition(completion.id)
             }),
             ScreenAcquisitionOwner::RegionCapture => {
                 self.region_capture.active().is_some_and(|region| {
                     region.purpose().is_capture()
                         && region.waits_for_acquisition(completion.id)
-                        && matches!(
-                            self.capture.region_phase(),
-                            crate::backend::wayland::capture::RegionCapturePhase::Reserved(_)
-                        )
+                        && matches!(self.capture.region_phase(), RegionCapturePhase::Reserved(_))
                 })
             }
         };

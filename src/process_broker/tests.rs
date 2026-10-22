@@ -1,7 +1,15 @@
 use std::ffi::OsStr;
 use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
+use std::process::Command;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use std::{env, fs, iter, thread};
+
+use crate::daemon::protocol_v2;
+use crate::test_fake_helper::Role;
+use crate::{env_vars, process_broker, test_env, test_fake_helper, test_temp};
 
 use super::*;
 
@@ -12,15 +20,11 @@ fn wire_arguments(arguments: &[&str]) -> Vec<super::wire::OsWire> {
         .collect()
 }
 
-fn release_test_provider(
-    release_path: &std::path::Path,
-    proof_path: &std::path::Path,
-    provider_pid: i32,
-) {
-    std::fs::write(release_path, b"release").unwrap();
+fn release_test_provider(release_path: &Path, proof_path: &Path, provider_pid: i32) {
+    fs::write(release_path, b"release").unwrap();
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        if std::fs::read(proof_path).is_ok_and(|bytes| bytes == b"survived") {
+        if fs::read(proof_path).is_ok_and(|bytes| bytes == b"survived") {
             return;
         }
         if Instant::now() >= deadline {
@@ -30,48 +34,43 @@ fn release_test_provider(
             }
             panic!("successful provider could not act after normal broker shutdown");
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 #[test]
 fn configurator_manifest_preserves_arbitrary_explicit_override_name() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let configured = crate::test_fake_helper::link(temp.path(), "open-wayscriber-settings");
+    let temp = test_temp::tempdir().unwrap();
+    let configured = test_fake_helper::link(temp.path(), "open-wayscriber-settings");
     let output = temp.path().join("unused");
-    let mut variables = vec![(
-        crate::env_vars::CONFIGURATOR_ENV,
-        Some(configured.as_os_str()),
-    )];
-    variables.extend(crate::test_fake_helper::environment(
+    let mut variables = vec![(env_vars::CONFIGURATOR_ENV, Some(configured.as_os_str()))];
+    variables.extend(test_fake_helper::environment(
         &configured,
-        crate::test_fake_helper::Role::Exit,
+        Role::Exit,
         &output,
     ));
 
-    let (result, broker_result, unexpected_result) =
-        crate::test_env::with_env_vars(&variables, || {
-            let program = super::wire::OsWire::from_os(configured.as_os_str()).unwrap();
-            let result =
-                super::manifest::validate(HelperKind::Configurator, &program, &[], &[], &[]);
-            let broker_result = (|| -> anyhow::Result<()> {
-                let guard = start_for_runtime()?;
-                guard.broker().spawn(
-                    HelperKind::Configurator,
-                    HelperLifetime::DetachedAfterExec,
-                    configured.as_os_str(),
-                    std::iter::empty::<&OsStr>(),
-                    Vec::new(),
-                )?;
-                Ok(())
-            })();
-            let unexpected =
-                super::wire::OsWire::from_os(OsStr::new("/tmp/unrelated-program")).unwrap();
-            let unexpected_result =
-                super::manifest::validate(HelperKind::Configurator, &unexpected, &[], &[], &[]);
+    let (result, broker_result, unexpected_result) = test_env::with_env_vars(&variables, || {
+        let program = super::wire::OsWire::from_os(configured.as_os_str()).unwrap();
+        let result = super::manifest::validate(HelperKind::Configurator, &program, &[], &[], &[]);
+        let broker_result = (|| -> anyhow::Result<()> {
+            let guard = start_for_runtime()?;
+            guard.broker().spawn(
+                HelperKind::Configurator,
+                HelperLifetime::DetachedAfterExec,
+                configured.as_os_str(),
+                iter::empty::<&OsStr>(),
+                Vec::new(),
+            )?;
+            Ok(())
+        })();
+        let unexpected =
+            super::wire::OsWire::from_os(OsStr::new("/tmp/unrelated-program")).unwrap();
+        let unexpected_result =
+            super::manifest::validate(HelperKind::Configurator, &unexpected, &[], &[], &[]);
 
-            (result, broker_result, unexpected_result)
-        });
+        (result, broker_result, unexpected_result)
+    });
 
     result.unwrap();
     broker_result.unwrap();
@@ -444,9 +443,9 @@ fn tesseract_reads_the_complete_recognized_output_rather_than_a_prefix() {
 fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
-    let (running_tx, running_rx) = std::sync::mpsc::channel();
+    let (running_tx, running_rx) = mpsc::channel();
 
-    let long_helper = std::thread::spawn(move || {
+    let long_helper = thread::spawn(move || {
         running_tx.send(()).unwrap();
         broker.run(
             HelperKind::TestSleep,
@@ -459,7 +458,7 @@ fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
     });
     running_rx.recv_timeout(Duration::from_secs(5)).unwrap();
     // The helper thread has to hold the exchange before the policy is testable.
-    std::thread::sleep(Duration::from_millis(200));
+    thread::sleep(Duration::from_millis(200));
 
     let started = Instant::now();
     let declined = guard.broker().try_spawn(
@@ -473,8 +472,7 @@ fn only_the_callback_thread_spawn_declines_to_wait_for_the_transport() {
 
     let error = declined.expect_err("try_spawn must not queue behind the long helper");
     assert!(
-        crate::process_broker::error_kind(&error)
-            == Some(crate::process_broker::BrokerErrorKind::Busy),
+        process_broker::error_kind(&error) == Some(process_broker::BrokerErrorKind::Busy),
         "unexpected try_spawn failure: {error:#}"
     );
     assert!(
@@ -529,13 +527,13 @@ fn prelock_broker_runs_bounded_helpers_and_owns_reaping() {
     let deadline = Instant::now() + Duration::from_secs(1);
     while child.try_wait().unwrap().is_none() {
         assert!(Instant::now() < deadline);
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 #[test]
 fn process_group_guard_cleans_up_before_ownership_transfer() {
-    let mut command = std::process::Command::new("sleep");
+    let mut command = Command::new("sleep");
     command.arg("30").process_group(0);
     let child = super::execution::OwnedProcess::process_group(command.spawn().unwrap());
     let pid = i32::try_from(child.id()).unwrap();
@@ -548,16 +546,12 @@ fn process_group_guard_cleans_up_before_ownership_transfer() {
 
 #[test]
 fn initial_detach_child_remains_eligible_to_create_a_session() {
-    let temp = crate::test_temp::tempdir().unwrap();
-    let helper = crate::test_fake_helper::link(temp.path(), "wayscriber-detach-probe");
+    let temp = test_temp::tempdir().unwrap();
+    let helper = test_fake_helper::link(temp.path(), "wayscriber-detach-probe");
     let proof = temp.path().join("detach-state");
-    let variables = crate::test_fake_helper::environment(
-        &helper,
-        crate::test_fake_helper::Role::ReportProcessGroup,
-        &proof,
-    );
+    let variables = test_fake_helper::environment(&helper, Role::ReportProcessGroup, &proof);
 
-    let observed = crate::test_env::with_env_vars(&variables, || {
+    let observed = test_env::with_env_vars(&variables, || {
         let guard = start_for_runtime().unwrap();
         let _child = guard
             .broker()
@@ -565,18 +559,18 @@ fn initial_detach_child_remains_eligible_to_create_a_session() {
                 HelperKind::InitialDetach,
                 HelperLifetime::DetachedAfterExec,
                 helper.as_os_str(),
-                std::iter::empty::<&OsStr>(),
+                iter::empty::<&OsStr>(),
                 Vec::new(),
             )
             .unwrap();
 
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            if let Ok(value) = std::fs::read_to_string(&proof) {
+            if let Ok(value) = fs::read_to_string(&proof) {
                 break value;
             }
             assert!(Instant::now() < deadline, "detach probe did not complete");
-            std::thread::sleep(Duration::from_millis(5));
+            thread::sleep(Duration::from_millis(5));
         }
     });
 
@@ -624,7 +618,7 @@ fn broker_transfers_large_input_and_output_through_sealed_memfds() {
         .run(
             HelperKind::TestCat,
             OsStr::new("cat"),
-            std::iter::empty::<&OsStr>(),
+            iter::empty::<&OsStr>(),
             input.clone(),
             Duration::from_secs(2),
             input.len(),
@@ -716,7 +710,7 @@ fn broker_prefix_read_returns_the_requested_prefix_without_weakening_strict_runs
             .run_prefix(
                 HelperKind::TestCat,
                 OsStr::new("cat"),
-                std::iter::empty::<&OsStr>(),
+                iter::empty::<&OsStr>(),
                 Vec::new(),
                 Duration::from_secs(1),
                 5,
@@ -730,9 +724,9 @@ fn broker_prefix_read_returns_the_requested_prefix_without_weakening_strict_runs
 fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let pid_path = temp.path().join("helper.pid");
-    let run = std::thread::spawn({
+    let run = thread::spawn({
         let pid_path = pid_path.clone();
         move || {
             broker.run(
@@ -753,9 +747,9 @@ fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
     let deadline = Instant::now() + Duration::from_secs(1);
     while !pid_path.exists() {
         assert!(Instant::now() < deadline, "helper did not start");
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
-    let helper_pid = std::fs::read_to_string(&pid_path)
+    let helper_pid = fs::read_to_string(&pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -775,7 +769,7 @@ fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
 #[test]
 fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
     let guard = start_for_runtime().unwrap();
-    let watchdog = crate::daemon::protocol_v2::open_daemon_watchdog().unwrap();
+    let watchdog = protocol_v2::open_daemon_watchdog().unwrap();
     let child = guard
         .broker()
         .spawn_with_watchdog(
@@ -787,10 +781,10 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
             watchdog.as_raw_fd(),
         )
         .unwrap();
-    let inherited_pidfd = std::fs::read_dir(format!("/proc/{}/fd", child.id()))
+    let inherited_pidfd = fs::read_dir(format!("/proc/{}/fd", child.id()))
         .unwrap()
         .filter_map(Result::ok)
-        .filter_map(|entry| std::fs::read_link(entry.path()).ok())
+        .filter_map(|entry| fs::read_link(entry.path()).ok())
         .any(|target| target.as_os_str() == "anon_inode:[pidfd]");
     assert!(inherited_pidfd, "owned child should retain daemon pidfd");
     child.kill_wait().unwrap();
@@ -799,16 +793,16 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
 #[test]
 fn helpers_do_not_inherit_the_internal_process_markers() {
     const MARKERS: [&str; 4] = [
-        crate::env_vars::OVERLAY_CHILD_GENERATION_ENV,
-        crate::env_vars::DETACHED_ENV,
+        env_vars::OVERLAY_CHILD_GENERATION_ENV,
+        env_vars::DETACHED_ENV,
         crate::RESUME_SESSION_ENV,
-        crate::env_vars::OVERLAY_LANGUAGE_ENV,
+        env_vars::OVERLAY_LANGUAGE_ENV,
     ];
-    let _environment = crate::test_env::lock();
-    let previous = MARKERS.map(std::env::var_os);
+    let _environment = test_env::lock();
+    let previous = MARKERS.map(env::var_os);
     for marker in MARKERS {
         // SAFETY: serialized by the test environment mutex held above.
-        unsafe { std::env::set_var(marker, "inherited") };
+        unsafe { env::set_var(marker, "inherited") };
     }
 
     let guard = start_for_runtime().unwrap();
@@ -831,8 +825,8 @@ fn helpers_do_not_inherit_the_internal_process_markers() {
         // SAFETY: serialized by the test environment mutex held above.
         unsafe {
             match value {
-                Some(value) => std::env::set_var(marker, value),
-                None => std::env::remove_var(marker),
+                Some(value) => env::set_var(marker, value),
+                None => env::remove_var(marker),
             }
         }
     }
@@ -861,7 +855,7 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
     assert!(!output.timed_out);
     assert!(started.elapsed() < Duration::from_secs(1));
     assert!(
-        std::str::from_utf8(&output.stdout)
+        str::from_utf8(&output.stdout)
             .unwrap()
             .trim()
             .parse::<u32>()
@@ -872,7 +866,7 @@ fn operation_bound_run_terminates_descendants_that_retain_pipes() {
 #[test]
 fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let pid_path = temp.path().join("descendant.pid");
     // The helper waits until the descendant has written its pid, which it
     // does only after setsid(). Exiting sooner lets the group kill reach the
@@ -893,7 +887,7 @@ fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
         1024,
     );
     let elapsed = started.elapsed();
-    if let Some(pid) = std::fs::read_to_string(&pid_path)
+    if let Some(pid) = fs::read_to_string(&pid_path)
         .ok()
         .and_then(|pid| pid.trim().parse::<libc::pid_t>().ok())
     {
@@ -926,7 +920,7 @@ fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
 #[test]
 fn normal_broker_shutdown_releases_successful_provider_descendant() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let release_path = temp.path().join("release-provider");
     let proof_path = temp.path().join("provider-survived");
     let pid_path = temp.path().join("provider.pid");
@@ -951,7 +945,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
         .unwrap();
     assert_eq!(output.status, 0);
     assert!(!output.timed_out);
-    let provider_pid = std::fs::read_to_string(pid_path)
+    let provider_pid = fs::read_to_string(pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -967,7 +961,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
 #[test]
 fn shutdown_channel_peer_loss_kills_retained_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let pid_path = temp.path().join("provider.pid");
     let output = guard
         .broker()
@@ -985,7 +979,7 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
         )
         .unwrap();
     assert_eq!(output.status, 0);
-    let provider_pid = std::fs::read_to_string(pid_path)
+    let provider_pid = fs::read_to_string(pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -994,8 +988,8 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
     assert_eq!(unsafe { libc::kill(provider_pid, 0) }, 0);
 
     // Simulate abrupt parent loss without writing the graceful-shutdown packet.
-    // SAFETY: the descriptor belongs to this test's live broker guard.
     assert_eq!(
+        // SAFETY: the descriptor belongs to this test's live broker guard.
         unsafe { libc::shutdown(guard.broker().inner.shutdown.as_raw_fd(), libc::SHUT_RDWR) },
         0
     );
@@ -1014,14 +1008,14 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
             }
             panic!("provider survived abnormal broker channel loss");
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 #[test]
 fn retained_publication_replacement_disposes_the_previous_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let first_pid_path = temp.path().join("first-provider.pid");
     let second_pid_path = temp.path().join("second-provider.pid");
     let second_release_path = temp.path().join("release-second-provider");
@@ -1063,12 +1057,12 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
         .unwrap();
     assert_eq!(second.status, 0);
 
-    let first_pid = std::fs::read_to_string(first_pid_path)
+    let first_pid = fs::read_to_string(first_pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
         .unwrap();
-    let second_pid = std::fs::read_to_string(second_pid_path)
+    let second_pid = fs::read_to_string(second_pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -1087,7 +1081,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
             }
             panic!("replaced publication provider remained alive");
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
     // SAFETY: signal zero only checks the current test-owned provider.
     assert_eq!(unsafe { libc::kill(second_pid, 0) }, 0);
@@ -1099,7 +1093,7 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
 #[test]
 fn failed_publication_replacement_preserves_the_current_provider() {
     let guard = start_for_runtime().unwrap();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current_pid_path = temp.path().join("current-provider.pid");
     let failed_pid_path = temp.path().join("failed-provider.pid");
     let current_release_path = temp.path().join("release-current-provider");
@@ -1142,12 +1136,12 @@ fn failed_publication_replacement_preserves_the_current_provider() {
         .unwrap();
     assert_eq!(failed.status, 7);
 
-    let current_pid = std::fs::read_to_string(current_pid_path)
+    let current_pid = fs::read_to_string(current_pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
         .unwrap();
-    let failed_pid = std::fs::read_to_string(failed_pid_path)
+    let failed_pid = fs::read_to_string(failed_pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -1168,7 +1162,7 @@ fn failed_publication_replacement_preserves_the_current_provider() {
             }
             panic!("failed replacement provider survived cleanup");
         }
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 
     drop(guard);
@@ -1185,7 +1179,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
             vec![b'x'; 1024 * 1024],
         ),
     ] {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let pid_path = temp.path().join("provider.pid");
         let result = guard.broker().publish(
             HelperKind::TestShell,
@@ -1199,7 +1193,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
             input,
             Duration::from_millis(100),
         );
-        let provider_pid = std::fs::read_to_string(pid_path)
+        let provider_pid = fs::read_to_string(pid_path)
             .unwrap()
             .trim()
             .parse::<i32>()
@@ -1219,7 +1213,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
                 Instant::now() < deadline,
                 "failed provider survived cleanup"
             );
-            std::thread::sleep(Duration::from_millis(5));
+            thread::sleep(Duration::from_millis(5));
         }
     }
 }
@@ -1242,7 +1236,7 @@ fn retained_publication_rejects_incomplete_input_after_successful_exit() {
 fn broker_shutdown_preempts_retained_publication_stdin_writer() {
     let guard = start_for_runtime().unwrap();
     let broker = guard.broker().clone();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let current_pid_path = temp.path().join("current-provider.pid");
     let current_release_path = temp.path().join("release-current-provider");
     let current_proof_path = temp.path().join("current-provider-survived");
@@ -1267,12 +1261,12 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
         )
         .unwrap();
     assert_eq!(current.status, 0);
-    let current_pid = std::fs::read_to_string(current_pid_path)
+    let current_pid = fs::read_to_string(current_pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
         .unwrap();
-    let publication = std::thread::spawn({
+    let publication = thread::spawn({
         let pid_path = pid_path.clone();
         move || {
             broker.publish(
@@ -1295,9 +1289,9 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
             Instant::now() < deadline,
             "publication helper did not start"
         );
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
-    let provider_pid = std::fs::read_to_string(pid_path)
+    let provider_pid = fs::read_to_string(pid_path)
         .unwrap()
         .trim()
         .parse::<i32>()
@@ -1321,30 +1315,26 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
             Instant::now() < deadline,
             "publication provider survived broker shutdown"
         );
-        std::thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(5));
     }
 }
 
 #[test]
 fn wl_copy_publication_accepts_capture_sized_input() {
     const PUBLICATION_BYTES: usize = 16 * 1024 * 1024 + 1;
-    let temp = crate::test_temp::tempdir().unwrap();
-    let helper = crate::test_fake_helper::link(temp.path(), "wl-copy");
+    let temp = test_temp::tempdir().unwrap();
+    let helper = test_fake_helper::link(temp.path(), "wl-copy");
     let count_path = temp.path().join("published-bytes");
-    let variables = crate::test_fake_helper::environment(
-        &helper,
-        crate::test_fake_helper::Role::CountInput,
-        &count_path,
-    );
+    let variables = test_fake_helper::environment(&helper, Role::CountInput, &count_path);
 
-    let output = crate::test_env::with_env_vars(&variables, || {
+    let output = test_env::with_env_vars(&variables, || {
         let guard = start_for_runtime().unwrap();
         guard
             .broker()
             .publish(
                 HelperKind::WlCopy,
                 helper.as_os_str(),
-                std::iter::empty::<&OsStr>(),
+                iter::empty::<&OsStr>(),
                 vec![b'x'; PUBLICATION_BYTES],
                 Duration::from_secs(30),
             )
@@ -1354,7 +1344,7 @@ fn wl_copy_publication_accepts_capture_sized_input() {
     assert_eq!(output.status, 0);
     assert!(!output.timed_out);
     assert_eq!(
-        std::fs::read_to_string(count_path).unwrap().trim(),
+        fs::read_to_string(count_path).unwrap().trim(),
         PUBLICATION_BYTES.to_string()
     );
 }
@@ -1376,8 +1366,8 @@ fn missing_executable_category_survives_real_broker_transport_and_context() {
         .context("caller can add diagnostic context");
 
     assert_eq!(
-        crate::process_broker::error_kind(&error),
-        Some(crate::process_broker::BrokerErrorKind::MissingExecutable)
+        process_broker::error_kind(&error),
+        Some(process_broker::BrokerErrorKind::MissingExecutable)
     );
     assert!(format!("{error:#}").contains("broker helper spawn failed"));
 }
@@ -1400,7 +1390,7 @@ fn rejected_diagnostic_with_missing_file_words_is_not_a_missing_executable() {
 
     assert!(format!("{error:#}").contains("No such file"));
     assert_eq!(
-        crate::process_broker::error_kind(&error),
-        Some(crate::process_broker::BrokerErrorKind::Rejected)
+        process_broker::error_kind(&error),
+        Some(process_broker::BrokerErrorKind::Rejected)
     );
 }

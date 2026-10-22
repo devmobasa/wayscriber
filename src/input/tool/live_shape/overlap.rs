@@ -1,5 +1,7 @@
 //! Compare an oval's overlapping tail with the first lap at the same angle.
 
+use std::f64::consts;
+
 use super::ellipse::{angle_delta, polar};
 use super::{Bounds, ellipse};
 
@@ -12,7 +14,7 @@ pub(super) fn follows_first_lap(points: &[(i32, i32)], lap_end: usize, bounds: B
     let Some(coverage) = ellipse::angular_travel(points, bounds) else {
         return false;
     };
-    if coverage.winding.abs() > std::f64::consts::TAU * (MAX_OVAL_TURNS + WINDING_MARGIN_TURNS)
+    if coverage.winding.abs() > consts::TAU * (MAX_OVAL_TURNS + WINDING_MARGIN_TURNS)
         || coverage.travel > coverage.winding.abs() * 1.5
     {
         return false;
@@ -33,8 +35,8 @@ pub(super) fn follows_first_lap(points: &[(i32, i32)], lap_end: usize, bounds: B
         }
         previous_angle = angle;
     }
-    if last_position < std::f64::consts::TAU {
-        profile.push((std::f64::consts::TAU, start_radius));
+    if last_position < consts::TAU {
+        profile.push((consts::TAU, start_radius));
     }
 
     // Keep the overlap tolerance independent of the one-lap fit sensitivity.
@@ -43,7 +45,7 @@ pub(super) fn follows_first_lap(points: &[(i32, i32)], lap_end: usize, bounds: B
     let margin = (bounds.width.min(bounds.height) / 2.0 * OVERLAP_RADIUS_TOLERANCE).max(2.0);
     for &point in &points[lap_end + 1..] {
         let (angle, radius) = polar(point, bounds);
-        let progress = ((angle - start_angle) * direction).rem_euclid(std::f64::consts::TAU);
+        let progress = ((angle - start_angle) * direction).rem_euclid(consts::TAU);
         let upper = profile.partition_point(|&(position, _)| position < progress);
         let expected = if upper == 0 {
             start_radius

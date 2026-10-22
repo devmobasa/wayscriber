@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::{
     BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD, BoardBackground, BoardIdentityGeneration,
     BoardManager, BoardSpec, BoardState, board_color_from_config, board_color_to_config,
@@ -24,6 +26,7 @@ pub(crate) enum PendingBoardRuntimeUiAction {
     },
 }
 
+use crate::domain::BoardGrid;
 use crate::domain::color::PALETTE_BLACK;
 
 impl BoardSpec {
@@ -33,7 +36,7 @@ impl BoardSpec {
             name: item.name.clone(),
             background: board_background_from_config(&item.background),
             grid: if item.background.is_transparent() {
-                crate::domain::BoardGrid::from(item.grid).disabled()
+                BoardGrid::from(item.grid).disabled()
             } else {
                 item.grid.into()
             },
@@ -44,6 +47,7 @@ impl BoardSpec {
         }
     }
 
+    #[must_use]
     pub fn effective_pen_color(&self) -> Option<Color> {
         if let Some(color) = self.default_pen_color {
             return Some(color);
@@ -77,7 +81,7 @@ impl BoardManager {
         if boards.is_empty() {
             boards.push(default_overlay_board());
         }
-        let mut pin_seeds: std::collections::BTreeMap<String, bool> = pin_seeds;
+        let mut pin_seeds: BTreeMap<String, bool> = pin_seeds;
         for board in &boards {
             pin_seeds
                 .entry(board.spec.id.clone())
@@ -107,6 +111,7 @@ impl BoardManager {
         }
     }
 
+    #[must_use]
     pub fn to_config(&self) -> BoardsConfig {
         BoardsConfig {
             max_count: self.max_count,
@@ -142,7 +147,7 @@ impl BoardManager {
             .items
             .iter()
             .map(|item| (item.id.as_str(), item.pinned))
-            .collect::<std::collections::BTreeMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
         let live_ids = self
             .boards
             .iter()

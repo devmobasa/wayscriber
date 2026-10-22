@@ -4,6 +4,9 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
+use crate::durable_io;
+use crate::durable_io::AtomicWriteOptions;
+
 use super::wire::{
     DaemonRuntimeRecordV2, MAX_RUNTIME_RECORD_BYTES, canonical_json, parse_canonical_json,
 };
@@ -34,7 +37,7 @@ pub(crate) fn read_runtime_record(path: &Path) -> Result<ClassifiedRuntimeRecord
         }
         Err(_) => {}
     }
-    let text = std::str::from_utf8(&bytes).context("daemon runtime record is not UTF-8")?;
+    let text = str::from_utf8(&bytes).context("daemon runtime record is not UTF-8")?;
     if let Ok(record) = serde_json::from_str::<LegacyRuntimeRecord>(text) {
         if record.pid == 0 {
             bail!("legacy daemon runtime pid is zero");
@@ -78,27 +81,26 @@ pub(crate) fn write_runtime_record_v2(path: &Path, record: &DaemonRuntimeRecordV
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    crate::durable_io::write_atomic(
-        path,
-        &bytes,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+    durable_io::write_atomic(path, &bytes, AtomicWriteOptions::private_runtime_file()).with_context(
+        || {
+            format!(
+                "failed to publish daemon v2 runtime record {}",
+                path.display()
+            )
+        },
     )
-    .with_context(|| {
-        format!(
-            "failed to publish daemon v2 runtime record {}",
-            path.display()
-        )
-    })
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
     use crate::daemon::protocol_v2::ProtocolToken;
 
     #[test]
     fn exact_v2_is_strict_but_v1_remains_permissive() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let path = temp.path().join("runtime");
         let v2 = DaemonRuntimeRecordV2::current(ProtocolToken::generate().unwrap()).unwrap();
         write_runtime_record_v2(&path, &v2).unwrap();
@@ -119,7 +121,7 @@ mod tests {
 
     #[test]
     fn malformed_v2_shaped_records_never_downgrade_to_legacy() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let path = temp.path().join("runtime");
         for record in [
             r#" {"pid":42,"runtime_record_version":2}"#,

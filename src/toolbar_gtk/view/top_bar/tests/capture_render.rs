@@ -6,6 +6,15 @@ mod popups;
 mod subprocess;
 mod support;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc;
+use std::{env, process};
+
+use gtk4::gdk::Display;
+
+use crate::toolbar_gtk::css;
+
 use super::super::{FeedbackSender, TopBar};
 use crate::toolbar_gtk::view::install_capture_css_provider;
 use gtk4::prelude::*;
@@ -14,13 +23,13 @@ use support::*;
 
 #[test]
 fn capture_roots_override_user_css_and_restore_rendered_pixels() {
-    if std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
-        || std::env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
+    if env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none()
+        || env::var("WAYLAND_DISPLAY").as_deref() != Ok("wayscriber-widget-tests")
     {
         return;
     }
 
-    if std::env::var_os(CHILD_ENV).is_none() {
+    if env::var_os(CHILD_ENV).is_none() {
         let name = concat!(
             module_path!(),
             "::capture_roots_override_user_css_and_restore_rendered_pixels"
@@ -42,9 +51,9 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
     gtk4::Settings::default()
         .unwrap()
         .set_gtk_xft_dpi(96 * 1024);
-    let display = gtk4::gdk::Display::default().unwrap();
+    let display = Display::default().unwrap();
     let application = gtk4::CssProvider::new();
-    application.load_from_string(&crate::toolbar_gtk::css::stylesheet(1.0));
+    application.load_from_string(&css::stylesheet(1.0));
     gtk4::style_context_add_provider_for_display(
         &display,
         &application,
@@ -52,7 +61,7 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
     );
     let capture = install_capture_css_provider(1.0);
     let user = gtk4::CssProvider::new();
-    let errors = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let errors = Rc::new(RefCell::new(Vec::new()));
     let observed = errors.clone();
     user.connect_parsing_error(move |_, _, error| observed.borrow_mut().push(error.to_string()));
     gtk4::style_context_add_provider_for_display(
@@ -61,12 +70,12 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
         gtk4::STYLE_PROVIDER_PRIORITY_USER,
     );
 
-    let case = std::env::var(CHILD_ENV).unwrap();
+    let case = env::var(CHILD_ENV).unwrap();
     eprintln!(
         "capture case: {case}, renderer: {}",
-        std::env::var("GSK_RENDERER").unwrap()
+        env::var("GSK_RENDERER").unwrap()
     );
-    let renderer = std::env::var("GSK_RENDERER").unwrap();
+    let renderer = env::var("GSK_RENDERER").unwrap();
     let mut outcome = Outcome::Passed;
     match case.as_str() {
         "renderer-probe" => {
@@ -101,12 +110,12 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
 
     subprocess::complete(&renderer, &case, &outcome);
     if outcome == Outcome::VulkanUnavailable {
-        std::process::exit(77);
+        process::exit(77);
     }
 }
 
 fn roots(user: &gtk4::CssProvider, case: &str) {
-    let (tx, _) = std::sync::mpsc::channel();
+    let (tx, _) = mpsc::channel();
     let top = TopBar::new_for_test(FeedbackSender::new(tx));
     top.root.set_size_request(160, 64);
     top.window.set_decorated(false);
@@ -134,18 +143,22 @@ fn roots(user: &gtk4::CssProvider, case: &str) {
     } else {
         ""
     };
-    user.load_from_string(
-        &(painted_css(selector, "0 2px 6px #58c0e8")
-            + &format!("{selector} {{ {transition} {image} {metrics} }}")),
-    );
+    user.load_from_string(&format!(
+        "{}{selector} {{ {transition} {image} {metrics} }}",
+        painted_css(selector, "0 2px 6px #58c0e8")
+    ));
     if case == "animation" {
-        user.load_from_string(&(painted_css("window", "none") + r#"
+        let mut css = painted_css("window", "none");
+        css.push_str(
+            r#"
             @keyframes capture-fixture {
                 from { background-color: #23252e; }
                 to { background-color: #e86b18; }
             }
             window { background-image: none; animation: capture-fixture 400ms linear infinite alternate; }
-        "#));
+        "#,
+        );
+        user.load_from_string(&css);
     }
     top.window.present();
     wait_for_frame(&top.window);
@@ -173,7 +186,7 @@ fn roots(user: &gtk4::CssProvider, case: &str) {
         top.capture_surface.set_transparent(true);
         top.capture_surface
             .widget()
-            .remove_css_class(crate::toolbar_gtk::css::CAPTURE_TRANSPARENT_CLASS);
+            .remove_css_class(css::CAPTURE_TRANSPARENT_CLASS);
         wait_for_frame(&top.window);
         assert_fixture(&pixels(&top.capture_surface.proof));
         top.capture_surface.set_transparent(false);

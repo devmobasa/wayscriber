@@ -1,6 +1,8 @@
 //! Configuration enum types.
 
-use crate::domain::{Color, color::*};
+use crate::domain::Color;
+use crate::domain::color::PALETTE_RED;
+use crate::util;
 use crate::util::ConfigHexColorError;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -94,6 +96,7 @@ pub enum ReducedMotion {
 
 impl ReducedMotion {
     /// Whether UI animations should run.
+    #[must_use]
     pub fn motion_enabled(self) -> bool {
         !matches!(self, ReducedMotion::On)
     }
@@ -142,15 +145,17 @@ impl ColorSpec {
     /// names and invalid hex values default to the tuned palette red with a warning.
     /// Three-component RGB arrays are converted from 0-255 range to 0.0-1.0 range with
     /// full opacity; four-component arrays take their alpha from the fourth.
+    #[must_use]
     pub fn to_color(&self) -> Color {
         match self {
-            ColorSpec::Name(name) => match crate::util::parse_config_hex_color(name) {
+            ColorSpec::Name(name) => match util::parse_config_hex_color(name) {
                 Ok(color) => color,
-                Err(ConfigHexColorError::MissingHash) => crate::util::name_to_color(name)
-                    .unwrap_or_else(|| {
+                Err(ConfigHexColorError::MissingHash) => {
+                    util::name_to_color(name).unwrap_or_else(|| {
                         warn!("Unknown color '{}', using red", name);
                         PALETTE_RED
-                    }),
+                    })
+                }
                 Err(err) => {
                     warn!("Invalid hex color '{}': {:?}; using red", name, err);
                     PALETTE_RED

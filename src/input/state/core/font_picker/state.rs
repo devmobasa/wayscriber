@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::Reverse;
 use std::time::{Duration, Instant};
 
 use super::{FontPickerFilter, FontPickerResults, FontPickerTarget};
@@ -127,7 +128,7 @@ impl FontPickerState {
                 (score > 0).then_some((score, family))
             })
             .collect();
-        scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
+        scored.sort_by_key(|(score, _)| Reverse(*score));
         scored
             .into_iter()
             .map(|(_, family)| family.clone())

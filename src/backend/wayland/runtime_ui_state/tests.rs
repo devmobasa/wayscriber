@@ -1,13 +1,18 @@
 use super::*;
 
-use std::fs;
 use std::path::Path;
-use std::thread;
 use std::time::Duration;
+use std::{fs, thread};
 
-use crate::config::{ToolbarItemsConfig, toolbar_item_ids as ids};
+use crate::config::{ToolbarItemsConfig, ToolbarSectionFlag, toolbar_item_ids as ids};
+use crate::draw::TextMeasurer;
+use crate::input::boards::BoardManager;
 use crate::input::state::test_support::make_test_input_state;
+use crate::runtime_ui_state::{
+    CommitResult, ItemVisibilitySetting, RuntimeStateObservedEnvelope, RuntimeStateSourceRevision,
+};
 use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot, ToolbarEvent};
+use crate::ui_text::UiTextEngine;
 
 mod board_pin_resets;
 mod board_pins;
@@ -21,7 +26,7 @@ mod visibility_recovery;
 
 fn input_from_config(config: &Config) -> InputState {
     let mut input = make_test_input_state();
-    input.boards = crate::input::boards::BoardManager::from_config(config.resolved_boards());
+    input.boards = BoardManager::from_config(config.resolved_boards());
     input.init_toolbar_from_config(&config.ui.toolbar);
     input
 }
@@ -100,12 +105,12 @@ fn settle_runtime(runtime: &mut ToolbarRuntimeState) -> ToolbarRuntimeDrain {
 
 fn wait_for_runtime_mode(
     runtime: &mut ToolbarRuntimeState,
-    expected: RuntimeUiPersistenceMode,
+    expected: &RuntimeUiPersistenceMode,
 ) -> RuntimeUiPersistenceSnapshot {
     for _ in 0..800 {
         runtime.drain_writer_completions();
         let snapshot = runtime.persistence_snapshot();
-        if snapshot.mode == expected {
+        if snapshot.mode == *expected {
             return snapshot;
         }
         thread::sleep(Duration::from_millis(5));
@@ -123,8 +128,8 @@ fn apply_finish(
 ) {
     if let ToolbarRuntimeFinish::Rollback(rollback) = finish {
         apply_toolbar_runtime_rollback(
-            &crate::ui_text::UiTextEngine::default(),
-            &crate::draw::TextMeasurer::default(),
+            &UiTextEngine::default(),
+            &TextMeasurer::default(),
             input,
             positions,
             &rollback,
@@ -166,12 +171,12 @@ fn config_positions(config: &Config) -> ToolbarPositionSnapshot {
 
 fn stored_position(
     runtime: &ToolbarRuntimeState,
-    target: InteractionSeedTarget,
+    target: &InteractionSeedTarget,
 ) -> Option<(f64, f64)> {
     match runtime
         .controller
         .model()
-        .get(&target)
+        .get(target)
         .map(|entry| &entry.value)
     {
         Some(InteractionSeedValue::Position(position)) => {
@@ -181,11 +186,11 @@ fn stored_position(
     }
 }
 
-fn stored_bool(runtime: &ToolbarRuntimeState, target: InteractionSeedTarget) -> Option<bool> {
+fn stored_bool(runtime: &ToolbarRuntimeState, target: &InteractionSeedTarget) -> Option<bool> {
     match runtime
         .controller
         .model()
-        .get(&target)
+        .get(target)
         .map(|entry| &entry.value)
     {
         Some(InteractionSeedValue::Bool(value)) => Some(*value),
@@ -208,15 +213,15 @@ fn stored_display_mode(runtime: &ToolbarRuntimeState) -> Option<PersistedTopDisp
 fn commit_display_mode(
     runtime: &mut ToolbarRuntimeState,
     input: &mut InputState,
-    mode: crate::config::TopDisplayMode,
+    mode: TopDisplayMode,
 ) -> ToolbarRuntimeFinish {
     let target = ToolbarRuntimeUiPersistenceTarget::TopDisplayMode;
     let prepared = runtime
         .begin_toolbar_mutation(target, input)
         .expect("display mode permit");
     input.set_top_display_mode_with_resources(
-        &crate::ui_text::UiTextEngine::default(),
-        &crate::draw::TextMeasurer::default(),
+        &UiTextEngine::default(),
+        &TextMeasurer::default(),
         mode,
     );
     runtime.finish_toolbar_mutation(prepared, true, input)
@@ -243,7 +248,7 @@ fn pins_rollback(top: bool) -> PreviewRollbackSnapshot {
     }
 }
 
-fn section_toggle(flag: crate::config::ToolbarSectionFlag, show: bool) -> ToolbarEvent {
+fn section_toggle(flag: ToolbarSectionFlag, show: bool) -> ToolbarEvent {
     use crate::config::ToolbarSectionFlag as Flag;
     match flag {
         Flag::Actions => ToolbarEvent::ToggleActionsSection(show),

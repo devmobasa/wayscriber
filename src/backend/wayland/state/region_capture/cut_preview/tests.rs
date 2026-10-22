@@ -1,3 +1,17 @@
+use crate::backend::wayland::RuntimeWakeSource;
+use crate::backend::wayland::runtime_operation::{
+    RuntimeOperationController, RuntimeOperationId, RuntimeOperationIdSource,
+    RuntimeOperationSubmitError,
+};
+use crate::backend::wayland::state::screen_image::ScreenSourceToken;
+use crate::canvas_export::SpotlightPassSnapshot;
+use crate::input::InputState;
+use crate::input::state::{RegionPurposeTag, test_support};
+
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+use std::{io, thread};
+
 use super::super::ActiveScreenRegion;
 use super::super::cut_review::{
     CutPreviewKey, PreviewApply, RegionAnnotatedRenderContext, RegionCutBase, RegionCutPreview,
@@ -13,8 +27,7 @@ use super::snapshot::{
 };
 use crate::backend::wayland::runtime_operation::RuntimeOperationPoll;
 use crate::backend::wayland::state::screen_image::ScreenImageKind;
-use crate::capture::CutAxis;
-use crate::capture::{CaptureError, CutBand};
+use crate::capture::{CaptureError, CutAxis, CutBand};
 use crate::input::state::RegionSelection;
 use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
 use std::sync::Arc;
@@ -22,8 +35,8 @@ use wayland_client::protocol::wl_output::Transform;
 
 type ContextMutation = (&'static str, fn(&mut RegionAnnotatedRenderContext));
 
-fn token() -> crate::backend::wayland::state::screen_image::ScreenSourceToken {
-    crate::backend::wayland::state::screen_image::ScreenSourceToken {
+fn token() -> ScreenSourceToken {
+    ScreenSourceToken {
         output_id: 1,
         output_layout_generation: 1,
         kind: ScreenImageKind::Frozen,
@@ -50,7 +63,7 @@ fn key(revision: u64, generation: u64) -> CutPreviewKey {
             source_rect: rect,
         },
         revision,
-        cuts: vec![CutBand::new(CutAxis::Columns, 1, 2).unwrap()],
+        cuts: vec![CutBand::try_new(CutAxis::Columns, 1, 2).unwrap()],
     }
 }
 
@@ -66,7 +79,7 @@ fn annotated_key(revision: u64, generation: u64) -> CutPreviewKey {
             canvas_content_generation: 4,
             board_view_offset: (5.0, 6.0),
             text_halo_enabled: true,
-            spotlight: crate::canvas_export::SpotlightPassSnapshot {
+            spotlight: SpotlightPassSnapshot {
                 dim_opacity: 0.7,
                 feather: 0.2,
             },
@@ -317,7 +330,7 @@ fn stale_failure_does_not_touch_the_new_review() {
     assert!(edits.unwrap().failed_revision.is_none());
 }
 
-fn ready(purpose: crate::input::state::RegionPurposeTag) -> ActiveScreenRegion {
+fn ready(purpose: RegionPurposeTag) -> ActiveScreenRegion {
     ActiveScreenRegion::Ready {
         purpose,
         generation: 7,
@@ -449,20 +462,17 @@ fn review_edits(desired: CutPreviewKey) -> Option<RegionReviewEdits> {
 }
 
 fn poll_until_terminal(
-    controller: &mut crate::backend::wayland::runtime_operation::RuntimeOperationController<
-        CutPreviewKey,
-        CutPreviewOutcome,
-    >,
+    controller: &mut RuntimeOperationController<CutPreviewKey, CutPreviewOutcome>,
 ) -> RuntimeOperationPoll<CutPreviewKey, CutPreviewOutcome> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         match controller.poll() {
             RuntimeOperationPoll::Pending { .. } => {
                 assert!(
-                    std::time::Instant::now() < deadline,
+                    Instant::now() < deadline,
                     "cut preview worker did not finish"
                 );
-                std::thread::yield_now();
+                thread::yield_now();
             }
             poll => return poll,
         }
@@ -471,7 +481,7 @@ fn poll_until_terminal(
 
 fn apply_poll(
     edits: &mut Option<RegionReviewEdits>,
-    input: &mut crate::input::InputState,
+    input: &mut InputState,
     poll: RuntimeOperationPoll<CutPreviewKey, CutPreviewOutcome>,
 ) {
     if let Some(outcome) = cut_preview_from_poll(poll) {
@@ -480,22 +490,16 @@ fn apply_poll(
     }
 }
 
-fn preview_controller() -> crate::backend::wayland::runtime_operation::RuntimeOperationController<
-    CutPreviewKey,
-    CutPreviewOutcome,
-> {
-    let wake = crate::backend::wayland::RuntimeWakeSource::new().unwrap();
-    crate::backend::wayland::runtime_operation::RuntimeOperationController::new(
-        crate::backend::wayland::runtime_operation::RuntimeOperationIdSource::new(),
-        wake.handle(),
-    )
+fn preview_controller() -> RuntimeOperationController<CutPreviewKey, CutPreviewOutcome> {
+    let wake = RuntimeWakeSource::try_new().unwrap();
+    RuntimeOperationController::new(RuntimeOperationIdSource::new(), wake.handle())
 }
 
 #[test]
 fn worker_error_toasts_once_and_marks_dirty_for_the_current_revision() {
     let desired = key(3, 1);
     let mut edits = review_edits(desired.clone());
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.needs_redraw = false;
     let _ = input.dirty_tracker.take_region_report(2, 1);
 
@@ -547,10 +551,10 @@ fn worker_error_toasts_once_and_marks_dirty_for_the_current_revision() {
 fn worker_panic_and_disconnect_fail_the_current_preview() {
     let desired = key(4, 1);
     let mut edits = review_edits(desired.clone());
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let mut controller = preview_controller();
     controller
-        .try_submit(desired.clone(), "test-cut-preview-panic", || {
+        .try_submit(desired, "test-cut-preview-panic", || {
             panic!("expected cut preview panic")
         })
         .unwrap();
@@ -560,11 +564,11 @@ fn worker_panic_and_disconnect_fail_the_current_preview() {
 
     let desired = key(5, 1);
     let mut edits = review_edits(desired.clone());
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let mut controller = preview_controller();
     controller
         .try_submit_with_spawner_for_test(
-            desired.clone(),
+            desired,
             || panic!("must not run"),
             |job| {
                 drop(job);
@@ -581,19 +585,19 @@ fn worker_panic_and_disconnect_fail_the_current_preview() {
 fn submit_failure_is_visible_and_busy_is_not() {
     let desired = key(6, 1);
     let mut edits = review_edits(desired.clone());
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     let mut controller = preview_controller();
     let failure = controller
         .try_submit_with_spawner_for_test(
-            desired.clone(),
+            desired,
             || panic!("must not run"),
-            |_job| Err(std::io::Error::other("injected spawn failure")),
+            |_job| Err(io::Error::other("injected spawn failure")),
         )
         .unwrap_err();
     let (error, failed_key) = failure.into_parts();
     assert!(matches!(
         error,
-        crate::backend::wayland::runtime_operation::RuntimeOperationSubmitError::SpawnFailed { .. }
+        RuntimeOperationSubmitError::SpawnFailed { .. }
     ));
     present_cut_preview_effect(
         &mut input,
@@ -611,9 +615,9 @@ fn submit_failure_is_visible_and_busy_is_not() {
 
     let desired = key(7, 1);
     let edits = review_edits(desired.clone());
-    let input = crate::input::state::test_support::make_test_input_state();
+    let input = test_support::make_test_input_state();
     let mut controller = preview_controller();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
     let blocked_key = desired.clone();
     controller
         .try_submit(desired.clone(), "test-cut-preview-busy", move || {
@@ -625,16 +629,13 @@ fn submit_failure_is_visible_and_busy_is_not() {
         })
         .unwrap();
     let busy = controller
-        .try_submit(desired.clone(), "test-cut-preview-busy-2", || {
+        .try_submit(desired, "test-cut-preview-busy-2", || {
             panic!("must not run")
         })
         .unwrap_err()
         .into_parts()
         .0;
-    assert!(matches!(
-        busy,
-        crate::backend::wayland::runtime_operation::RuntimeOperationSubmitError::Busy { .. }
-    ));
+    assert!(matches!(busy, RuntimeOperationSubmitError::Busy { .. }));
     assert!(edits.as_ref().unwrap().failed_revision.is_none());
     assert_eq!(input.test_toast_count(), 0);
     release_tx.send(()).unwrap();
@@ -645,12 +646,12 @@ fn submit_failure_is_visible_and_busy_is_not() {
 fn identity_mismatch_and_stale_failure_follow_current_or_silent_rules() {
     let desired = key(8, 1);
     let mut edits = review_edits(desired.clone());
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     apply_poll(
         &mut edits,
         &mut input,
         RuntimeOperationPoll::ProducerFailed {
-            id: crate::backend::wayland::runtime_operation::RuntimeOperationId::from_test(3),
+            id: RuntimeOperationId::from_test(3),
             context: desired.clone(),
             reason: "runtime operation worker reported transport identity 4, expected 3"
                 .to_string(),
@@ -661,14 +662,14 @@ fn identity_mismatch_and_stale_failure_follow_current_or_silent_rules() {
     assert!(input.needs_redraw);
 
     let mut next = review_edits(key(9, 2));
-    let mut input = crate::input::state::test_support::make_test_input_state();
+    let mut input = test_support::make_test_input_state();
     input.needs_redraw = false;
     let _ = input.dirty_tracker.take_region_report(2, 1);
     apply_poll(
         &mut next,
         &mut input,
         RuntimeOperationPoll::ProducerFailed {
-            id: crate::backend::wayland::runtime_operation::RuntimeOperationId::from_test(3),
+            id: RuntimeOperationId::from_test(3),
             context: desired,
             reason: "old picker".to_string(),
         },
@@ -692,7 +693,7 @@ fn busy_controller_runs_only_the_newest_desired_key_after_terminal_poll() {
     let newest = key(12, 1);
     let mut edits = review_edits(first.clone());
     let mut controller = preview_controller();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
     let first_job_key = first.clone();
     controller
         .try_submit(first, "test-cut-preview-queued-first", move || {
@@ -762,7 +763,7 @@ fn reset_while_worker_is_active_releases_buffers_and_ignores_completion() {
     let worker_base_weak = Arc::downgrade(&worker_base);
     let worker_preview = Arc::new(PackedArgb32::new(1, 1, 4, vec![1; 4]).unwrap());
     let worker_preview_weak = Arc::downgrade(&worker_preview);
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
     let mut controller = preview_controller();
     let worker_key = active_key.clone();
     controller
@@ -815,7 +816,7 @@ fn review_exit_and_reopen_releases_buffers_and_rejects_old_completion() {
     let worker_base_weak = Arc::downgrade(&worker_base);
     let worker_preview = Arc::new(PackedArgb32::new(1, 1, 4, vec![1; 4]).unwrap());
     let worker_preview_weak = Arc::downgrade(&worker_preview);
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
     let mut controller = preview_controller();
     let worker_key = old_key.clone();
     controller
@@ -874,7 +875,7 @@ fn render_source_jobs_paint_annotations_before_applying_key_cuts_on_the_worker()
             generation: 7,
             source: source_token,
         };
-        let spotlight = crate::canvas_export::SpotlightPassSnapshot {
+        let spotlight = SpotlightPassSnapshot {
             dim_opacity: 0.0,
             feather: 0.0,
         };
@@ -898,7 +899,7 @@ fn render_source_jobs_paint_annotations_before_applying_key_cuts_on_the_worker()
                 source_rect: selection,
             }
         };
-        desired.cuts = vec![CutBand::new(CutAxis::Columns, 4, 8).unwrap()];
+        desired.cuts = vec![CutBand::try_new(CutAxis::Columns, 4, 8).unwrap()];
         let source = if annotated {
             let mut frame = Frame::new();
             frame.add_shape(Shape::Rect {
@@ -931,9 +932,7 @@ fn render_source_jobs_paint_annotations_before_applying_key_cuts_on_the_worker()
             key: desired.clone(),
             input: CutPreviewInput::RenderSource(source),
         };
-        let outcome = std::thread::spawn(move || run_cut_preview(job))
-            .join()
-            .unwrap();
+        let outcome = thread::spawn(move || run_cut_preview(job)).join().unwrap();
         let CutPreviewOutcome::Success {
             key,
             base,

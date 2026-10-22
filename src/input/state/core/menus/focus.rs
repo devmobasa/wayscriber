@@ -1,3 +1,5 @@
+use crate::input::state::InputTextResources;
+
 use super::super::base::InputState;
 use super::types::ContextMenuLevel;
 
@@ -96,7 +98,7 @@ impl InputState {
 
     pub(crate) fn activate_context_menu_selection_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) -> bool {
         if !self.is_context_menu_open() {
             return false;
@@ -112,7 +114,7 @@ impl InputState {
     /// is there.
     pub(crate) fn activate_context_menu_row_at_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         x: i32,
         y: i32,
     ) -> bool {
@@ -129,7 +131,7 @@ impl InputState {
     /// the keyboard with focus inside it, from a click as a toggle.
     fn activate_context_menu_row_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         level: ContextMenuLevel,
         index: usize,
         focus_submenu: bool,

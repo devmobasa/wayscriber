@@ -2,6 +2,8 @@ use anyhow::{Context, Result, anyhow};
 use std::collections::BTreeSet;
 use std::fs;
 
+use crate::session;
+
 use super::types::ClearToolStateOutcome;
 use crate::session::options::SessionOptions;
 use crate::session::snapshot::{self, LoadSnapshotOutcome};
@@ -9,7 +11,7 @@ use crate::session::snapshot::{self, LoadSnapshotOutcome};
 /// Remove only the saved tool state from the session snapshot.
 pub fn clear_tool_state(options: &SessionOptions) -> Result<ClearToolStateOutcome> {
     if options.is_named_file() {
-        crate::session::validate_named_session_file_for_clear(&options.session_file_path())?;
+        session::validate_named_session_file_for_clear(&options.session_file_path())?;
     }
 
     let targets = tool_state_edit_targets(options);

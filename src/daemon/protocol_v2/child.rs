@@ -1,11 +1,17 @@
-use std::fs;
 use std::io::ErrorKind;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::thread::Builder;
 use std::time::Duration;
+use std::{env, fs, io, process, thread};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
+
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::process_broker::BrokerChild;
+use crate::{durable_io, env_vars};
 
 use super::session_target::{
     ReportedSession, discard_session_report, read_trusted_session_report, take_final_session_report,
@@ -27,7 +33,7 @@ pub(crate) enum OverlayChildPhase {
 struct OwnedOverlayChild {
     display_pid: u32,
     pidfd: OwnedFd,
-    child: crate::process_broker::BrokerChild,
+    child: BrokerChild,
     /// Captured when its readiness proved its identity, so its reports can be
     /// checked after it exits.
     process_start_ticks: Option<u64>,
@@ -118,7 +124,7 @@ impl OverlayChildOwner {
         Ok(self.generation().expect("reserved generation exists"))
     }
 
-    pub(crate) fn start(&mut self, child: crate::process_broker::BrokerChild) -> Result<()> {
+    pub(crate) fn start(&mut self, child: BrokerChild) -> Result<()> {
         if self.phase != OverlayChildPhase::Reserved {
             let _ = child.kill_wait();
             bail!("overlay child owner is not reserved");
@@ -202,7 +208,7 @@ impl OverlayChildOwner {
                                     "overlay signal authority did not become ready before deadline"
                                 );
                             }
-                            std::thread::sleep(Duration::from_millis(10));
+                            thread::sleep(Duration::from_millis(10));
                             continue;
                         }
                         Err(error) => {
@@ -227,13 +233,13 @@ impl OverlayChildOwner {
                         daemon_token: daemon_token.to_owned(),
                     };
                     let enabled_bytes = super::wire::canonical_json(&enabled, 1024)?;
-                    crate::durable_io::write_atomic(
+                    durable_io::write_atomic(
                         &enabled_path(&generation),
                         &enabled_bytes,
-                        crate::durable_io::AtomicWriteOptions {
-                            overwrite: crate::durable_io::OverwriteMode::CreateNew,
-                            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-                            symlink: crate::durable_io::SymlinkPolicy::Reject,
+                        AtomicWriteOptions {
+                            overwrite: OverwriteMode::CreateNew,
+                            permissions: PermissionPolicy::FixedMode(0o600),
+                            symlink: SymlinkPolicy::Reject,
                             sync_file: true,
                             sync_parent: true,
                         },
@@ -254,7 +260,7 @@ impl OverlayChildOwner {
                 let _ = self.force_kill_and_wait();
                 bail!("overlay child did not become ready before deadline");
             }
-            std::thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -377,23 +383,23 @@ struct OverlayEnabledRecord {
     daemon_token: String,
 }
 
-fn ready_dir() -> std::path::PathBuf {
+fn ready_dir() -> PathBuf {
     super::command_root().join("children")
 }
 
-fn ready_path(generation: &str) -> std::path::PathBuf {
+fn ready_path(generation: &str) -> PathBuf {
     ready_dir().join(format!("{generation}.ready"))
 }
 
-fn active_path(generation: &str) -> std::path::PathBuf {
+fn active_path(generation: &str) -> PathBuf {
     ready_dir().join(format!("{generation}.active"))
 }
 
-fn enabled_path(generation: &str) -> std::path::PathBuf {
+fn enabled_path(generation: &str) -> PathBuf {
     ready_dir().join(format!("{generation}.enabled"))
 }
 
-fn signals_path(generation: &str) -> std::path::PathBuf {
+fn signals_path(generation: &str) -> PathBuf {
     ready_dir().join(format!("{generation}.signals"))
 }
 
@@ -407,7 +413,7 @@ fn clear_generation_records(generation: &str) {
 pub(crate) fn recover_stale_child_records() -> Result<()> {
     let directory = ready_dir();
     let entries = match fs::read_dir(&directory) {
-        Ok(entries) => entries.take(129).collect::<std::io::Result<Vec<_>>>()?,
+        Ok(entries) => entries.take(129).collect::<io::Result<Vec<_>>>()?,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(error).context("failed to enumerate overlay child proofs"),
     };
@@ -419,7 +425,7 @@ pub(crate) fn recover_stale_child_records() -> Result<()> {
             .file_name()
             .into_string()
             .map_err(|_| anyhow!("overlay child proof name is not UTF-8"))?;
-        if let Some(target) = crate::durable_io::temp_file_target(&name) {
+        if let Some(target) = durable_io::temp_file_target(&name) {
             collect_leftover_proof_temp(&entry.path(), target)?;
             continue;
         }
@@ -491,7 +497,7 @@ pub(crate) fn recover_stale_child_records() -> Result<()> {
 /// still rename the temporary belongs to a daemon that is gone, and that
 /// daemon's watchdog is already stopping it. A temporary for anything but a
 /// proof record is not this directory's own and still fails recovery.
-fn collect_leftover_proof_temp(path: &std::path::Path, target: &str) -> Result<()> {
+fn collect_leftover_proof_temp(path: &Path, target: &str) -> Result<()> {
     let (generation, kind) = target
         .rsplit_once('.')
         .ok_or_else(|| anyhow!("invalid overlay child proof temporary"))?;
@@ -508,12 +514,12 @@ fn collect_leftover_proof_temp(path: &std::path::Path, target: &str) -> Result<(
 }
 
 pub(crate) fn open_daemon_watchdog() -> Result<OwnedFd> {
-    super::linux::open_pidfd(std::process::id())
+    super::linux::open_pidfd(process::id())
         .context("failed to open daemon pidfd for overlay watchdog")
 }
 
 pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
-    let Some(raw) = std::env::var_os(crate::env_vars::DAEMON_WATCHDOG_FD_ENV) else {
+    let Some(raw) = env::var_os(env_vars::DAEMON_WATCHDOG_FD_ENV) else {
         return Ok(());
     };
     let raw = raw
@@ -530,7 +536,7 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
     let descriptor = unsafe { OwnedFd::from_raw_fd(raw) };
     // SAFETY: descriptor is owned and F_SETFD changes only exec inheritance.
     if unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) } != 0 {
-        return Err(std::io::Error::last_os_error())
+        return Err(io::Error::last_os_error())
             .context("failed to protect daemon watchdog descriptor");
     }
     super::linux::validate_pidfd(descriptor.as_fd())
@@ -538,9 +544,9 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
     // SAFETY: application startup has not launched runtime worker threads yet;
     // removing this private bootstrap marker prevents accidental inheritance.
     unsafe {
-        std::env::remove_var(crate::env_vars::DAEMON_WATCHDOG_FD_ENV);
+        env::remove_var(env_vars::DAEMON_WATCHDOG_FD_ENV);
     }
-    std::thread::Builder::new()
+    Builder::new()
         .name("wayscriber-daemon-watchdog".into())
         .spawn(move || {
             let mut pollfd = libc::pollfd {
@@ -557,9 +563,7 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
                     // fail-stop condition for its internal overlay child.
                     unsafe { super::linux::fail_stop(70) }
                 }
-                if result < 0
-                    && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted
-                {
+                if result < 0 && io::Error::last_os_error().kind() == ErrorKind::Interrupted {
                     continue;
                 }
                 // SAFETY: an unusable parent-death channel cannot safely
@@ -572,7 +576,7 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
 }
 
 pub(crate) fn publish_ready_from_environment() -> Result<()> {
-    let Some(generation) = std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
+    let Some(generation) = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
         return Ok(());
     };
     let generation = generation
@@ -586,17 +590,17 @@ pub(crate) fn publish_ready_from_environment() -> Result<()> {
     let active = OverlayActiveRecord {
         protocol_version: super::wire::DAEMON_CHILD_PROTOCOL_VERSION,
         generation: generation.to_owned(),
-        pid: std::process::id(),
+        pid: process::id(),
         process_start_ticks,
     };
     let active_bytes = super::wire::canonical_json(&active, 1024)?;
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &active_path(generation),
         &active_bytes,
-        crate::durable_io::AtomicWriteOptions {
-            overwrite: crate::durable_io::OverwriteMode::CreateNew,
-            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-            symlink: crate::durable_io::SymlinkPolicy::Reject,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::CreateNew,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
         },
@@ -604,17 +608,17 @@ pub(crate) fn publish_ready_from_environment() -> Result<()> {
     let record = OverlayReadyRecord {
         protocol_version: super::wire::DAEMON_CHILD_PROTOCOL_VERSION,
         generation: generation.to_owned(),
-        pid: std::process::id(),
+        pid: process::id(),
         process_start_ticks,
     };
     let bytes = super::wire::canonical_json(&record, 1024)?;
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &ready_path(generation),
         &bytes,
-        crate::durable_io::AtomicWriteOptions {
-            overwrite: crate::durable_io::OverwriteMode::CreateNew,
-            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-            symlink: crate::durable_io::SymlinkPolicy::Reject,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::CreateNew,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
         },
@@ -623,7 +627,7 @@ pub(crate) fn publish_ready_from_environment() -> Result<()> {
 }
 
 pub(crate) fn publish_signal_ready_from_environment() -> Result<()> {
-    let Some(generation) = std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
+    let Some(generation) = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
         return Ok(());
     };
     let generation = generation
@@ -632,19 +636,19 @@ pub(crate) fn publish_signal_ready_from_environment() -> Result<()> {
     super::wire::validate_id(generation)?;
     let active_bytes = super::linux::read_bounded_regular_file(&active_path(generation), 1024)?;
     let active: OverlayActiveRecord = super::wire::parse_canonical_json(&active_bytes, 1024)?;
-    if active.pid != std::process::id()
+    if active.pid != process::id()
         || active.process_start_ticks != super::linux::current_process_start_ticks()?
         || active.generation != generation
     {
         bail!("cannot publish signal readiness for a different overlay child");
     }
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &signals_path(generation),
         &active_bytes,
-        crate::durable_io::AtomicWriteOptions {
-            overwrite: crate::durable_io::OverwriteMode::CreateNew,
-            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-            symlink: crate::durable_io::SymlinkPolicy::Reject,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::CreateNew,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
         },
@@ -659,7 +663,7 @@ pub(crate) enum ActiveGeneration {
 }
 
 pub(crate) fn active_generation_from_environment() -> Result<ActiveGeneration> {
-    let Some(generation) = std::env::var_os(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
+    let Some(generation) = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
         return Ok(ActiveGeneration::Inactive);
     };
     let generation = generation
@@ -674,7 +678,7 @@ pub(crate) fn active_generation_from_environment() -> Result<ActiveGeneration> {
         Err(error) => return Err(error).context("failed to read active overlay proof"),
     };
     let record: OverlayActiveRecord = super::wire::parse_canonical_json(&bytes, 1024)?;
-    let current_pid = std::process::id();
+    let current_pid = process::id();
     let current_start = super::linux::current_process_start_ticks()?;
     if record.protocol_version != super::wire::DAEMON_CHILD_PROTOCOL_VERSION
         || record.generation != generation
@@ -710,7 +714,7 @@ pub(crate) fn active_generation_from_environment() -> Result<ActiveGeneration> {
 #[cfg(test)]
 pub(crate) fn enable_current_generation_for_test(daemon_token: &str) -> Result<()> {
     super::wire::validate_token(daemon_token)?;
-    let generation = std::env::var(crate::env_vars::OVERLAY_CHILD_GENERATION_ENV)?;
+    let generation = env::var(env_vars::OVERLAY_CHILD_GENERATION_ENV)?;
     let bytes = super::linux::read_bounded_regular_file(&active_path(&generation), 1024)?;
     let active: OverlayActiveRecord = super::wire::parse_canonical_json(&bytes, 1024)?;
     let enabled = super::wire::canonical_json(
@@ -723,28 +727,34 @@ pub(crate) fn enable_current_generation_for_test(daemon_token: &str) -> Result<(
         },
         1024,
     )?;
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &enabled_path(&generation),
         &enabled,
-        crate::durable_io::AtomicWriteOptions::private_runtime_file(),
+        AtomicWriteOptions::private_runtime_file(),
     )?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsStr;
+    use std::time::Instant;
+
+    use crate::process_broker::{HelperKind, HelperLifetime};
+    use crate::{process_broker, test_env, test_temp};
+
     use super::*;
 
     #[test]
     fn child_generation_and_pidfd_own_signal_authority() {
-        let broker = crate::process_broker::start_for_runtime().unwrap();
+        let broker = process_broker::start_for_runtime().unwrap();
         let child = broker
             .broker()
             .spawn(
-                crate::process_broker::HelperKind::TestSleep,
-                crate::process_broker::HelperLifetime::OwnedChild,
-                std::ffi::OsStr::new("sleep"),
-                [std::ffi::OsStr::new("30")],
+                HelperKind::TestSleep,
+                HelperLifetime::OwnedChild,
+                OsStr::new("sleep"),
+                [OsStr::new("30")],
                 Vec::new(),
             )
             .unwrap();
@@ -758,10 +768,10 @@ mod tests {
         owner.mark_committing().unwrap();
         owner.mark_ready().unwrap();
         owner.signal(libc::SIGTERM).unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        let deadline = Instant::now() + Duration::from_secs(1);
         while owner.try_wait().unwrap().is_none() {
-            assert!(std::time::Instant::now() < deadline);
-            std::thread::sleep(std::time::Duration::from_millis(5));
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(5));
         }
         assert_eq!(owner.phase(), OverlayChildPhase::Stopped);
         assert!(!generation.is_empty());
@@ -769,21 +779,21 @@ mod tests {
 
     #[test]
     fn readiness_requires_exact_generation_pid_and_start_identity() {
-        let _environment = crate::test_env::lock();
-        let temp = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+        let _environment = test_env::lock();
+        let temp = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
         // SAFETY: serialized by the test environment mutex.
-        unsafe { std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
-        let broker = crate::process_broker::start_for_runtime().unwrap();
+        unsafe { env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
+        let broker = process_broker::start_for_runtime().unwrap();
         let mut owner = OverlayChildOwner::default();
         let generation = owner.reserve().unwrap().to_owned();
         let child = broker
             .broker()
             .spawn(
-                crate::process_broker::HelperKind::TestSleep,
-                crate::process_broker::HelperLifetime::OwnedChild,
-                std::ffi::OsStr::new("sleep"),
-                [std::ffi::OsStr::new("30")],
+                HelperKind::TestSleep,
+                HelperLifetime::OwnedChild,
+                OsStr::new("sleep"),
+                [OsStr::new("30")],
                 Vec::new(),
             )
             .unwrap();
@@ -817,20 +827,20 @@ mod tests {
         // SAFETY: this test still holds the environment mutex.
         unsafe {
             if let Some(previous) = previous {
-                std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, previous);
+                env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, previous);
             } else {
-                std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+                env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV);
             }
         }
     }
 
     #[test]
     fn recovery_removes_only_proofs_for_dead_child_identities() {
-        let _environment = crate::test_env::lock();
-        let temp = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+        let _environment = test_env::lock();
+        let temp = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
         // SAFETY: serialized by the test environment mutex.
-        unsafe { std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
+        unsafe { env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
         let generation = super::super::ProtocolId::generate().unwrap().to_string();
         fs::create_dir_all(ready_dir()).unwrap();
         let active = OverlayActiveRecord {
@@ -848,20 +858,20 @@ mod tests {
         // SAFETY: this test still holds the environment mutex.
         unsafe {
             if let Some(previous) = previous {
-                std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, previous);
+                env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, previous);
             } else {
-                std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+                env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV);
             }
         }
     }
 
     #[test]
     fn recovery_collects_a_leftover_record_temp_instead_of_failing() {
-        let _environment = crate::test_env::lock();
-        let temp = crate::test_temp::tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+        let _environment = test_env::lock();
+        let temp = test_temp::tempdir().unwrap();
+        let previous = env::var_os(env_vars::XDG_RUNTIME_DIR_ENV);
         // SAFETY: serialized by the test environment mutex.
-        unsafe { std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
+        unsafe { env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, temp.path()) };
         let generation = super::super::ProtocolId::generate().unwrap().to_string();
         fs::create_dir_all(ready_dir()).unwrap();
         let leftover = ready_dir().join(format!(".{generation}.ready.1.2.3.tmp"));
@@ -878,9 +888,9 @@ mod tests {
         // SAFETY: this test still holds the environment mutex.
         unsafe {
             if let Some(previous) = previous {
-                std::env::set_var(crate::env_vars::XDG_RUNTIME_DIR_ENV, previous);
+                env::set_var(env_vars::XDG_RUNTIME_DIR_ENV, previous);
             } else {
-                std::env::remove_var(crate::env_vars::XDG_RUNTIME_DIR_ENV);
+                env::remove_var(env_vars::XDG_RUNTIME_DIR_ENV);
             }
         }
     }

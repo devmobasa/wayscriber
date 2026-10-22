@@ -57,10 +57,12 @@ impl Default for BoardsConfig {
 }
 
 impl BoardsConfig {
+    #[must_use]
     pub fn default_items() -> Vec<BoardItemConfig> {
         default_board_items()
     }
 
+    #[must_use]
     pub fn default_overlay_item() -> BoardItemConfig {
         BoardItemConfig {
             id: "transparent".to_string(),
@@ -74,6 +76,7 @@ impl BoardsConfig {
         }
     }
 
+    #[must_use]
     pub fn from_legacy(legacy: &BoardConfig) -> Self {
         let mut items = vec![BoardsConfig::default_overlay_item()];
 
@@ -162,6 +165,7 @@ pub enum BoardBackgroundConfig {
 }
 
 impl BoardBackgroundConfig {
+    #[must_use]
     pub fn is_transparent(&self) -> bool {
         matches!(self, BoardBackgroundConfig::Transparent(_))
     }
@@ -177,6 +181,7 @@ pub enum BoardColorConfig {
 }
 
 impl BoardColorConfig {
+    #[must_use]
     pub fn rgb(&self) -> [f64; 3] {
         match self {
             BoardColorConfig::Rgb(rgb) => *rgb,

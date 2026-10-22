@@ -7,7 +7,7 @@
 //! the user picks the arrow they can see in one click. The keyboard action
 //! still cycles.
 
-use super::*;
+use super::ToolbarEvent;
 use crate::draw::ArrowStyle;
 
 /// Chip geometry in spec units, shared by both frontends: its slot in the
@@ -92,6 +92,9 @@ fn arrow_style_hint(style: ArrowStyle) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use crate::domain::Language;
+    use crate::{i18n, test_env};
+
     use super::*;
 
     #[test]
@@ -115,14 +118,14 @@ mod tests {
 
     #[test]
     fn menu_ids_stay_english_and_unique_when_the_labels_translate() {
-        crate::test_env::in_language_isolated_child(
+        test_env::in_language_isolated_child(
             concat!(
                 module_path!(),
                 "::menu_ids_stay_english_and_unique_when_the_labels_translate"
             ),
             || {
                 let english = arrow_style_menu_entries(ArrowStyle::Standard);
-                crate::i18n::set_language(crate::domain::Language::SimplifiedChinese);
+                i18n::set_language(Language::SimplifiedChinese);
                 let chinese = arrow_style_menu_entries(ArrowStyle::Standard);
 
                 let ids: Vec<String> = chinese.iter().map(ArrowStyleMenuEntry::id).collect();

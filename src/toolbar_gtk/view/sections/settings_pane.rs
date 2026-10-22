@@ -2,6 +2,8 @@
 //! button grid, and the toolbar-item customization sub-panel (group
 //! chooser plus per-item show/hide and reorder rows).
 
+use gtk4::glib::SignalHandlerId;
+use gtk4::pango::{EllipsizeMode, WrapMode};
 use gtk4::prelude::*;
 
 use crate::i18n::tr;
@@ -30,7 +32,7 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
         let label = gtk4::Label::new(Some(notice.text.as_ref()));
         label.set_xalign(0.0);
         label.set_wrap(true);
-        label.set_wrap_mode(gtk4::pango::WrapMode::WordChar);
+        label.set_wrap_mode(WrapMode::WordChar);
         label.set_selectable(true);
         match notice.severity {
             model::ToolbarSettingsNoticeSeverity::Info => {}
@@ -118,7 +120,7 @@ fn layout_mode_segments(ctx: &mut SectionCtx) -> gtk4::Box {
 struct ToggleSync {
     id: model::ToolbarControlId,
     check: gtk4::CheckButton,
-    handler: gtk4::glib::SignalHandlerId,
+    handler: SignalHandlerId,
 }
 
 fn settings_toggle_event(template: &ToolbarEvent, checked: bool) -> ToolbarEvent {
@@ -241,7 +243,7 @@ fn settings_button(ctx: &SectionCtx, button_model: &model::ToolbarSettingsButton
         let label = gtk4::Label::new(Some(button_model.label.as_ref()));
         label.set_xalign(0.0);
         label.set_hexpand(true);
-        label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        label.set_ellipsize(EllipsizeMode::End);
         row.append(&label);
         button.set_child(Some(&row));
     } else {

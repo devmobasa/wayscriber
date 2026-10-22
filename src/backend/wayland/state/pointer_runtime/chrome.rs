@@ -1,4 +1,7 @@
-use super::*;
+use std::mem;
+
+use crate::input::state::ToastPress;
+use crate::ui::{OnboardingCardPress, ZoomChipPress};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct PendingChromePress {
@@ -44,7 +47,7 @@ impl PendingChromePress {
     }
 
     pub(super) fn take_status_hud(&mut self) -> bool {
-        std::mem::take(&mut self.status_hud)
+        mem::take(&mut self.status_hud)
     }
 
     pub(super) fn arm_zoom_chip(&mut self, press: ZoomChipPress) -> bool {
@@ -56,7 +59,7 @@ impl PendingChromePress {
     }
 
     pub(super) fn take_zoom_chip(&mut self) -> ZoomChipPress {
-        std::mem::replace(&mut self.zoom_chip, ZoomChipPress::None)
+        mem::replace(&mut self.zoom_chip, ZoomChipPress::None)
     }
 
     pub(super) fn arm_onboarding_card(&mut self, press: OnboardingCardPress) -> bool {

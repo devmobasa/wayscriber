@@ -1,5 +1,11 @@
 //! Shared-widget unit tests.
 
+use std::env;
+use std::process::Command;
+use std::sync::mpsc;
+
+use crate::config::PointerButton;
+
 use super::*;
 
 /// Focus moving to a control inside a popover must not drop the layer
@@ -14,8 +20,8 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
     const TEST_NAME: &str =
         "toolbar_gtk::widgets::tests::popover_internal_focus_keeps_the_keyboard_grab";
 
-    if std::env::var_os(CHILD_ENV).is_none() {
-        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+    if env::var_os(CHILD_ENV).is_none() {
+        let status = Command::new(env::current_exe().expect("test binary"))
             .arg(TEST_NAME)
             .arg("--exact")
             .arg("--test-threads=1")
@@ -30,7 +36,7 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
 
     if let Err(error) = gtk4::init() {
         assert!(
-            std::env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
+            env::var_os("WAYSCRIBER_REQUIRE_GTK_TESTS").is_none(),
             "Required GTK widget coverage could not initialize: {error}"
         );
         eprintln!("skipping GTK focus-policy test: {error}");
@@ -78,12 +84,10 @@ fn popover_internal_focus_keeps_the_keyboard_grab() {
 
 #[test]
 fn gtk_feedback_carries_rebind_state_once() {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let sender = FeedbackSender::new(tx);
     sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
-    sender.capture_click_modifiers(
-        gtk4::gdk::ModifierType::CONTROL_MASK | gtk4::gdk::ModifierType::SHIFT_MASK,
-    );
+    sender.capture_click_modifiers(ModifierType::CONTROL_MASK | ModifierType::SHIFT_MASK);
     send_event(&sender, ToolbarEvent::Undo);
     send_event(&sender, ToolbarEvent::Redo);
 
@@ -105,10 +109,10 @@ fn gtk_feedback_carries_rebind_state_once() {
 
 #[test]
 fn backend_modifier_latch_survives_focus_reset_during_click() {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let sender = FeedbackSender::new(tx);
     sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, true);
-    sender.capture_click_modifiers(gtk4::gdk::ModifierType::empty());
+    sender.capture_click_modifiers(ModifierType::empty());
     sender.set_rebind_state(ToolbarRebindModifier::CtrlShift, false);
 
     send_event(&sender, ToolbarEvent::Undo);
@@ -124,7 +128,7 @@ fn backend_modifier_latch_survives_focus_reset_during_click() {
 
 #[test]
 fn auxiliary_mouse_buttons_forward_as_pointer_shortcuts() {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     let sender = FeedbackSender::new(tx);
     let _ = sender.send(GtkToolbarFeedback::PointerShortcut {
         button: 8,
@@ -144,16 +148,16 @@ fn auxiliary_mouse_buttons_forward_as_pointer_shortcuts() {
         }
     );
     assert_eq!(
-        crate::config::keybindings::gdk::pointer_button(8),
-        Some(crate::config::PointerButton::Back)
+        keybindings::gdk::pointer_button(8),
+        Some(PointerButton::Back)
     );
-    assert_eq!(crate::config::keybindings::gdk::pointer_button(1), None);
+    assert_eq!(keybindings::gdk::pointer_button(1), None);
 }
 
 #[test]
 fn gtk_pointer_shortcuts_carry_click_modifiers() {
     assert_eq!(
-        super::pointer_shortcut_feedback(8, gtk4::gdk::ModifierType::CONTROL_MASK),
+        super::pointer_shortcut_feedback(8, ModifierType::CONTROL_MASK),
         Some(GtkToolbarFeedback::PointerShortcut {
             button: 8,
             ctrl: true,
@@ -163,10 +167,7 @@ fn gtk_pointer_shortcuts_carry_click_modifiers() {
         })
     );
     assert_eq!(
-        super::pointer_shortcut_feedback(
-            9,
-            gtk4::gdk::ModifierType::SHIFT_MASK | gtk4::gdk::ModifierType::SUPER_MASK,
-        ),
+        super::pointer_shortcut_feedback(9, ModifierType::SHIFT_MASK | ModifierType::SUPER_MASK,),
         Some(GtkToolbarFeedback::PointerShortcut {
             button: 9,
             ctrl: false,

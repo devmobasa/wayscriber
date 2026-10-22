@@ -1,20 +1,21 @@
 //! Shared seed reconciliation and publication; only protocol drag teardown is adapter-owned.
 use super::{ToolbarPositionSnapshot, ToolbarRuntimeState};
-use crate::backend::wayland::{
-    state::{ToolbarChrome, ToolbarDrag},
-    toolbar::ToolbarSurfaceManager,
-};
-use crate::{config::Config, draw::TextMeasurer, input::InputState, ui_text::UiTextEngine};
+use crate::backend::wayland::state::{ToolbarChrome, ToolbarDrag};
+use crate::backend::wayland::toolbar::ToolbarSurfaceManager;
+use crate::config::Config;
+use crate::draw::TextMeasurer;
+use crate::input::InputState;
+use crate::ui_text::UiTextEngine;
 
-pub(in crate::backend::wayland) struct SeedRefreshContext<'a> {
-    pub config: &'a Config,
-    pub input: &'a mut InputState,
-    pub engine: &'a UiTextEngine,
-    pub measurer: &'a TextMeasurer,
-    pub runtime: Option<&'a mut ToolbarRuntimeState>,
-    pub drag: &'a mut ToolbarDrag,
-    pub chrome: &'a mut ToolbarChrome,
-    pub toolbar: &'a mut ToolbarSurfaceManager,
+pub(in crate::backend::wayland) struct SeedRefreshContext<'state> {
+    pub config: &'state Config,
+    pub input: &'state mut InputState,
+    pub engine: &'state UiTextEngine,
+    pub measurer: &'state TextMeasurer,
+    pub runtime: Option<&'state mut ToolbarRuntimeState>,
+    pub drag: &'state mut ToolbarDrag,
+    pub chrome: &'state mut ToolbarChrome,
+    pub toolbar: &'state mut ToolbarSurfaceManager,
 }
 
 pub(in crate::backend::wayland) trait RuntimeUiSeedRefresh {

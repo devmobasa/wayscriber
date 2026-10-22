@@ -1,4 +1,5 @@
 use wayscriber::config::{Config, ConfigDocument};
+use wayscriber::i18n;
 
 use crate::messages::ConfigSaveResult;
 
@@ -10,7 +11,7 @@ pub(super) async fn load_config_from_disk() -> Result<(Box<ConfigDocument>, Opti
         // Every catalog, whatever language the file names: the Language row
         // can preview any of them later, and reading a user override is file
         // work that must not happen on the GTK thread.
-        wayscriber::i18n::prepare_catalogs();
+        i18n::prepare_catalogs();
         ConfigDocument::load_for_editing()
             .map(|(document, warning)| (Box::new(document), warning))
             .map_err(|err| format!("{err:#}"))

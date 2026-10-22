@@ -37,7 +37,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Top toolbar while presenting"),
             "",
             toolbar_modes,
-            toolbar_mode_labels,
+            &toolbar_mode_labels,
             |app| app.draft.presenter_toolbar_mode,
             Message::PresenterToolbarModeChanged,
         )
@@ -69,7 +69,7 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             tr("Tool behavior"),
             "",
             behaviors,
-            behavior_labels,
+            &behavior_labels,
             |app| app.draft.presenter_tool_behavior,
             Message::PresenterToolBehaviorChanged,
         )

@@ -1,3 +1,5 @@
+use crate::session::BoardAppearanceSnapshot;
+
 use super::base::InputState;
 use super::session_preflight::board_should_persist_for_session;
 use crate::draw::{BoardPages, Frame};
@@ -111,9 +113,7 @@ fn duplicate_page_in_snapshot(
     let insert_at = (page_index + 1).min(pages.len());
     pages.insert(insert_at, cloned_page);
     snapshot.boards.push(BoardSnapshot {
-        appearance: Some(crate::session::BoardAppearanceSnapshot::capture(
-            source_board,
-        )),
+        appearance: Some(BoardAppearanceSnapshot::capture(source_board)),
         id: source_board.spec.id.clone(),
         pages: BoardPagesSnapshot {
             active: insert_at,
@@ -167,9 +167,7 @@ fn copy_page_between_boards_in_snapshot(
     let mut pages = pages_for_snapshot(&target_board.pages, history_limit);
     pages.push(cloned_page);
     snapshot.boards.push(BoardSnapshot {
-        appearance: Some(crate::session::BoardAppearanceSnapshot::capture(
-            target_board,
-        )),
+        appearance: Some(BoardAppearanceSnapshot::capture(target_board)),
         id: target_board.spec.id.clone(),
         pages: BoardPagesSnapshot {
             active: pages.len().saturating_sub(1),

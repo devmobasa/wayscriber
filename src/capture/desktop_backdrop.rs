@@ -2,12 +2,10 @@ use std::sync::Arc;
 
 use tokio::task;
 
-use crate::capture::{
-    dependencies::CaptureDependencies,
-    types::{
-        CaptureError, CaptureType, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
-        DesktopBackdropGeometry,
-    },
+use crate::capture::dependencies::CaptureDependencies;
+use crate::capture::types::{
+    CaptureError, CaptureType, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
+    DesktopBackdropGeometry,
 };
 use crate::image_decode::{DecodeLimits, decode_rgba, format_from_mime_or_bytes};
 
@@ -25,24 +23,23 @@ pub(crate) async fn capture_desktop_backdrop(
         image_data.len()
     );
 
-    task::spawn_blocking(move || decode_desktop_backdrop(image_data, request))
+    task::spawn_blocking(move || decode_desktop_backdrop(&image_data, &request))
         .await
         .map_err(|err| CaptureError::ImageError(format!("Backdrop decode task failed: {err}")))?
 }
 
 fn decode_desktop_backdrop(
-    image_data: Vec<u8>,
-    request: DesktopBackdropCaptureRequest,
+    image_data: &[u8],
+    request: &DesktopBackdropCaptureRequest,
 ) -> Result<DesktopBackdropCaptureResult, CaptureError> {
-    let format = format_from_mime_or_bytes("", &image_data).ok_or_else(|| {
+    let format = format_from_mime_or_bytes("", image_data).ok_or_else(|| {
         CaptureError::ImageError("Desktop backdrop capture returned an unsupported image".into())
     })?;
-    let decoded =
-        decode_rgba(format, &image_data, DecodeLimits::SCREEN_CAPTURE).map_err(|err| {
-            CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
-        })?;
+    let decoded = decode_rgba(format, image_data, DecodeLimits::SCREEN_CAPTURE).map_err(|err| {
+        CaptureError::ImageError(format!("Failed to decode desktop backdrop: {err}"))
+    })?;
     let argb = rgba_to_cairo_argb(&decoded.rgba)?;
-    desktop_backdrop_from_argb(argb, decoded.width, decoded.height, &request)
+    desktop_backdrop_from_argb(argb, decoded.width, decoded.height, request)
 }
 
 fn rgba_to_cairo_argb(rgba: &[u8]) -> Result<Vec<u8>, CaptureError> {

@@ -1,16 +1,19 @@
 use std::path::{Path, PathBuf};
 
+use crate::session::{LoadSnapshotOutcome, SessionOptions};
+use crate::test_temp;
+
 use super::*;
 
 #[test]
 fn corrupt_copies_move_with_session_and_clear_without_touching_siblings() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let source = temp.path().join("board.wayscriber-session");
     let target = temp.path().join("archive.wayscriber-session");
-    std::fs::write(&source, b"primary").unwrap();
+    fs::write(&source, b"primary").unwrap();
     let suffixes = [".corrupt-1", ".bak.corrupt-2", ".recovery.corrupt-3"];
     for suffix in suffixes {
-        std::fs::write(append_path_suffix(&source, suffix), suffix.as_bytes()).unwrap();
+        fs::write(append_path_suffix(&source, suffix), suffix.as_bytes()).unwrap();
     }
     let invalid_suffixes = [
         ".corrupt-0",
@@ -23,21 +26,21 @@ fn corrupt_copies_move_with_session_and_clear_without_touching_siblings() {
         ".bak.corrupt-2-more",
     ];
     for suffix in invalid_suffixes {
-        std::fs::write(append_path_suffix(&source, suffix), b"not our name").unwrap();
+        fs::write(append_path_suffix(&source, suffix), b"not our name").unwrap();
     }
 
     move_named_session_non_lock_artifacts(&source, &target).unwrap();
     for suffix in suffixes {
         assert!(!append_path_suffix(&source, suffix).exists());
         assert_eq!(
-            std::fs::read(append_path_suffix(&target, suffix)).unwrap(),
+            fs::read(append_path_suffix(&target, suffix)).unwrap(),
             suffix.as_bytes()
         );
     }
 
     assert!(duplicate_named_session_primary(&target, &source).is_ok());
-    std::fs::remove_file(&source).unwrap();
-    std::fs::write(append_path_suffix(&source, ".corrupt-4"), b"old diagnostic").unwrap();
+    fs::remove_file(&source).unwrap();
+    fs::write(append_path_suffix(&source, ".corrupt-4"), b"old diagnostic").unwrap();
     assert!(duplicate_named_session_primary(&target, &source).is_err());
 
     clear_named_session_non_lock_artifacts(&target).unwrap();
@@ -46,7 +49,7 @@ fn corrupt_copies_move_with_session_and_clear_without_touching_siblings() {
     }
     for suffix in invalid_suffixes {
         assert_eq!(
-            std::fs::read(append_path_suffix(&source, suffix)).unwrap(),
+            fs::read(append_path_suffix(&source, suffix)).unwrap(),
             b"not our name",
             "{suffix}"
         );
@@ -76,7 +79,7 @@ fn named_session_artifact_paths_use_exact_primary_suffixes() {
 
 #[test]
 fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("lecture.wayscriber-session");
     let sibling = temp.path().join("other.wayscriber-session");
     let artifacts = named_session_artifact_paths(&path);
@@ -94,18 +97,18 @@ fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
         &sibling_artifacts.backup,
         &sibling_artifacts.lock,
     ] {
-        std::fs::write(path, b"artifact").unwrap();
+        fs::write(path, b"artifact").unwrap();
     }
     let rotated_recovery = PathBuf::from(format!("{}.old", artifacts.recovery.display()));
-    std::fs::write(&rotated_recovery, b"rotated").unwrap();
+    fs::write(&rotated_recovery, b"rotated").unwrap();
     let preserved = append_path_suffix(&artifacts.primary, ".v2-preserved-0123456789abcdef");
     let preserved_moved =
         append_path_suffix(&artifacts.primary, ".v3-preserved-fedcba9876543210-moved-1");
     let similar_sibling =
         append_path_suffix(&artifacts.primary, ".version-preserved-not-a-session");
-    std::fs::write(&preserved, b"newer").unwrap();
-    std::fs::write(&preserved_moved, b"newer moved").unwrap();
-    std::fs::write(&similar_sibling, b"sibling").unwrap();
+    fs::write(&preserved, b"newer").unwrap();
+    fs::write(&preserved_moved, b"newer moved").unwrap();
+    fs::write(&similar_sibling, b"sibling").unwrap();
 
     let outcome = clear_named_session_non_lock_artifacts(&path).unwrap();
 
@@ -138,14 +141,14 @@ fn clear_named_session_non_lock_artifacts_preserves_lock_and_sibling() {
 
 #[test]
 fn clear_named_session_non_lock_artifacts_skips_directory_sidecars() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("lecture.wayscriber-session");
     let artifacts = named_session_artifact_paths(&path);
     let recovery_dir = PathBuf::from(format!("{}.old", artifacts.recovery.display()));
 
-    std::fs::write(&artifacts.primary, b"primary").unwrap();
-    std::fs::create_dir(&artifacts.backup).unwrap();
-    std::fs::create_dir(&recovery_dir).unwrap();
+    fs::write(&artifacts.primary, b"primary").unwrap();
+    fs::create_dir(&artifacts.backup).unwrap();
+    fs::create_dir(&recovery_dir).unwrap();
 
     let outcome = clear_named_session_non_lock_artifacts(&path).unwrap();
 
@@ -165,26 +168,23 @@ fn clear_named_session_non_lock_artifacts_skips_directory_sidecars() {
 
 #[test]
 fn duplicate_named_session_primary_copies_only_primary() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let source = temp.path().join("lecture.wayscriber-session");
     let target = temp.path().join("lecture-copy.wayscriber-session");
     let source_artifacts = named_session_artifact_paths(&source);
     let target_artifacts = named_session_artifact_paths(&target);
 
-    std::fs::write(&source_artifacts.primary, b"primary").unwrap();
-    std::fs::write(&source_artifacts.backup, b"backup").unwrap();
-    std::fs::write(&source_artifacts.recovery, b"recovery").unwrap();
-    std::fs::write(&source_artifacts.clear_marker, b"cleared").unwrap();
-    std::fs::write(&source_artifacts.lock, b"lock").unwrap();
+    fs::write(&source_artifacts.primary, b"primary").unwrap();
+    fs::write(&source_artifacts.backup, b"backup").unwrap();
+    fs::write(&source_artifacts.recovery, b"recovery").unwrap();
+    fs::write(&source_artifacts.clear_marker, b"cleared").unwrap();
+    fs::write(&source_artifacts.lock, b"lock").unwrap();
 
     let outcome = duplicate_named_session_primary(&source, &target).unwrap();
 
     assert_eq!(outcome.target, target);
     assert_eq!(outcome.bytes_copied, "primary".len() as u64);
-    assert_eq!(
-        std::fs::read(&target_artifacts.primary).unwrap(),
-        b"primary"
-    );
+    assert_eq!(fs::read(&target_artifacts.primary).unwrap(), b"primary");
     for path in [
         &target_artifacts.backup,
         &target_artifacts.recovery,
@@ -205,12 +205,12 @@ fn duplicate_named_session_primary_copies_only_primary() {
 
 #[test]
 fn duplicate_named_session_primary_rejects_existing_target_sidecar() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let source = temp.path().join("lecture.wayscriber-session");
     let target = temp.path().join("lecture-copy.wayscriber-session");
     let target_artifacts = named_session_artifact_paths(&target);
-    std::fs::write(&source, b"primary").unwrap();
-    std::fs::write(&target_artifacts.backup, b"backup").unwrap();
+    fs::write(&source, b"primary").unwrap();
+    fs::write(&target_artifacts.backup, b"backup").unwrap();
 
     let err = duplicate_named_session_primary(&source, &target)
         .expect_err("target sidecar should block duplicate");
@@ -228,11 +228,11 @@ fn duplicate_named_session_primary_rejects_existing_target_sidecar() {
 fn duplicate_named_session_primary_rejects_symlink_source() {
     use std::os::unix::fs::symlink;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let target_source = temp.path().join("real.wayscriber-session");
     let source = temp.path().join("link.wayscriber-session");
     let target = temp.path().join("copy.wayscriber-session");
-    std::fs::write(&target_source, b"primary").unwrap();
+    fs::write(&target_source, b"primary").unwrap();
     symlink(&target_source, &source).unwrap();
 
     let err = duplicate_named_session_primary(&source, &target)
@@ -246,31 +246,31 @@ fn duplicate_named_session_primary_rejects_symlink_source() {
 fn non_utf8_diagnostics_are_reused_pruned_moved_and_removed_by_core_clear() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let source = temp
         .path()
         .join(OsStr::from_bytes(b"board-\xff.wayscriber-session"));
     let target = temp
         .path()
         .join(OsStr::from_bytes(b"archive-\xfe.wayscriber-session"));
-    let mut options = crate::session::SessionOptions::new(temp.path().to_path_buf(), "nonutf");
+    let mut options = SessionOptions::new(temp.path().to_path_buf(), "nonutf");
     options.set_named_file_target(source.clone());
     for index in 0..5 {
-        std::fs::write(&source, format!("broken {index}")).unwrap();
-        let outcome = crate::session::load_snapshot_with_outcome(&options).unwrap();
+        fs::write(&source, format!("broken {index}")).unwrap();
+        let outcome = session::load_snapshot_with_outcome(&options).unwrap();
         assert!(matches!(
             outcome,
-            crate::session::LoadSnapshotOutcome::EmptyAfterCorruption { .. }
+            LoadSnapshotOutcome::EmptyAfterCorruption { .. }
         ));
         // The same unreadable primary reuses its diagnostic, rather than allocating again.
-        crate::session::load_snapshot_with_outcome(&options).unwrap();
+        session::load_snapshot_with_outcome(&options).unwrap();
         assert_eq!(
             corrupt_copies_of(&source).unwrap().len(),
             (index + 1).min(3)
         );
     }
     for suffix in [".bak.corrupt-1", ".recovery.corrupt-1"] {
-        std::fs::write(append_path_suffix(&source, suffix), b"side diagnostic").unwrap();
+        fs::write(append_path_suffix(&source, suffix), b"side diagnostic").unwrap();
     }
     let before = named_session_non_lock_artifact_paths(&source).unwrap();
     move_named_session_non_lock_artifacts(&source, &target).unwrap();
@@ -278,6 +278,6 @@ fn non_utf8_diagnostics_are_reused_pruned_moved_and_removed_by_core_clear() {
     options.set_named_file_target(target.clone());
     let moved = named_session_non_lock_artifact_paths(&target).unwrap();
     assert_eq!(moved.len(), before.len());
-    crate::session::clear_session(&options).unwrap();
+    session::clear_session(&options).unwrap();
     assert!(moved.iter().all(|path| !path.exists()));
 }

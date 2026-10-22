@@ -1,3 +1,6 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 
 fn shape_bounds_center(shape: &Shape) -> (i32, i32) {
@@ -7,8 +10,8 @@ fn shape_bounds_center(shape: &Shape) -> (i32, i32) {
 
 #[test]
 fn duplicate_selection_via_action_creates_offset_shape() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -52,8 +55,8 @@ fn duplicate_selection_via_action_creates_offset_shape() {
 
 #[test]
 fn copy_paste_selection_centers_shape_at_pointer() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -112,8 +115,8 @@ fn copy_paste_selection_centers_shape_at_pointer() {
 
 #[test]
 fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -156,8 +159,8 @@ fn immediate_paste_after_copy_uses_pending_local_publish_shapes() {
 
 #[test]
 fn stale_publish_completion_is_ignored_for_newer_copy() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -211,8 +214,8 @@ fn stale_publish_completion_is_ignored_for_newer_copy() {
 
 #[test]
 fn published_selection_allows_local_fallback_until_superseded() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -260,8 +263,8 @@ fn published_selection_allows_local_fallback_until_superseded() {
 
 #[test]
 fn fallback_generation_rejects_newer_local_copy() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -304,8 +307,8 @@ fn fallback_generation_rejects_newer_local_copy() {
 
 #[test]
 fn private_payload_for_request_rejects_newer_same_instance_generation() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -360,8 +363,8 @@ fn private_payload_for_request_rejects_newer_same_instance_generation() {
 
 #[test]
 fn private_payload_for_request_uses_payload_when_current_generation_changed() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -418,8 +421,8 @@ fn private_payload_for_request_uses_payload_when_current_generation_changed() {
 
 #[test]
 fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -465,8 +468,8 @@ fn same_instance_private_payload_with_no_fallback_generation_uses_payload() {
 
 #[test]
 fn request_generation_supersede_ignores_newer_local_copy() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -522,8 +525,8 @@ fn request_generation_supersede_ignores_newer_local_copy() {
 
 #[test]
 fn duplicate_selection_skips_locked_shapes() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -596,7 +599,7 @@ fn copy_selection_of_only_locked_shapes_leaves_clipboard_empty() {
 
 #[test]
 fn repeated_paste_selection_uses_current_pointer_anchor() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -628,7 +631,7 @@ fn repeated_paste_selection_uses_current_pointer_anchor() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let original_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 10,
@@ -653,7 +656,7 @@ fn paste_selection_warns_when_shape_limit_prevents_any_paste() {
 
 #[test]
 fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     let first = state.boards.active_frame_mut().add_shape(Shape::Rect {
         x: 0,
@@ -688,10 +691,7 @@ fn paste_selection_warns_when_shape_limit_allows_only_partial_paste() {
     );
 }
 
-fn paste_local_clipboard(
-    state: &mut crate::input::InputState,
-    measurer: &crate::draw::TextMeasurer,
-) -> usize {
+fn paste_local_clipboard(state: &mut InputState, measurer: &TextMeasurer) -> usize {
     let request = state.request_clipboard_paste();
     let shapes = state
         .selection_clipboard_snapshot()

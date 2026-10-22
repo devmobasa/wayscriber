@@ -94,6 +94,8 @@ pub(super) fn warn_if_other_wayscriber_binaries() {
 
 #[cfg(test)]
 mod tests {
+    use crate::{env_vars, test_env, test_temp};
+
     use super::*;
     use std::fs;
     use std::os::unix::fs::symlink;
@@ -104,7 +106,7 @@ mod tests {
 
     #[test]
     fn no_conflict_when_path_and_extras_are_the_same_file() {
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let tmp = test_temp::tempdir().unwrap();
         let binary = tmp.path().join("wayscriber");
         write_file(&binary);
         let path_env = tmp.path().display().to_string();
@@ -116,7 +118,7 @@ mod tests {
 
     #[test]
     fn reports_a_second_file_on_path() {
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let tmp = test_temp::tempdir().unwrap();
         let current_dir = tmp.path().join("current");
         let other_dir = tmp.path().join("other");
         fs::create_dir(&current_dir).unwrap();
@@ -133,7 +135,7 @@ mod tests {
 
     #[test]
     fn reports_a_well_known_copy_even_when_path_matches_current() {
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let tmp = test_temp::tempdir().unwrap();
         let current_dir = tmp.path().join("local");
         let usr_dir = tmp.path().join("usr");
         fs::create_dir(&current_dir).unwrap();
@@ -150,7 +152,7 @@ mod tests {
 
     #[test]
     fn symlink_to_the_same_file_is_not_a_conflict() {
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let tmp = test_temp::tempdir().unwrap();
         let current = tmp.path().join("wayscriber");
         let alias = tmp.path().join("alias-wayscriber");
         write_file(&current);
@@ -161,7 +163,7 @@ mod tests {
 
     #[test]
     fn missing_current_exe_yields_no_others() {
-        let tmp = crate::test_temp::tempdir().unwrap();
+        let tmp = test_temp::tempdir().unwrap();
         let missing = tmp.path().join("missing");
         let other = tmp.path().join("wayscriber");
         write_file(&other);
@@ -171,16 +173,12 @@ mod tests {
 
     #[test]
     fn well_known_includes_resolved_user_local_bin() {
-        let tmp = crate::test_temp::tempdir().unwrap();
-        crate::test_env::with_env_var(
-            crate::env_vars::HOME_ENV,
-            Some(tmp.path().as_os_str()),
-            || {
-                let paths = well_known_wayscriber_binaries();
-                assert!(paths.contains(&PathBuf::from("/usr/bin/wayscriber")));
-                assert!(paths.contains(&PathBuf::from("/usr/local/bin/wayscriber")));
-                assert!(paths.contains(&tmp.path().join(".local").join("bin").join("wayscriber")));
-            },
-        );
+        let tmp = test_temp::tempdir().unwrap();
+        test_env::with_env_var(env_vars::HOME_ENV, Some(tmp.path().as_os_str()), || {
+            let paths = well_known_wayscriber_binaries();
+            assert!(paths.contains(&PathBuf::from("/usr/bin/wayscriber")));
+            assert!(paths.contains(&PathBuf::from("/usr/local/bin/wayscriber")));
+            assert!(paths.contains(&tmp.path().join(".local").join("bin").join("wayscriber")));
+        });
     }
 }

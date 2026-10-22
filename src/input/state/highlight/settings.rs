@@ -21,6 +21,7 @@ pub struct ClickHighlightSettings {
 
 impl ClickHighlightSettings {
     #[cfg_attr(not(test), allow(dead_code))]
+    #[must_use]
     pub fn disabled() -> Self {
         let base_fill = Color {
             r: 1.0,

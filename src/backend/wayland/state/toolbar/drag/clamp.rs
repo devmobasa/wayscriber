@@ -1,6 +1,9 @@
 use std::time::Instant;
 
-use super::*;
+use super::super::{
+    ToolbarSnapshot, WaylandState, debug, debug_toolbar_drag_logging_enabled, drag_log, geometry,
+    toolbar_drag_throttle_interval, top_size,
+};
 
 impl WaylandState {
     pub(in crate::backend::wayland::state::toolbar) fn apply_toolbar_offsets_throttled(

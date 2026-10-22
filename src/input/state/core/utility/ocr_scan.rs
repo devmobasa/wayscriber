@@ -11,6 +11,8 @@
 
 use std::time::{Duration, Instant};
 
+use crate::ui::anim;
+
 use super::super::base::InputState;
 use crate::i18n::{tr, trf};
 use crate::ocr::OcrRequestId;
@@ -107,7 +109,7 @@ impl OcrScan {
     /// under `[ui] reduced_motion`: the region is marked with a static
     /// indicator instead of a moving band (WCAG 2.3.3).
     pub(crate) fn sweep_progress(self, now: Instant) -> Option<f64> {
-        self.sweep_progress_for(now, crate::ui::anim::motion_enabled())
+        self.sweep_progress_for(now, anim::motion_enabled())
     }
 
     /// Split from the accessor so both motion settings can be exercised
@@ -156,7 +158,7 @@ impl InputState {
         outcome: OcrScanOutcome,
         now: Instant,
     ) {
-        self.settle_ocr_scan_for(request, outcome, now, crate::ui::anim::motion_enabled());
+        self.settle_ocr_scan_for(request, outcome, now, anim::motion_enabled());
     }
 
     pub(crate) fn settle_ocr_scan_for(
@@ -209,7 +211,7 @@ impl InputState {
     /// which wakes the loop itself. A still card is the one case that needs a
     /// deadline: nothing else will wake the loop to expire it.
     pub(crate) fn ocr_scan_wake_after(&self, now: Instant) -> Option<Duration> {
-        self.ocr_scan_wake_after_for(now, crate::ui::anim::motion_enabled())
+        self.ocr_scan_wake_after_for(now, anim::motion_enabled())
     }
 
     pub(crate) fn ocr_scan_wake_after_for(&self, now: Instant, motion: bool) -> Option<Duration> {
@@ -234,7 +236,7 @@ impl InputState {
     /// pin a repaint at the animation frame rate for the length of a
     /// recognition; `ocr_scan_wake_after` supplies the one deadline it needs.
     pub fn advance_ocr_scan(&mut self, now: Instant) -> bool {
-        self.advance_ocr_scan_for(now, crate::ui::anim::motion_enabled())
+        self.advance_ocr_scan_for(now, anim::motion_enabled())
     }
 
     pub(crate) fn advance_ocr_scan_for(&mut self, now: Instant, motion: bool) -> bool {
@@ -288,7 +290,7 @@ fn completed_sweep(elapsed: Duration, motion: bool) -> Duration {
 
 /// Opacity of the outcome card `shown` into its lifetime.
 pub(crate) fn result_opacity(shown: Duration) -> f64 {
-    result_opacity_for(shown, crate::ui::anim::motion_enabled())
+    result_opacity_for(shown, anim::motion_enabled())
 }
 
 /// Split from the accessor so both motion settings can be exercised without

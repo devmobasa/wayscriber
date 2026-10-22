@@ -1,9 +1,11 @@
+use crate::domain::BoardGrid;
+use crate::draw;
 use crate::draw::shape::{
     bounding_box_for_blur, bounding_box_for_eraser, bounding_box_for_points, smooth_committed_path,
 };
 use crate::draw::{
     ArrowLabel, ArrowStyle, BlurRectParams, BlurStyle, Color, EraserBrush, EraserKind, LaserStyle,
-    Shape, TextMeasurer,
+    Shape, StepMarkerLabel, TextMeasurer, shape,
 };
 use crate::input::tool::{
     EraserMode, Tool, ToolDrawingBehavior, ToolPathKind, ToolPressureBehavior,
@@ -43,7 +45,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) point_thicknesses: Vec<f32>,
     pub(crate) color: Color,
     pub(crate) size: f64,
-    pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) grid: BoardGrid,
     pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) marker_opacity: f64,
     pub(crate) fill_enabled: bool,
@@ -54,7 +56,7 @@ pub(crate) struct ToolStrokeSnapshot {
     pub(crate) arrow_head_at_end: bool,
     pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
-    pub(crate) step_marker_label: crate::draw::StepMarkerLabel,
+    pub(crate) step_marker_label: StepMarkerLabel,
     pub(crate) eraser_mode: EraserMode,
     pub(crate) eraser_size: f64,
     pub(crate) eraser_kind: EraserKind,
@@ -103,15 +105,15 @@ pub(crate) struct ToolUsage {
 }
 
 /// Borrowed inputs needed to classify and render the current live preview.
-pub(crate) struct ProvisionalToolSnapshot<'a> {
+pub(crate) struct ProvisionalToolSnapshot<'stroke> {
     pub(crate) tool: Tool,
     pub(crate) start: (i32, i32),
     pub(crate) current: (i32, i32),
-    pub(crate) points: &'a [(f64, f64)],
-    pub(crate) point_thicknesses: &'a [f32],
+    pub(crate) points: &'stroke [(f64, f64)],
+    pub(crate) point_thicknesses: &'stroke [f32],
     pub(crate) color: Color,
     pub(crate) size: f64,
-    pub(crate) grid: crate::domain::BoardGrid,
+    pub(crate) grid: BoardGrid,
     pub(crate) shape_recognition_sensitivity: u8,
     pub(crate) eraser_size: f64,
     pub(crate) marker_opacity: f64,
@@ -123,9 +125,9 @@ pub(crate) struct ProvisionalToolSnapshot<'a> {
     pub(crate) arrow_head_at_end: bool,
     pub(crate) arrow_style: ArrowStyle,
     pub(crate) arrow_label: Option<ArrowLabel>,
-    pub(crate) step_marker_label: Option<crate::draw::StepMarkerLabel>,
+    pub(crate) step_marker_label: Option<StepMarkerLabel>,
     /// Shape Pen's recognition of this stroke so far.
-    pub(crate) live_shape_memo: &'a super::LiveShapeMemo,
+    pub(crate) live_shape_memo: &'stroke super::LiveShapeMemo,
     /// Color and width of laser ink, which no tool slot stores.
     pub(crate) laser_style: LaserStyle,
 }
@@ -141,24 +143,24 @@ pub(crate) struct PolygonProvisionalSnapshot {
     pub(crate) regular_sides: u8,
 }
 
-pub(crate) enum ProvisionalToolStroke<'a> {
+pub(crate) enum ProvisionalToolStroke<'stroke> {
     BorrowedFreehand {
-        points: &'a [(f64, f64)],
+        points: &'stroke [(f64, f64)],
         color: Color,
         size: f64,
     },
     BorrowedPressureFreehand {
-        points: &'a [(f64, f64)],
-        point_thicknesses: &'a [f32],
+        points: &'stroke [(f64, f64)],
+        point_thicknesses: &'stroke [f32],
         color: Color,
     },
     BorrowedMarker {
-        points: &'a [(f64, f64)],
+        points: &'stroke [(f64, f64)],
         color: Color,
         size: f64,
     },
     EraserPreview {
-        points: &'a [(f64, f64)],
+        points: &'stroke [(f64, f64)],
         size: f64,
     },
     Shape(Shape),
@@ -166,14 +168,14 @@ pub(crate) enum ProvisionalToolStroke<'a> {
     /// it came from, so the swap from ink to shape is never silent.
     Recognized {
         shape: Shape,
-        ink: &'a [(f64, f64)],
+        ink: &'stroke [(f64, f64)],
         ink_color: Color,
         ink_size: f64,
     },
     BlurReplayPreview(BlurRectParams),
     /// The laser stroke under the pointer, drawn exactly as its finished ink.
     Laser {
-        points: &'a [(f64, f64)],
+        points: &'stroke [(f64, f64)],
         style: LaserStyle,
     },
     None,
@@ -181,7 +183,10 @@ pub(crate) enum ProvisionalToolStroke<'a> {
 
 impl Tool {
     pub(crate) fn finish_stroke(self, snapshot: ToolStrokeSnapshot) -> FinishedToolStroke {
-        debug_assert_eq!(self, snapshot.tool);
+        debug_assert_eq!(
+            self, snapshot.tool,
+            "finish a stroke with the tool that captured its snapshot"
+        );
         let usage = ToolUsage::default();
         match self.drawing_behavior() {
             ToolDrawingBehavior::None => FinishedToolStroke::Noop,
@@ -189,7 +194,7 @@ impl Tool {
                 finish_path_stroke(snapshot, kind, pressure, usage)
             }
             ToolDrawingBehavior::LiveShape => {
-                let rounded = crate::draw::shape::quantize_path(&snapshot.points);
+                let rounded = shape::quantize_path(&snapshot.points);
                 let recognized = if rounded.last().copied() == Some(snapshot.end) {
                     super::live_shape::recognize(
                         &rounded,
@@ -316,7 +321,7 @@ impl Tool {
                     cy,
                     rx,
                     ry,
-                    magnification: crate::draw::normalize_spotlight_magnification(
+                    magnification: draw::normalize_spotlight_magnification(
                         snapshot.spotlight_magnification,
                     ),
                 }
@@ -333,9 +338,9 @@ impl Tool {
                     label: snapshot.step_marker_label,
                 })
             }
-            ToolDrawingBehavior::Eraser => finish_eraser(snapshot),
+            ToolDrawingBehavior::Eraser => finish_eraser(&snapshot),
             ToolDrawingBehavior::Laser => {
-                let mut points = crate::draw::shape::quantize_path(&snapshot.points);
+                let mut points = shape::quantize_path(&snapshot.points);
                 if points.last().copied() != Some(snapshot.end) {
                     points.push(snapshot.end);
                 }
@@ -348,7 +353,10 @@ impl Tool {
         self,
         snapshot: ProvisionalToolSnapshot<'a>,
     ) -> ProvisionalToolStroke<'a> {
-        debug_assert_eq!(self, snapshot.tool);
+        debug_assert_eq!(
+            self, snapshot.tool,
+            "preview a stroke with the tool that captured its snapshot"
+        );
         match self.drawing_behavior() {
             ToolDrawingBehavior::None => ProvisionalToolStroke::None,
             ToolDrawingBehavior::LiveShape => {
@@ -508,7 +516,7 @@ impl Tool {
                     cy,
                     rx,
                     ry,
-                    magnification: crate::draw::normalize_spotlight_magnification(
+                    magnification: draw::normalize_spotlight_magnification(
                         snapshot.spotlight_magnification,
                     ),
                 })
@@ -534,7 +542,7 @@ impl Tool {
     }
 }
 
-impl<'a> ProvisionalToolStroke<'a> {
+impl<'stroke> ProvisionalToolStroke<'stroke> {
     pub(crate) fn bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         match self {
             Self::BorrowedFreehand { points, size, .. } => bounding_box_for_points(points, *size),
@@ -637,9 +645,9 @@ fn finish_path_stroke(
     }
 }
 
-fn finish_eraser(snapshot: ToolStrokeSnapshot) -> FinishedToolStroke {
+fn finish_eraser(snapshot: &ToolStrokeSnapshot) -> FinishedToolStroke {
     if snapshot.eraser_mode == EraserMode::Stroke {
-        let mut path = crate::draw::shape::quantize_path(&snapshot.points);
+        let mut path = shape::quantize_path(&snapshot.points);
         if path.last().copied() != Some(snapshot.end) {
             path.push(snapshot.end);
         }
@@ -648,7 +656,7 @@ fn finish_eraser(snapshot: ToolStrokeSnapshot) -> FinishedToolStroke {
 
     FinishedToolStroke::Shape {
         shape: Shape::EraserStroke {
-            points: crate::draw::shape::quantize_path(&snapshot.points),
+            points: shape::quantize_path(&snapshot.points),
             brush: EraserBrush {
                 size: snapshot.eraser_size,
                 kind: snapshot.eraser_kind,

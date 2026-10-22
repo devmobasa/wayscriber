@@ -1,4 +1,5 @@
-use super::*;
+use super::super::{WaylandState, drag_log};
+use super::state::MoveDragKind;
 
 impl WaylandState {
     /// Base X position for the top toolbar when laid out inline.

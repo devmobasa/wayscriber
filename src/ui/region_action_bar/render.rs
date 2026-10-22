@@ -1,3 +1,5 @@
+use crate::ui::theme::popup;
+
 use super::controls::{draw_action, draw_toggle};
 use super::layout::{RegionActionBar, RegionActionRect, STATUS_ROW_HEIGHT};
 use super::model::{RegionAction, RegionActionBarVisual, RegionCutStatus};
@@ -85,7 +87,7 @@ fn draw_bar_frame(ctx: &cairo::Context, bounds: RegionActionRect) {
         let _ = ctx.fill();
     }
 
-    theme::set_color(ctx, crate::ui::theme::popup::bg_context_menu());
+    theme::set_color(ctx, popup::bg_context_menu());
     draw_rounded_rect(
         ctx,
         bounds.x,
@@ -96,7 +98,7 @@ fn draw_bar_frame(ctx: &cairo::Context, bounds: RegionActionRect) {
     );
     let _ = ctx.fill();
 
-    theme::set_color(ctx, crate::ui::theme::popup::border_context_menu());
+    theme::set_color(ctx, popup::border_context_menu());
     ctx.set_line_width(1.0);
     draw_rounded_rect(
         ctx,

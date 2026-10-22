@@ -1,7 +1,7 @@
-use wayland_client::{QueueHandle, protocol::wl_seat};
-use wayland_protocols::wp::text_input::zv3::client::{
-    zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
-};
+use wayland_client::QueueHandle;
+use wayland_client::protocol::wl_seat;
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3;
 
 use super::WaylandState;
 

@@ -1,12 +1,14 @@
 //! Command palette UI rendering.
 
-use crate::config::action_label;
+use std::collections::HashMap;
+use std::iter;
+
+use crate::config::Action;
 use crate::i18n::tr;
 use crate::input::InputState;
 use crate::input::state::{
     COMMAND_PALETTE_INPUT_HEIGHT, COMMAND_PALETTE_ITEM_HEIGHT, COMMAND_PALETTE_LIST_GAP,
-    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, COMMAND_PALETTE_TOP_RATIO,
-    CommandPaletteListRow,
+    COMMAND_PALETTE_PADDING, COMMAND_PALETTE_QUERY_PLACEHOLDER, CommandPaletteListRow,
 };
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -61,7 +63,7 @@ const TOOLTIP_POINTER_OFFSET: f64 = 12.0;
 pub(crate) enum CommandPaletteView {
     Closed,
     Capture {
-        action: crate::config::Action,
+        action: Action,
         bindings: Vec<String>,
     },
     List(PaletteListView),
@@ -76,7 +78,7 @@ pub(crate) struct PaletteListView {
     selected: usize,
     /// The row under the pointer, which also shows its shortcut controls.
     hovered: Option<usize>,
-    bindings: std::collections::HashMap<crate::config::Action, Vec<String>>,
+    bindings: HashMap<Action, Vec<String>>,
     tooltip: Option<(String, i32, i32)>,
 }
 
@@ -705,7 +707,7 @@ fn ellipsize_to_width(
     let boundaries: Vec<usize> = text
         .char_indices()
         .map(|(index, _)| index)
-        .chain(std::iter::once(text.len()))
+        .chain(iter::once(text.len()))
         .collect();
     let mut low = 0;
     let mut high = boundaries.len() - 1;

@@ -2,7 +2,7 @@ use super::content::HelpContentSnapshot;
 use super::grid::{GridColors, draw_sections_grid};
 use super::keycaps::KeyComboStyle;
 use super::nav::{NavDrawStyle, draw_nav};
-use super::sections::HelpOverlayBindings;
+use super::sections::{HelpContentOptions, HelpOverlayBindings};
 
 mod cache;
 mod entry;
@@ -24,35 +24,30 @@ use footer::{FooterPillLayout, FooterTarget, draw_footer_pills, footer_pills};
 use frame::draw_overlay_frame;
 use header::{HeaderContent, HeaderHint, draw_hints, draw_version_pill};
 
+use crate::build_info;
+use crate::config::HelpOverlayStyle;
 pub use crate::help_overlay_interaction::{HelpHitMap, HelpOverlayRegion, HelpRenderResult};
+use crate::ui::UiRenderCtx;
+use crate::ui_text::UiTextEngine;
 
 const BULLET: &str = "\u{2022}";
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_help_overlay_result_with_context(
-    engine: &crate::ui_text::UiTextEngine,
-    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
-    style: &crate::config::HelpOverlayStyle,
+    engine: &UiTextEngine,
+    render: &mut UiRenderCtx<'_, '_, '_>,
+    style: &HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
-    frozen_enabled: bool,
+    options: HelpContentOptions,
     page_index: usize,
     bindings: &HelpOverlayBindings,
     search_query: &str,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
     scroll_offset: f64,
     quick_mode: bool,
     show_unbound: bool,
 ) -> HelpRenderResult {
-    let content = HelpContentSnapshot::from_bindings(
-        bindings,
-        frozen_enabled,
-        context_filter,
-        board_enabled,
-        capture_enabled,
-    );
+    let content = HelpContentSnapshot::from_bindings(bindings, options);
     render_help_overlay_result_with_content(
         engine,
         render,
@@ -70,9 +65,9 @@ pub(crate) fn render_help_overlay_result_with_context(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_help_overlay_result_with_content(
-    engine: &crate::ui_text::UiTextEngine,
-    render: &mut crate::ui::UiRenderCtx<'_, '_, '_>,
-    style: &crate::config::HelpOverlayStyle,
+    engine: &UiTextEngine,
+    render: &mut UiRenderCtx<'_, '_, '_>,
+    style: &HelpOverlayStyle,
     screen_width: u32,
     screen_height: u32,
     page_index: usize,
@@ -99,7 +94,7 @@ pub(crate) fn render_help_overlay_result_with_content(
         .and_then(|labels| labels.first())
         .map(|label| label.as_str())
         .unwrap_or(NOT_BOUND_LABEL);
-    let version_text = format!("v{}", crate::build_info::version());
+    let version_text = format!("v{}", build_info::version());
     let header_hints = if quick_mode {
         vec![HeaderHint {
             keys: palette_binding,
@@ -349,7 +344,7 @@ pub(crate) fn render_help_overlay_result_with_content(
     let footer_hits = draw_footer_pills(
         engine,
         ctx,
-        FooterPillLayout {
+        &FooterPillLayout {
             inner_x,
             inner_width,
             top_y: cursor_y,

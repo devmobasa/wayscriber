@@ -4,10 +4,13 @@
 //! report carries the build, desktop, and feature information in one paste
 //! instead of three follow-up questions.
 
+use std::env;
+
 use crate::env_vars::{
     DESKTOP_SESSION_ENV, WAYLAND_DISPLAY_ENV, XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV,
 };
 use crate::i18n::{tr, trf};
+use crate::{base64, build_info};
 
 /// Environment facts worth reporting, captured so the formatter stays pure.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -25,10 +28,10 @@ pub(super) struct DiagnosticsEnv {
 impl DiagnosticsEnv {
     fn capture() -> Self {
         Self {
-            version: crate::build_info::version().to_string(),
-            commit: crate::build_info::commit_hash().to_string(),
-            build_date: crate::build_info::build_date().map(str::to_string),
-            install_source: crate::build_info::install_source().map(str::to_string),
+            version: build_info::version().to_string(),
+            commit: build_info::commit_hash().to_string(),
+            build_date: build_info::build_date().map(str::to_string),
+            install_source: build_info::install_source().map(str::to_string),
             current_desktop: env_value(XDG_CURRENT_DESKTOP_ENV),
             session_desktop: env_value(XDG_SESSION_DESKTOP_ENV),
             desktop_session: env_value(DESKTOP_SESSION_ENV),
@@ -38,7 +41,7 @@ impl DiagnosticsEnv {
 }
 
 fn env_value(key: &str) -> Option<String> {
-    std::env::var(key)
+    env::var(key)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
@@ -46,7 +49,7 @@ fn env_value(key: &str) -> Option<String> {
 
 /// Diagnostics for this process.
 pub(super) fn report() -> String {
-    format_report(&DiagnosticsEnv::capture(), compiled_features())
+    format_report(&DiagnosticsEnv::capture(), &compiled_features())
 }
 
 /// `<base>#d=<base64 of `diagnostics`>`, for handing the diagnostics to the
@@ -64,7 +67,7 @@ pub(super) fn report_url(base: &str, diagnostics: &str) -> String {
 }
 
 fn encode_fragment(report: &str) -> String {
-    crate::base64::encode_standard(report.as_bytes())
+    base64::encode_standard(report.as_bytes())
 }
 
 /// Cargo features this binary was built with, which decide whether the tray,
@@ -89,7 +92,7 @@ fn compiled_features() -> Vec<&'static str> {
     features
 }
 
-fn format_report(env: &DiagnosticsEnv, features: Vec<&'static str>) -> String {
+fn format_report(env: &DiagnosticsEnv, features: &[&'static str]) -> String {
     let mut lines = Vec::new();
 
     let mut build = trf("Wayscriber {}", &[&env.version]);
@@ -149,7 +152,7 @@ mod tests {
 
     #[test]
     fn reports_every_field_when_available() {
-        let report = format_report(&sample_env(), vec!["tray", "portal"]);
+        let report = format_report(&sample_env(), &["tray", "portal"]);
 
         assert_eq!(
             report,
@@ -169,7 +172,7 @@ mod tests {
             ..DiagnosticsEnv::default()
         };
 
-        let report = format_report(&env, Vec::new());
+        let report = format_report(&env, &[]);
 
         assert_eq!(
             report,
@@ -190,7 +193,7 @@ mod tests {
             ..sample_env()
         };
 
-        assert!(format_report(&env, Vec::new()).contains("Desktop: sway"));
+        assert!(format_report(&env, &[]).contains("Desktop: sway"));
     }
 
     #[test]
@@ -212,7 +215,7 @@ mod tests {
             .expect("report URL carries a #d= payload");
         assert_eq!(base, "https://wayscriber.com/report");
 
-        let decoded = crate::base64::decode_standard(fragment).expect("fragment is valid base64");
+        let decoded = base64::decode_standard(fragment).expect("fragment is valid base64");
         assert_eq!(String::from_utf8(decoded).unwrap(), diagnostics);
     }
 }

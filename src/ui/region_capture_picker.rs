@@ -14,6 +14,8 @@ pub(crate) use types::{
     RegionCaptureWindowVisual, RegionCutDragVisual, RegionCutPreviewVisual,
 };
 
+use crate::draw::Color;
+use crate::ui;
 use crate::ui::region_action_bar::{
     RegionActionBar, RegionActionBarVisual, render_region_action_bar,
 };
@@ -34,10 +36,10 @@ pub(crate) fn render_region_capture_loupe(
     ctx: &cairo::Context,
     screen: (u32, u32),
     visual: RegionCaptureLoupeVisual,
-    sample: impl FnMut(f64, f64) -> Option<crate::draw::Color>,
+    sample: impl FnMut(f64, f64) -> Option<Color>,
 ) {
-    let layout = crate::ui::compute_eyedropper_loupe_layout(visual.pointer, screen);
-    crate::ui::render_eyedropper_loupe(ctx, layout, visual.image_center, sample);
+    let layout = ui::compute_eyedropper_loupe_layout(visual.pointer, screen);
+    ui::render_eyedropper_loupe(ctx, layout, visual.image_center, sample);
 }
 
 pub(crate) fn render_region_capture_picker(
@@ -46,7 +48,7 @@ pub(crate) fn render_region_capture_picker(
     screen_width: u32,
     screen_height: u32,
     visual: &RegionCapturePickerVisual<'_>,
-    mut sample_loupe: impl FnMut(f64, f64) -> Option<crate::draw::Color>,
+    mut sample_loupe: impl FnMut(f64, f64) -> Option<Color>,
 ) {
     let width = f64::from(screen_width);
     let height = f64::from(screen_height);

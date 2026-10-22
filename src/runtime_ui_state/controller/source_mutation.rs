@@ -1,4 +1,16 @@
-use super::*;
+use super::super::{
+    AbandonedPreviewResolutionReason, ControllerBarrierId, ControllerBarrierOperation,
+    ControllerBarrierPhase, HeldReplacementStage, RuntimeStateFailurePathEffect,
+    RuntimeStateIoError, RuntimeStateObservedEnvelope, RuntimeStateObservedPathEffect,
+    RuntimeStateSourceObservation, RuntimeUiFileStatus, RuntimeUiModel, RuntimeUiWireState,
+    SourceMutationKind, SourceMutationRequest, SourceMutationResult, StagedSeedReload,
+    WirePassthrough,
+};
+use super::{
+    ExternalAuthorityInstallError, ExternalAuthorityInstallResult, RuntimeUiStateController,
+    SubmitSourceMutationResult, file_status_matches_observation,
+};
+use std::collections::BTreeSet;
 
 impl RuntimeUiStateController {
     pub(crate) fn take_source_mutation(&mut self) -> Option<SourceMutationRequest> {
@@ -28,7 +40,7 @@ impl RuntimeUiStateController {
                     SourceMutationKind::ResetSupported { .. }
                         | SourceMutationKind::ResetUnsupportedIfUnchanged { .. }
                 ) {
-                    return self.finish_supported_reset_success(integrated);
+                    return self.finish_supported_reset_success(&integrated);
                 }
                 if self.supported_reset.is_some() {
                     self.capture_reset_authority_after_prerequisite();
@@ -123,16 +135,16 @@ impl RuntimeUiStateController {
                     SourceMutationKind::ResetSupported { .. }
                     | SourceMutationKind::ResetUnsupportedIfUnchanged { .. } => {
                         self.pipeline
-                            .settle_failed(integrated.covered.iter().copied(), error.clone());
+                            .settle_failed(integrated.covered.iter().copied(), error);
                         None
                     }
                 };
                 let incident = self.enter_persistence_incident(
-                    error.clone(),
+                    error,
                     active.clone(),
                     recovery_artifacts.clone(),
                     path_effect.clone(),
-                    failed_replacement,
+                    failed_replacement.as_ref(),
                 );
                 let barrier = self.active_barrier.as_ref().expect("barrier installed").id;
                 if self.shutting_down {
@@ -204,7 +216,7 @@ impl RuntimeUiStateController {
             self.live_only_overlay.clear();
             self.rebuild_live_state();
             let incident = self.enter_persistence_incident(
-                RuntimeStateIoError::new(
+                &RuntimeStateIoError::new(
                     "external runtime-state authority is malformed or unreadable",
                 ),
                 Some(observation),
@@ -247,7 +259,7 @@ impl RuntimeUiStateController {
         let mut canonical_model = model;
         canonical_model.remove_targets(&tombstoned_targets);
         canonical_model.reconcile(&next_seeds);
-        let mut canonical_passthrough = passthrough.clone();
+        let mut canonical_passthrough = passthrough;
         canonical_passthrough.reconcile_entries(&canonical_model);
         let canonical_wire = RuntimeUiWireState {
             model: canonical_model.clone(),
@@ -267,7 +279,7 @@ impl RuntimeUiStateController {
         self.model = canonical_model;
         self.passthrough = canonical_passthrough;
         self.pipeline
-            .install_acknowledged_authority(observation.revision.clone(), observed_wire);
+            .install_acknowledged_authority(observation.revision, observed_wire);
         if retains_live_only_authority {
             self.live_only_overlay.reconcile(&changed_targets);
         } else {

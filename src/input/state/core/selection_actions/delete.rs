@@ -1,6 +1,5 @@
 use super::super::base::InputState;
-use crate::draw::ShapeId;
-use crate::draw::TextMeasurer;
+use crate::draw::{ShapeId, TextMeasurer};
 use std::borrow::Cow;
 use std::collections::HashSet;
 

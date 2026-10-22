@@ -1,3 +1,5 @@
+use wayscriber::draw;
+
 use super::*;
 use wayscriber::config::{ColorSpec, Config};
 
@@ -164,7 +166,7 @@ fn choosing_a_duplicate_font_keeps_the_list_and_explains_the_rejection() {
     config.drawing.font_cycle = vec!["Sans".to_string(), "Serif".to_string()];
     app.draft = ConfigDraft::from_config(&config);
 
-    let _ = app.handle_font_cycle_changed(1, "sans".to_string());
+    let _ = app.handle_font_cycle_changed(1, "sans");
 
     assert_eq!(app.draft.drawing_font_cycle.entries(), ["Sans", "Serif"]);
     let feedback = app
@@ -179,7 +181,7 @@ fn choosing_a_duplicate_font_keeps_the_list_and_explains_the_rejection() {
 fn add_font_never_creates_a_blank_or_duplicate_when_the_catalog_is_exhausted() {
     let (mut app, _effects) = ConfiguratorApp::new_app();
     let mut config = Config::default();
-    config.drawing.font_cycle = wayscriber::draw::system_font_families().to_vec();
+    config.drawing.font_cycle = draw::system_font_families().to_vec();
     app.draft = ConfigDraft::from_config(&config);
     let before = app.draft.drawing_font_cycle.entries().to_vec();
 

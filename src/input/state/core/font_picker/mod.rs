@@ -25,8 +25,7 @@ pub(crate) use state::FontPickerState;
 pub use layout::{FontPickerLayout, FontPickerRow, font_picker_layout, font_picker_rows};
 
 use super::InputState;
-use crate::draw::TextMeasurer;
-use crate::draw::{FontDescriptor, families_match, system_font_catalog_is_ready};
+use crate::draw::{FontDescriptor, TextMeasurer, families_match, system_font_catalog_is_ready};
 use crate::i18n::{tr, trf};
 
 /// The picker's memoized result list, keyed by what produced it.
@@ -43,6 +42,7 @@ pub enum FontPickerFilter {
 }
 
 impl FontPickerFilter {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::All => tr("All fonts"),
@@ -50,6 +50,7 @@ impl FontPickerFilter {
         }
     }
 
+    #[must_use]
     pub fn next(self) -> Self {
         match self {
             Self::All => Self::Monospace,
@@ -68,6 +69,7 @@ pub enum FontPickerTarget {
 }
 
 impl FontPickerTarget {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::ToolDefault => tr("Sets the font for new text"),
@@ -152,7 +154,10 @@ impl InputState {
         if !self.font_picker.finish_catalog_load() {
             return false;
         }
-        debug_assert!(system_font_catalog_is_ready());
+        debug_assert!(
+            system_font_catalog_is_ready(),
+            "finish the picker's catalog load only after the system font catalog is ready"
+        );
         self.position_font_picker_on_current_family();
         self.mark_font_picker_dirty();
         true

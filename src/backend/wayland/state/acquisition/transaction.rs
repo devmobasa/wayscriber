@@ -3,6 +3,7 @@ use crate::backend::wayland::acquisition::{
     ScreenAcquisitionOutcome, ScreenAcquisitionOwner, rejected_ready_generation,
 };
 use crate::backend::wayland::zoom::{ZoomSourceOutcome, ZoomSourceTerminal, ZoomWaiterOwner};
+use crate::input::InputState;
 #[cfg(test)]
 use crate::input::state::{EyedropperCaptureSource, ScreenCaptureSource};
 use crate::input::state::{Toast, ToastPriority};
@@ -19,7 +20,7 @@ const INCONSISTENT_CAPTURE_MESSAGE: &str = "Screen capture state was inconsisten
 const SOURCE_ACTIVATION_REJECTED_MESSAGE: &str =
     "Screen image changed before the selection could start; try again.";
 
-pub(super) fn report_inconsistent_capture_to(input_state: &mut crate::input::InputState) {
+pub(super) fn report_inconsistent_capture_to(input_state: &mut InputState) {
     input_state.push_toast(
         ToastPriority::Critical,
         "capture",
@@ -28,7 +29,7 @@ pub(super) fn report_inconsistent_capture_to(input_state: &mut crate::input::Inp
 }
 
 pub(in crate::backend::wayland::state) fn report_screen_source_activation_rejected_to(
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: ScreenAcquisitionOwner,
 ) {
     let source = match owner {
@@ -85,7 +86,7 @@ fn zoom_terminal_report(
 }
 
 pub(in crate::backend::wayland::state) fn report_zoom_terminal_to(
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: Option<ZoomWaiterOwner>,
     terminal: &ZoomSourceTerminal,
 ) {
@@ -96,7 +97,7 @@ pub(in crate::backend::wayland::state) fn report_zoom_terminal_to(
 }
 
 pub(super) fn report_screen_terminal_to(
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     owner: ScreenAcquisitionOwner,
     outcome: &ScreenAcquisitionOutcome,
 ) {
@@ -163,7 +164,7 @@ pub(super) trait AcquisitionTransactionRuntime {
         record: &AcquisitionRecord,
         completion: &ScreenAcquisitionCompletion,
     ) -> bool;
-    fn input_state(&mut self) -> &mut crate::input::InputState;
+    fn input_state(&mut self) -> &mut InputState;
     fn finish_eyedropper_ready(&mut self, installed_generation: u64) -> bool;
     fn finish_ocr_ready(&mut self, installed_generation: u64) -> bool;
     fn finish_region_capture_ready(&mut self, installed_generation: u64) -> bool;
@@ -229,7 +230,7 @@ fn cancel_owner_transition<R: AcquisitionTransactionRuntime>(
 fn fail_closed_acquisition_transaction<R: AcquisitionTransactionRuntime>(
     runtime: &mut R,
     record: Option<AcquisitionRecord>,
-    completion: ScreenAcquisitionCompletion,
+    completion: &ScreenAcquisitionCompletion,
 ) {
     if record.is_some_and(|record| {
         record.stage == AcquisitionStage::Started
@@ -266,12 +267,12 @@ pub(super) fn route_acquisition_transaction<R: AcquisitionTransactionRuntime>(
         .is_some_and(|record| record.id == completion.id && record.owner == completion.owner);
     let record = runtime.take_acquisition_record();
     if !registry_matches {
-        fail_closed_acquisition_transaction(runtime, record, completion);
+        fail_closed_acquisition_transaction(runtime, record, &completion);
         return;
     }
     let record = record.expect("a matched screen acquisition record exists");
     if !runtime.owner_waiter_matches(&record, &completion) {
-        fail_closed_acquisition_transaction(runtime, Some(record), completion);
+        fail_closed_acquisition_transaction(runtime, Some(record), &completion);
         return;
     }
 

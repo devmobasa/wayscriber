@@ -14,15 +14,31 @@ use std::sync::atomic::Ordering;
 #[cfg(feature = "portal")]
 use crate::i18n::tr;
 #[cfg(feature = "portal")]
+use crate::zbus_stream;
+#[cfg(feature = "portal")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "portal")]
 use log::{debug, info, warn};
 #[cfg(feature = "portal")]
 use std::collections::HashMap;
 #[cfg(feature = "portal")]
+use std::env;
+#[cfg(feature = "portal")]
 use std::future::Future;
 #[cfg(feature = "portal")]
+use std::process;
+use std::thread;
+#[cfg(feature = "portal")]
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(feature = "portal")]
+use tokio::runtime::Runtime;
+#[cfg(feature = "portal")]
+use tokio::sync::oneshot;
+#[cfg(feature = "portal")]
+use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::Sender;
+#[cfg(feature = "portal")]
+use zbus::zvariant::ObjectPath;
 #[cfg(feature = "portal")]
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 #[cfg(feature = "portal")]
@@ -63,7 +79,7 @@ const PORTAL_KEY_SESSION_HANDLE_TOKEN: &str = "session_handle_token";
 const PORTAL_KEY_STARTUP_ID: &str = "startup_id";
 
 pub(super) struct GlobalShortcutsListener {
-    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+    shutdown: Option<Sender<()>>,
     thread: JoinHandle<()>,
 }
 
@@ -74,7 +90,7 @@ impl GlobalShortcutsListener {
         }
     }
 
-    pub(super) fn join(mut self) -> std::thread::Result<()> {
+    pub(super) fn join(mut self) -> thread::Result<()> {
         self.request_shutdown();
         self.thread.join()
     }
@@ -86,19 +102,19 @@ pub(super) fn start_global_shortcuts_listener(
 ) -> Option<GlobalShortcutsListener> {
     #[cfg(feature = "portal")]
     {
-        let listener_quit_flag = quit_flag.clone();
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let preferred_trigger = std::env::var(PORTAL_SHORTCUT_ENV)
+        let listener_quit_flag = quit_flag;
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let preferred_trigger = env::var(PORTAL_SHORTCUT_ENV)
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PREFERRED_TRIGGER.to_string());
-        let portal_app_id = std::env::var(PORTAL_APP_ID_ENV)
+        let portal_app_id = env::var(PORTAL_APP_ID_ENV)
             .ok()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| DEFAULT_PORTAL_APP_ID.to_string());
 
-        let thread = std::thread::spawn(move || {
-            let runtime = match tokio::runtime::Runtime::new() {
+        let thread = thread::spawn(move || {
+            let runtime = match Runtime::new() {
                 Ok(runtime) => runtime,
                 Err(err) => {
                     warn!(
@@ -145,21 +161,21 @@ pub(super) fn start_global_shortcuts_listener(
 trait GlobalShortcuts {
     async fn create_session(
         &self,
-        options: HashMap<String, zbus::zvariant::Value<'_>>,
+        options: HashMap<String, Value<'_>>,
     ) -> zbus::Result<OwnedObjectPath>;
 
     async fn bind_shortcuts(
         &self,
-        session_handle: zbus::zvariant::ObjectPath<'_>,
-        shortcuts: Vec<(String, HashMap<String, zbus::zvariant::Value<'_>>)>,
+        session_handle: ObjectPath<'_>,
+        shortcuts: Vec<(String, HashMap<String, Value<'_>>)>,
         parent_window: &str,
-        options: HashMap<String, zbus::zvariant::Value<'_>>,
+        options: HashMap<String, Value<'_>>,
     ) -> zbus::Result<OwnedObjectPath>;
 
     #[zbus(signal)]
     fn activated(
         &self,
-        session_handle: zbus::zvariant::ObjectPath<'_>,
+        session_handle: ObjectPath<'_>,
         shortcut_id: &str,
         timestamp: u64,
         options: HashMap<String, OwnedValue>,
@@ -176,11 +192,8 @@ trait GlobalShortcuts {
     default_path = "/org/freedesktop/portal/desktop"
 )]
 trait HostPortalRegistry {
-    async fn register(
-        &self,
-        app_id: &str,
-        options: HashMap<String, zbus::zvariant::Value<'_>>,
-    ) -> zbus::Result<()>;
+    async fn register(&self, app_id: &str, options: HashMap<String, Value<'_>>)
+    -> zbus::Result<()>;
 }
 
 #[cfg(feature = "portal")]
@@ -198,7 +211,7 @@ async fn run_listener(
     visibility: VisibilityPublisher,
     preferred_trigger: String,
     portal_app_id: String,
-    mut shutdown: tokio::sync::oneshot::Receiver<()>,
+    mut shutdown: Receiver<()>,
 ) -> Result<()> {
     let connection = await_portal_operation(
         Connection::session(),
@@ -254,7 +267,7 @@ async fn run_listener(
 
     loop {
         tokio::select! {
-            maybe_signal = crate::zbus_stream::next(&mut activated_stream) => {
+            maybe_signal = zbus_stream::next(&mut activated_stream) => {
                 let Some(signal) = maybe_signal else {
                     return Err(anyhow!("GlobalShortcuts.Activated stream ended unexpectedly"));
                 };
@@ -309,6 +322,11 @@ fn log_global_shortcuts_version(version: zbus::Result<u32>) {
 
 #[cfg(all(test, feature = "portal"))]
 mod tests {
+    use std::future;
+    use std::sync::mpsc;
+
+    use tokio::time;
+
     use super::*;
     use std::time::Duration;
 
@@ -325,10 +343,10 @@ mod tests {
 
     #[test]
     fn shutdown_handle_unblocks_listener_without_a_timer() {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
-        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
-        let thread = std::thread::spawn(move || {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (observed_tx, observed_rx) = mpsc::channel();
+        let thread = thread::spawn(move || {
+            let runtime = Runtime::new().unwrap();
             runtime.block_on(async move {
                 let _ = shutdown_rx.await;
                 observed_tx.send(()).unwrap();
@@ -346,20 +364,20 @@ mod tests {
 
     #[test]
     fn shutdown_interrupts_a_pending_portal_operation() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
         runtime.block_on(async {
-            let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
-            let (polled_tx, polled_rx) = tokio::sync::oneshot::channel();
+            let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
+            let (polled_tx, polled_rx) = oneshot::channel();
             let operation = async move {
                 polled_tx.send(()).unwrap();
-                std::future::pending::<()>().await
+                future::pending::<()>().await
             };
             let shutdown_task = tokio::spawn(async move {
                 polled_rx.await.unwrap();
                 shutdown_tx.send(()).unwrap();
             });
 
-            let result = tokio::time::timeout(
+            let result = time::timeout(
                 Duration::from_secs(1),
                 await_portal_operation(operation, &mut shutdown_rx, "test portal operation"),
             )
@@ -390,7 +408,7 @@ async fn create_global_shortcuts_session(
     connection: &Connection,
     proxy: &GlobalShortcutsProxy<'_>,
     portal_app_id: &str,
-    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    shutdown: &mut Receiver<()>,
 ) -> Result<OwnedObjectPath> {
     let mut options: HashMap<String, Value<'static>> = HashMap::new();
     options.insert(
@@ -435,7 +453,7 @@ async fn bind_toggle_shortcut(
     proxy: &GlobalShortcutsProxy<'_>,
     session_handle: &OwnedObjectPath,
     preferred_trigger: &str,
-    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    shutdown: &mut Receiver<()>,
 ) -> Result<()> {
     let mut shortcut_options: HashMap<String, Value<'static>> = HashMap::new();
     shortcut_options.insert(
@@ -480,7 +498,7 @@ async fn bind_toggle_shortcut(
 #[cfg(feature = "portal")]
 async fn await_portal_operation<T>(
     operation: impl Future<Output = T>,
-    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    shutdown: &mut Receiver<()>,
     description: &str,
 ) -> Result<T> {
     tokio::select! {
@@ -496,7 +514,7 @@ async fn await_portal_operation<T>(
 async fn wait_for_request_response(
     connection: &Connection,
     request_path: OwnedObjectPath,
-    shutdown: &mut tokio::sync::oneshot::Receiver<()>,
+    shutdown: &mut Receiver<()>,
 ) -> Result<(u32, HashMap<String, OwnedValue>)> {
     let request_proxy = RequestProxy::builder(connection)
         .path(request_path)
@@ -515,7 +533,7 @@ async fn wait_for_request_response(
     .await?
     .context("failed to subscribe to Request.Response")?;
     let response_signal = await_portal_operation(
-        crate::zbus_stream::next(&mut response_stream),
+        zbus_stream::next(&mut response_stream),
         shutdown,
         "portal Request.Response",
     )
@@ -524,7 +542,7 @@ async fn wait_for_request_response(
     let args = response_signal
         .args()
         .context("failed to parse Request.Response signal arguments")?;
-    Ok((args.response, args.results.clone()))
+    Ok((args.response, args.results))
 }
 
 #[cfg(feature = "portal")]
@@ -572,5 +590,5 @@ fn make_handle_token(prefix: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
-    format!("{}_{}_{}", prefix, std::process::id(), nanos)
+    format!("{}_{}_{}", prefix, process::id(), nanos)
 }

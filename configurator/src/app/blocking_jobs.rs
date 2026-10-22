@@ -1,9 +1,9 @@
 use std::fmt;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use tokio::sync::Semaphore;
+use tokio::task;
 
 const PRODUCTION_BLOCKING_JOB_LIMIT: usize = 2;
 const SLOW_JOB_THRESHOLD: Duration = Duration::from_millis(250);
@@ -65,21 +65,21 @@ impl BlockingJobRunner {
             .map_err(|_| format!("{kind} blocking job queue is unavailable"))?;
         report_slow_phase(kind, "queue wait", queued_at.elapsed());
 
-        let joined = tokio::task::spawn_blocking(move || {
+        let joined = task::spawn_blocking(move || {
             let _permit = permit;
             let started_at = Instant::now();
-            let outcome = catch_unwind(AssertUnwindSafe(job));
+            let result = job();
             report_slow_phase(kind, "execution", started_at.elapsed());
-            outcome
+            result
         })
         .await;
 
-        let outcome =
-            joined.map_err(|err| format!("{kind} blocking job did not complete: {err}"))?;
-
-        match outcome {
+        // A panicking job unwinds its blocking thread, which releases the
+        // permit; tokio reports the panic through the join error.
+        match joined {
             Ok(result) => result,
-            Err(_) => Err(format!("{kind} blocking job panicked")),
+            Err(err) if err.is_panic() => Err(format!("{kind} blocking job panicked")),
+            Err(err) => Err(format!("{kind} blocking job did not complete: {err}")),
         }
     }
 }
@@ -106,6 +106,7 @@ mod tests {
     use std::sync::mpsc;
     use std::thread;
 
+    use tokio::sync::oneshot;
     use tokio::time::{Duration, timeout};
 
     use super::*;
@@ -134,7 +135,7 @@ mod tests {
     async fn blocking_work_is_offloaded_while_executor_work_progresses() {
         let runner = BlockingJobRunner::new(1);
         let caller_thread = thread::current().id();
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (started_tx, started_rx) = oneshot::channel();
         let (release_tx, release_rx) = mpsc::channel();
 
         let job = tokio::spawn(async move {
@@ -169,7 +170,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn one_permit_prevents_a_second_closure_from_starting() {
         let runner = BlockingJobRunner::new(1);
-        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
+        let (first_started_tx, first_started_rx) = oneshot::channel();
         let (first_release_tx, first_release_rx) = mpsc::channel();
         let first_runner = runner.clone();
         let first = tokio::spawn(async move {
@@ -186,7 +187,7 @@ mod tests {
             .expect("first closure should start")
             .expect("first closure should report startup");
 
-        let (second_started_tx, mut second_started_rx) = tokio::sync::oneshot::channel();
+        let (second_started_tx, mut second_started_rx) = oneshot::channel();
         let second = tokio::spawn(async move {
             runner
                 .run(BlockingJobKind::SessionCatalogLoad, move || {
@@ -238,7 +239,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dropping_the_waiter_does_not_release_a_running_jobs_permit() {
         let runner = BlockingJobRunner::new(1);
-        let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
+        let (first_started_tx, first_started_rx) = oneshot::channel();
         let (first_release_tx, first_release_rx) = mpsc::channel();
         let first_runner = runner.clone();
         let first = tokio::spawn(async move {
@@ -268,7 +269,7 @@ mod tests {
             "the detached blocking closure must retain its permit"
         );
 
-        let (second_started_tx, mut second_started_rx) = tokio::sync::oneshot::channel();
+        let (second_started_tx, mut second_started_rx) = oneshot::channel();
         let second = tokio::spawn(async move {
             runner
                 .run(BlockingJobKind::SessionCatalogLoad, move || {

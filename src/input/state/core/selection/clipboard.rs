@@ -1,6 +1,9 @@
 //! Clipboard state for copied selections and image-save fallback.
 
-use crate::capture::{ImageOperationKind, file::FileSaveConfig};
+use std::process;
+
+use crate::capture::ImageOperationKind;
+use crate::capture::file::FileSaveConfig;
 use crate::draw::Shape;
 use crate::input::state::core::base::{
     ClipboardFingerprint, ClipboardPasteRequest, PasteAnchor, PendingSelectionClipboardPublish,
@@ -385,7 +388,7 @@ fn new_clipboard_app_instance_id() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
-    format!("{}-{millis}", std::process::id())
+    format!("{}-{millis}", process::id())
 }
 
 #[cfg(test)]

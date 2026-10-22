@@ -1,11 +1,22 @@
-use super::*;
+use crate::toolbar_gtk::GtkToolbarKind;
+
+use std::env;
+
+use super::super::chrome::ConfigureVerdict;
+use super::{KeyboardInteractivityPolicyInput, keyboard_interactivity_for};
+use crate::backend::wayland::state::WaylandState;
+use crate::backend::wayland::state::helpers::{debug_toolbar_drag_logging_enabled, drag_log};
 use crate::env_vars::{XDG_CURRENT_DESKTOP_ENV, XDG_SESSION_DESKTOP_ENV};
+use crate::ui::toolbar::ToolbarSnapshot;
+use log::{debug, warn};
 use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
+use wayland_client::QueueHandle;
 
 fn toolbar_visibility_for_frontend(
     requested: bool,
     gtk_active: bool,
-    gtk_drag_preview: Option<crate::toolbar_gtk::GtkToolbarKind>,
+    gtk_drag_preview: Option<GtkToolbarKind>,
     chrome_suppressed: bool,
 ) -> bool {
     if chrome_suppressed {
@@ -14,7 +25,7 @@ fn toolbar_visibility_for_frontend(
     if !gtk_active {
         return requested;
     }
-    requested && gtk_drag_preview == Some(crate::toolbar_gtk::GtkToolbarKind::Top)
+    requested && gtk_drag_preview == Some(GtkToolbarKind::Top)
 }
 
 impl WaylandState {
@@ -43,10 +54,8 @@ impl WaylandState {
             return;
         }
 
-        let desktop_env =
-            std::env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
-        let session_env =
-            std::env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
+        let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
+        let session_env = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
         log::info!(
             "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{}', session='{}'). Overlay may be limited to the work area on compositors like GNOME.",
             desktop_env,
@@ -248,6 +257,9 @@ impl WaylandState {
 
 #[cfg(test)]
 mod tests {
+    use crate::input::InputState;
+    use crate::input::state::test_support;
+
     use super::*;
     use crate::toolbar_gtk::GtkToolbarKind;
 
@@ -281,8 +293,8 @@ mod tests {
 
     #[test]
     fn command_palette_hides_the_builtin_bars_and_closing_it_restores_them() {
-        let mut input_state = crate::input::state::test_support::make_test_input_state();
-        let visible = |input: &crate::input::InputState| {
+        let mut input_state = test_support::make_test_input_state();
+        let visible = |input: &InputState| {
             toolbar_visibility_for_frontend(
                 input.toolbar_top_visible(),
                 false,

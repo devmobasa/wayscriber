@@ -12,6 +12,8 @@ pub use layout::top_size;
 pub use main::*;
 pub use render::render_top_strip;
 
+use crate::label_format;
+
 pub fn format_binding_label(label: &str, binding: Option<&str>) -> String {
-    crate::label_format::format_binding_label(label, binding)
+    label_format::format_binding_label(label, binding)
 }

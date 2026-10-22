@@ -18,6 +18,7 @@ impl ToolbarLayoutMode {
 
     /// The next preset, simplest to richest; wraps from Advanced back to
     /// Simple.
+    #[must_use]
     pub fn next(self) -> Self {
         match self {
             Self::Simple => Self::Regular,
@@ -26,6 +27,7 @@ impl ToolbarLayoutMode {
         }
     }
 
+    #[must_use]
     pub fn section_defaults(self) -> ToolbarSectionDefaults {
         match self {
             Self::Simple => ToolbarSectionDefaults {

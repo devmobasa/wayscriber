@@ -6,9 +6,15 @@ use super::{CatalogEvent, upsert_session_event};
 use crate::session::options::SessionOptions;
 
 #[cfg(test)]
-use {
-    super::identity::normalize_exact_path, crate::env_vars::CATALOG_HOOKS_TEST_ENV, std::path::Path,
-};
+use super::identity::normalize_exact_path;
+#[cfg(test)]
+use crate::env_vars::CATALOG_HOOKS_TEST_ENV;
+#[cfg(test)]
+use std::env;
+#[cfg(test)]
+use std::ffi::OsStr;
+#[cfg(test)]
+use std::path::Path;
 
 /// Record a committed named Open, preserving failures for runtime feedback.
 pub(crate) fn try_record_named_session_opened(options: &SessionOptions) -> Result<()> {
@@ -66,10 +72,10 @@ pub(crate) fn record_named_session_saved(options: &SessionOptions) {
 
 #[cfg(test)]
 fn test_catalog_hooks_enabled_for_path(path: &Path) -> bool {
-    let Some(raw) = std::env::var_os(CATALOG_HOOKS_TEST_ENV) else {
+    let Some(raw) = env::var_os(CATALOG_HOOKS_TEST_ENV) else {
         return false;
     };
-    if raw.is_empty() || raw == std::ffi::OsStr::new("1") {
+    if raw.is_empty() || raw == OsStr::new("1") {
         return true;
     }
 

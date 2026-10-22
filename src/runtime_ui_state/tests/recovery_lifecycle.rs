@@ -404,7 +404,7 @@ fn cancelled_recovery_applies_reload_and_retains_cleanup_work() {
         CancelPersistenceRecoveryResult::PendingIrrevocableIo { .. }
     ));
     assert!(matches!(
-        controller.update_seeds(test_seeds(true, false)),
+        controller.update_seeds(&test_seeds(true, false)),
         UpdateSeedsResult::StagedBehindBarrier { .. }
     ));
     let applied = present_revision("applied-before-cancel-with-reload");

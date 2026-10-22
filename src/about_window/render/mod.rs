@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use smithay_client_toolkit::shell::WaylandSurface;
+use wayland_client::protocol::wl_shm::Format;
 
 use super::AboutWindowState;
 
@@ -34,7 +35,7 @@ impl AboutWindowState {
                 phys_w as i32,
                 phys_h as i32,
                 (phys_w * 4) as i32,
-                wayland_client::protocol::wl_shm::Format::Argb8888,
+                Format::Argb8888,
             )
             .context("Failed to create about window buffer")?;
 

@@ -1,9 +1,9 @@
+use wayscriber::durable_io;
 use wayscriber::i18n::{tr, trf};
 
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, fs};
 
 use crate::models::DesktopEnvironment;
 use wayscriber::durable_io::AtomicWriteOptions;
@@ -115,7 +115,7 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
     })?;
 
     let contents = render_user_service_file(&binary_path);
-    wayscriber::durable_io::write_text_atomic(
+    durable_io::write_text_atomic(
         &service_path,
         &contents,
         AtomicWriteOptions::user_config_file(),

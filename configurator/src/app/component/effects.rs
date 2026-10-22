@@ -1,4 +1,5 @@
 use relm4::ComponentSender;
+use relm4::adw::ApplicationWindow;
 
 use crate::messages::CommandMessage;
 
@@ -11,7 +12,7 @@ use super::super::{daemon_setup, io, session_catalog};
 pub(super) fn spawn_effect(
     effect: Effect,
     sender: &ComponentSender<ConfiguratorApp>,
-    root: &relm4::adw::ApplicationWindow,
+    root: &ApplicationWindow,
 ) {
     use relm4::gtk::prelude::*;
     match effect {

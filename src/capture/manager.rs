@@ -1,25 +1,25 @@
-use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
+use std::{error, fmt, sync};
 
+use tokio::runtime::Handle;
+#[cfg(test)]
+use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
-use crate::capture::{
-    dependencies::CaptureDependencies,
-    desktop_backdrop::capture_desktop_backdrop,
-    file::FileSaveConfig,
-    pipeline::{
-        CaptureManagerRequest, CaptureManagerResult, CaptureRequest, deliver_document,
-        deliver_image, perform_capture, render_and_deliver_document, render_and_deliver_image,
-        render_image,
-    },
-    types::{
-        CaptureDestination, CaptureError, CaptureOutcome, CaptureType,
-        DesktopBackdropCaptureRequest, DocumentDeliveryRequest, ImageDeliveryRequest,
-        ImageOperationKind, RenderImageRequest, RenderedDocumentDeliveryRequest,
-        RenderedImageDeliveryRequest,
-    },
+use crate::capture::dependencies::CaptureDependencies;
+use crate::capture::desktop_backdrop::capture_desktop_backdrop;
+use crate::capture::file::FileSaveConfig;
+use crate::capture::pipeline::{
+    CaptureManagerRequest, CaptureManagerResult, CaptureRequest, deliver_document, deliver_image,
+    perform_capture, render_and_deliver_document, render_and_deliver_image, render_image,
+};
+use crate::capture::types::{
+    CaptureDestination, CaptureError, CaptureOutcome, CaptureType, DesktopBackdropCaptureRequest,
+    DocumentDeliveryRequest, ImageDeliveryRequest, ImageOperationKind, RenderImageRequest,
+    RenderedDocumentDeliveryRequest, RenderedImageDeliveryRequest,
 };
 
 type CompletionNotifier = Arc<dyn Fn() + Send + Sync + 'static>;
@@ -65,7 +65,7 @@ impl fmt::Display for CaptureSubmitError {
     }
 }
 
-impl std::error::Error for CaptureSubmitError {}
+impl error::Error for CaptureSubmitError {}
 
 /// Non-blocking observation of the unique capture completion owner.
 #[derive(Debug)]
@@ -116,12 +116,13 @@ pub struct CaptureManager {
     healthy: bool,
     terminal_reported: bool,
     shutdown_requested: Arc<AtomicBool>,
-    worker: Option<tokio::task::JoinHandle<()>>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl CaptureManager {
     /// Creates a manager whose owner polls completions directly.
-    pub fn new(runtime_handle: &tokio::runtime::Handle) -> Self {
+    #[must_use]
+    pub fn new(runtime_handle: &Handle) -> Self {
         Self::with_dependencies_and_notifier(
             runtime_handle,
             CaptureDependencies::default(),
@@ -132,14 +133,14 @@ impl CaptureManager {
     /// Creates a manager with custom dependencies for deterministic consumers.
     #[cfg(test)]
     pub(crate) fn with_dependencies(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         dependencies: CaptureDependencies,
     ) -> Self {
         Self::with_dependencies_and_notifier(runtime_handle, dependencies, Arc::new(|| {}))
     }
 
     pub(crate) fn with_completion_notifier(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         notifier: impl Fn() + Send + Sync + 'static,
     ) -> Self {
         Self::with_dependencies_and_notifier(
@@ -151,7 +152,7 @@ impl CaptureManager {
 
     #[cfg(test)]
     pub(crate) fn with_dependencies_and_test_notifier(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         dependencies: CaptureDependencies,
         notifier: impl Fn() + Send + Sync + 'static,
     ) -> Self {
@@ -159,12 +160,12 @@ impl CaptureManager {
     }
 
     fn with_dependencies_and_notifier(
-        runtime_handle: &tokio::runtime::Handle,
+        runtime_handle: &Handle,
         dependencies: CaptureDependencies,
         notifier: CompletionNotifier,
     ) -> Self {
         let (request_tx, request_rx) = mpsc::channel::<CaptureCommand>(1);
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = sync::mpsc::sync_channel(1);
         let shutdown_requested = Arc::new(AtomicBool::new(false));
         let worker = runtime_handle.spawn(run_capture_worker(
             request_rx,
@@ -523,7 +524,7 @@ impl Drop for CaptureWorkerExitGuard {
 #[cfg(test)]
 impl CaptureManager {
     pub(crate) fn with_closed_channel_for_test() -> Self {
-        let runtime = tokio::runtime::Runtime::new().expect("test runtime");
+        let runtime = Runtime::new().expect("test runtime");
         let mut manager = Self::new(runtime.handle());
         manager.request_tx.take();
         if let Some(worker) = manager.worker.take() {
@@ -537,6 +538,8 @@ impl CaptureManager {
 
 #[cfg(test)]
 mod transport_tests {
+    use std::sync::atomic::AtomicUsize;
+
     use super::*;
 
     fn request() -> CaptureManagerRequest {
@@ -560,7 +563,7 @@ mod transport_tests {
         SyncSender<CaptureCompletion>,
     ) {
         let (request_tx, request_rx) = mpsc::channel(1);
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = sync::mpsc::sync_channel(1);
         let manager = CaptureManager {
             request_tx: Some(request_tx),
             completion_rx,
@@ -755,8 +758,8 @@ mod transport_tests {
 
     #[test]
     fn completion_channel_is_capacity_one_and_notifier_follows_publication() {
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-        let notifications = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (completion_tx, completion_rx) = sync::mpsc::sync_channel(1);
+        let notifications = Arc::new(AtomicUsize::new(0));
         let notified = Arc::clone(&notifications);
         let shutdown = Arc::new(AtomicBool::new(true));
         let guard = CaptureWorkerExitGuard::new(

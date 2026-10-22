@@ -1,5 +1,12 @@
+use crate::config::StatusBarStyle;
+
 use super::content::status_text_style;
-use super::*;
+use super::{STATUS_BAR_CORNER_RADIUS, StatusHudRun};
+use crate::input::{BoardBackground, InputState};
+use crate::ui::primitives::{BadgeAlign, draw_badge_with_engine, draw_pill, draw_rounded_rect};
+use crate::ui::theme;
+use crate::ui_text::UiTextEngine;
+use std::f64::consts::PI;
 
 // ============================================================================
 // Rendering
@@ -10,7 +17,7 @@ use super::*;
 pub fn render_status_bar(
     ctx: &cairo::Context,
     input_state: &InputState,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
 ) {
@@ -33,7 +40,7 @@ pub fn render_status_bar_with_theme(
     ctx: &cairo::Context,
     theme: &theme::Theme,
     input_state: &InputState,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
 ) {
@@ -53,7 +60,7 @@ pub(crate) fn render_status_bar_with_resources(
     ctx: &cairo::Context,
     theme: &theme::Theme,
     input_state: &InputState,
-    style: &crate::config::StatusBarStyle,
+    style: &StatusBarStyle,
     screen_width: u32,
     screen_height: u32,
 ) {

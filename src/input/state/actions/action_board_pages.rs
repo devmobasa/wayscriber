@@ -1,5 +1,5 @@
 use crate::domain::Action;
-use crate::draw::PageDeleteOutcome;
+use crate::draw::{PageDeleteOutcome, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::{Toast, ToastPriority};
 use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT, BOARD_ID_WHITEBOARD};
@@ -10,7 +10,7 @@ use super::super::InputState;
 impl InputState {
     pub(in crate::input::state) fn handle_board_pages_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {

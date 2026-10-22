@@ -6,13 +6,16 @@
 //! already been told about (so a notification fires once per release, not once
 //! per login).
 
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{fs, thread};
 
 use log::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+use crate::{durable_io, paths, session};
 
 /// Schema version, so a future format change can be detected rather than
 /// misread. v2 split the single "checked" timestamp in two; v3 records the
@@ -64,7 +67,7 @@ pub(crate) struct UpdateCache {
 
 /// Cache file path (`$XDG_CACHE_HOME/wayscriber/update-check.json`).
 pub(crate) fn cache_path() -> PathBuf {
-    crate::paths::update_check_cache_file()
+    paths::update_check_cache_file()
 }
 
 /// Advisory lock guarding read-modify-write cycles.
@@ -77,7 +80,7 @@ fn lock_path(cache_path: &Path) -> PathBuf {
 /// or are on the daemon's watcher thread. On timeout the mutation is skipped;
 /// it must never fall back to an unlocked read-modify-write.
 const LOCK_ATTEMPTS: u32 = 25;
-const LOCK_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(20);
+const LOCK_RETRY_DELAY: Duration = Duration::from_millis(20);
 
 /// Read-modify-write the cache under an advisory lock.
 ///
@@ -101,18 +104,18 @@ pub(crate) fn update<T>(mutate: impl FnOnce(&mut UpdateCache) -> T) -> Option<T>
 }
 
 /// Holds the advisory lock for as long as it is in scope.
-struct CacheLock(std::fs::File);
+struct CacheLock(File);
 
 impl CacheLock {
     fn acquire(cache_path: &Path) -> Option<Self> {
         let parent = cache_path.parent()?;
-        if let Err(err) = std::fs::create_dir_all(parent) {
+        if let Err(err) = fs::create_dir_all(parent) {
             debug!("Failed to create update cache dir for locking: {err}");
             return None;
         }
 
         let path = lock_path(cache_path);
-        let file = match std::fs::OpenOptions::new()
+        let file = match OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
@@ -127,11 +130,11 @@ impl CacheLock {
         };
 
         for attempt in 0..LOCK_ATTEMPTS {
-            if crate::session::try_lock_exclusive(&file).is_ok() {
+            if session::try_lock_exclusive(&file).is_ok() {
                 return Some(Self(file));
             }
             if attempt + 1 < LOCK_ATTEMPTS {
-                std::thread::sleep(LOCK_RETRY_DELAY);
+                thread::sleep(LOCK_RETRY_DELAY);
             }
         }
 
@@ -142,7 +145,7 @@ impl CacheLock {
 
 impl Drop for CacheLock {
     fn drop(&mut self) {
-        if let Err(err) = crate::session::unlock(&self.0) {
+        if let Err(err) = session::unlock(&self.0) {
             debug!("Failed to release the update cache lock: {err}");
         }
     }
@@ -155,7 +158,7 @@ pub(crate) fn load() -> UpdateCache {
 }
 
 pub(crate) fn load_from(path: &Path) -> UpdateCache {
-    let Ok(raw) = std::fs::read_to_string(path) else {
+    let Ok(raw) = fs::read_to_string(path) else {
         return UpdateCache::default();
     };
     match serde_json::from_str::<UpdateCache>(&raw) {
@@ -209,7 +212,7 @@ fn store_at(path: &Path, cache: &UpdateCache) -> bool {
     };
 
     if let Some(parent) = path.parent()
-        && let Err(err) = std::fs::create_dir_all(parent)
+        && let Err(err) = fs::create_dir_all(parent)
     {
         debug!(
             "Failed to create update cache dir {}: {err}",
@@ -218,7 +221,7 @@ fn store_at(path: &Path, cache: &UpdateCache) -> bool {
         return false;
     }
 
-    if let Err(err) = crate::durable_io::write_text_atomic(
+    if let Err(err) = durable_io::write_text_atomic(
         path,
         &contents,
         AtomicWriteOptions {
@@ -254,6 +257,12 @@ pub(crate) fn seconds_since(then: u64) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+    use std::os::unix;
+    use std::sync::{Arc, Barrier};
+
+    use crate::{env_vars, test_env};
+
     use super::*;
     use crate::test_temp::tempdir;
 
@@ -291,7 +300,7 @@ mod tests {
         assert_eq!(load_from(&missing), UpdateCache::default());
 
         let corrupt = dir.path().join("corrupt.json");
-        std::fs::write(&corrupt, "{not json").unwrap();
+        fs::write(&corrupt, "{not json").unwrap();
         assert_eq!(load_from(&corrupt), UpdateCache::default());
     }
 
@@ -299,7 +308,7 @@ mod tests {
     fn a_v1_cache_keeps_its_throttle_but_not_a_claim_of_freshness() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("v1.json");
-        std::fs::write(
+        fs::write(
             &path,
             r#"{"version": 1, "last_checked_unix": 1750000000, "latest_version": "0.9.23"}"#,
         )
@@ -315,7 +324,7 @@ mod tests {
 
         // Rewriting drops the legacy key entirely.
         store_at(&path, &cache);
-        let raw = std::fs::read_to_string(&path).unwrap();
+        let raw = fs::read_to_string(&path).unwrap();
         assert!(!raw.contains("last_checked_unix"), "{raw}");
         assert!(raw.contains("last_attempt_unix"), "{raw}");
     }
@@ -324,7 +333,7 @@ mod tests {
     fn a_v2_cache_does_not_guess_an_attempt_outcome_from_timestamps() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("v2.json");
-        std::fs::write(
+        fs::write(
             &path,
             r#"{
                 "version": 2,
@@ -348,10 +357,11 @@ mod tests {
     /// restored stale result.
     #[test]
     fn concurrent_updates_do_not_erase_each_other() {
-        let _lock = crate::test_env::lock();
+        let _lock = test_env::lock();
         let dir = tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         let mut initial = sample();
         initial.notified_version = None;
@@ -361,13 +371,13 @@ mod tests {
         // The slow writer holds the lock across a wide load→store window; the
         // fast one starts inside that window. Unlocked, the slow store would
         // land last and revert the fast writer's field.
-        let entered = std::sync::Arc::new(std::sync::Barrier::new(2));
-        let slow_entered = std::sync::Arc::clone(&entered);
-        let slow = std::thread::spawn(move || {
+        let entered = Arc::new(Barrier::new(2));
+        let slow_entered = Arc::clone(&entered);
+        let slow = thread::spawn(move || {
             let _ = update(|cache| {
                 cache.notified_version = Some("0.9.23".to_string());
                 slow_entered.wait();
-                std::thread::sleep(std::time::Duration::from_millis(60));
+                thread::sleep(Duration::from_millis(60));
             });
         });
         entered.wait();
@@ -387,18 +397,22 @@ mod tests {
         // Fields neither writer touched survive both cycles.
         assert_eq!(final_cache.latest_version.as_deref(), Some("0.9.23"));
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
     #[test]
     fn a_timed_out_lock_does_not_fall_back_to_an_unlocked_write() {
-        let _env_lock = crate::test_env::lock();
+        let _env_lock = test_env::lock();
         let dir = tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_env_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         let initial = sample();
         store(&initial);
@@ -420,23 +434,27 @@ mod tests {
         );
         drop(held);
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_env_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
     #[cfg(unix)]
     #[test]
     fn a_rejected_cache_write_is_not_reported_as_persisted() {
-        let _env_lock = crate::test_env::lock();
+        let _env_lock = test_env::lock();
         let dir = tempdir().unwrap();
-        let previous = std::env::var_os(crate::env_vars::XDG_CACHE_HOME_ENV);
-        unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
+        let previous = env::var_os(env_vars::XDG_CACHE_HOME_ENV);
+        // SAFETY: serialized by the test environment mutex held in `_env_lock`.
+        unsafe { env::set_var(env_vars::XDG_CACHE_HOME_ENV, dir.path()) };
 
         let path = cache_path();
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::os::unix::fs::symlink(dir.path().join("redirected.json"), &path).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        unix::fs::symlink(dir.path().join("redirected.json"), &path).unwrap();
 
         let update_result = update(|cache| {
             cache.last_attempt_unix = 1_800_000_000;
@@ -445,9 +463,12 @@ mod tests {
         assert_eq!(update_result, None, "a rejected write was not persisted");
         assert!(!dir.path().join("redirected.json").exists());
 
-        match previous {
-            Some(value) => unsafe { std::env::set_var(crate::env_vars::XDG_CACHE_HOME_ENV, value) },
-            None => unsafe { std::env::remove_var(crate::env_vars::XDG_CACHE_HOME_ENV) },
+        // SAFETY: this test still holds the environment mutex in `_env_lock`.
+        unsafe {
+            match previous {
+                Some(value) => env::set_var(env_vars::XDG_CACHE_HOME_ENV, value),
+                None => env::remove_var(env_vars::XDG_CACHE_HOME_ENV),
+            }
         }
     }
 
@@ -455,7 +476,7 @@ mod tests {
     fn cache_from_a_newer_schema_is_ignored() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("future.json");
-        std::fs::write(&path, r#"{"version": 99, "latest_version": "9.9.9"}"#).unwrap();
+        fs::write(&path, r#"{"version": 99, "latest_version": "9.9.9"}"#).unwrap();
 
         assert_eq!(load_from(&path), UpdateCache::default());
     }

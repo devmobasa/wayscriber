@@ -35,15 +35,19 @@ pub(super) fn interaction_timeout(
 
 #[cfg(test)]
 mod tests {
+    use crate::draw::TextMeasurer;
+    use crate::ui_text::UiTextEngine;
+
     use super::*;
     use crate::config::Action;
     use crate::draw::Shape;
-    use crate::input::state::{SpotlightWheelOutcome, test_support::make_test_input_state};
+    use crate::input::state::SpotlightWheelOutcome;
+    use crate::input::state::test_support::make_test_input_state;
 
     #[test]
     fn polling_the_owning_path_finishes_one_idle_wheel_burst() {
-        let test_text_measurer = crate::draw::TextMeasurer::default();
-        let test_ui_engine = crate::ui_text::UiTextEngine::default();
+        let test_text_measurer = TextMeasurer::default();
+        let test_ui_engine = UiTextEngine::default();
         let test_text_resources = crate::input::state::InputTextResources {
             measurer: &test_text_measurer,
             ui_engine: &test_ui_engine,

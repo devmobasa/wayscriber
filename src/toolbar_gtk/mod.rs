@@ -31,7 +31,12 @@ mod view;
 #[cfg(feature = "toolbar-gtk")]
 mod widgets;
 
+#[cfg(feature = "toolbar-gtk")]
+use std::env;
+
 use crate::config::ToolbarRebindModifier;
+#[cfg(feature = "toolbar-gtk")]
+use crate::env_vars;
 use crate::ui::toolbar::{ToolbarEvent, ToolbarSnapshot};
 
 #[cfg(feature = "toolbar-gtk")]
@@ -40,7 +45,7 @@ pub(crate) fn drag_debug_log(message: impl AsRef<str>) {
 
     static ENABLED: OnceLock<bool> = OnceLock::new();
     let enabled = *ENABLED.get_or_init(|| {
-        let raw = std::env::var(crate::env_vars::DEBUG_TOOLBAR_DRAG_ENV)
+        let raw = env::var(env_vars::DEBUG_TOOLBAR_DRAG_ENV)
             .unwrap_or_default()
             .to_ascii_lowercase();
         !(raw.is_empty() || raw == "0" || raw == "false" || raw == "off")

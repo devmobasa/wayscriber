@@ -255,7 +255,7 @@ pub(super) fn apply_window_query_completion(
     }
     let mapped: Vec<_> = targets
         .into_iter()
-        .filter_map(|target| map_window_target(correlation.source, target))
+        .filter_map(|target| map_window_target(correlation.source, &target))
         .collect();
     if mapped.is_empty() {
         *session = None;
@@ -285,7 +285,7 @@ fn region_selection_for_rect(rect: Rect) -> RegionSelection {
     }
 }
 
-fn map_window_target(source: ScreenSourceToken, target: WindowTarget) -> Option<WindowSnapTarget> {
+fn map_window_target(source: ScreenSourceToken, target: &WindowTarget) -> Option<WindowSnapTarget> {
     let logical_rect = target.logical_rect;
     let first = output_logical_to_image_point(source, (logical_rect.x, logical_rect.y))?;
     let second = output_logical_to_image_point(

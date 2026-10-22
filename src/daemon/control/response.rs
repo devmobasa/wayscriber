@@ -14,7 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub(crate) fn write_daemon_toggle_command_success(command: &DaemonToggleCommand) -> Result<()> {
-    write_daemon_toggle_response(&command.response_path, DaemonToggleResponse::ok())
+    write_daemon_toggle_response(&command.response_path, &DaemonToggleResponse::ok())
 }
 
 pub(crate) fn write_daemon_toggle_command_error(
@@ -23,13 +23,13 @@ pub(crate) fn write_daemon_toggle_command_error(
 ) -> Result<()> {
     write_daemon_toggle_response(
         &command.response_path,
-        DaemonToggleResponse::error(message.to_string()),
+        &DaemonToggleResponse::error(message.to_string()),
     )
 }
 
-fn write_daemon_toggle_response(path: &Path, response: DaemonToggleResponse) -> Result<()> {
+fn write_daemon_toggle_response(path: &Path, response: &DaemonToggleResponse) -> Result<()> {
     let payload =
-        serde_json::to_vec(&response).context("failed to serialize daemon toggle response")?;
+        serde_json::to_vec(response).context("failed to serialize daemon toggle response")?;
     write_file_atomic(path, &payload)
 }
 

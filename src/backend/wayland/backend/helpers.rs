@@ -1,9 +1,13 @@
+use std::io;
+use std::io::ErrorKind;
+
 use anyhow::{Context, Result};
 use log::warn;
 use std::env;
 use std::os::fd::{AsRawFd, RawFd};
 use std::time::Duration;
-use wayland_client::{EventQueue, backend::ReadEventsGuard, backend::WaylandError};
+use wayland_client::EventQueue;
+use wayland_client::backend::{ReadEventsGuard, WaylandError};
 
 use super::super::state::WaylandState;
 #[cfg(test)]
@@ -51,7 +55,7 @@ pub(super) fn friendly_capture_error(kind: CaptureFailureKind) -> String {
 fn normalize_read_result(result: Result<usize, WaylandError>) -> Result<usize, WaylandError> {
     match result {
         Ok(n) => Ok(n),
-        Err(WaylandError::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
+        Err(WaylandError::Io(err)) if err.kind() == ErrorKind::WouldBlock => Ok(0),
         Err(e) => Err(e),
     }
 }
@@ -87,8 +91,8 @@ fn poll_runtime_fds_with(
     wayland_fd: RawFd,
     wake_fd: RawFd,
     timeout: Option<Duration>,
-    mut poll_once: impl FnMut(&mut [libc::pollfd], i32) -> std::io::Result<i32>,
-) -> std::io::Result<RuntimePollReadiness> {
+    mut poll_once: impl FnMut(&mut [libc::pollfd], i32) -> io::Result<i32>,
+) -> io::Result<RuntimePollReadiness> {
     poll_with_retry(timeout, |timeout_ms| {
         let mut pollfds = [
             libc::pollfd {
@@ -121,7 +125,7 @@ fn poll_runtime_fds_with(
                     )?,
                 };
                 if !readiness.wayland && !readiness.wake {
-                    return Err(std::io::Error::other(
+                    return Err(io::Error::other(
                         "runtime poll reported readiness without a readable descriptor",
                     ));
                 }
@@ -142,7 +146,7 @@ fn poll_runtime_fds(
     wayland_fd: RawFd,
     wake_fd: RawFd,
     timeout: Option<Duration>,
-) -> std::io::Result<RuntimePollReadiness> {
+) -> io::Result<RuntimePollReadiness> {
     poll_runtime_fds_with(wayland_fd, wake_fd, timeout, |pollfds, timeout_ms| {
         // SAFETY: pollfds is a live mutable slice for the duration of this call,
         // and both descriptors remain borrowed by their runtime owners.
@@ -154,7 +158,7 @@ fn poll_runtime_fds(
             )
         };
         if ready < 0 {
-            Err(std::io::Error::last_os_error())
+            Err(io::Error::last_os_error())
         } else {
             Ok(ready)
         }
@@ -231,10 +235,10 @@ fn dispatch_runtime_cycle(
     Ok(())
 }
 
-struct RealRuntimeDispatchOps<'a, F> {
-    event_queue: &'a mut EventQueue<WaylandState>,
-    state: &'a mut WaylandState,
-    runtime_wake: &'a RuntimeWakeSource,
+struct RealRuntimeDispatchOps<'runtime, F> {
+    event_queue: &'runtime mut EventQueue<WaylandState>,
+    state: &'runtime mut WaylandState,
+    runtime_wake: &'runtime RuntimeWakeSource,
     on_runtime_wake: F,
 }
 
@@ -321,6 +325,8 @@ pub(super) fn launched_resume_policy() -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_env;
+
     use super::*;
     use crate::capture::CaptureError;
     use crate::set_runtime_session_override;
@@ -344,17 +350,17 @@ mod tests {
 
     #[test]
     fn normalize_read_result_maps_would_block_to_zero() {
-        let err = WaylandError::Io(std::io::Error::from(std::io::ErrorKind::WouldBlock));
+        let err = WaylandError::Io(io::Error::from(ErrorKind::WouldBlock));
         assert_eq!(normalize_read_result(Err(err)).unwrap(), 0);
     }
 
     #[test]
     fn normalize_read_result_preserves_other_errors() {
-        let err = WaylandError::Io(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+        let err = WaylandError::Io(io::Error::from(ErrorKind::BrokenPipe));
         let actual = normalize_read_result(Err(err)).unwrap_err();
         match actual {
             WaylandError::Io(io_err) => {
-                assert_eq!(io_err.kind(), std::io::ErrorKind::BrokenPipe);
+                assert_eq!(io_err.kind(), ErrorKind::BrokenPipe);
             }
             other => panic!("expected io error, got {other}"),
         }
@@ -363,7 +369,7 @@ mod tests {
     #[test]
     fn runtime_poll_observes_wake_only_readiness() {
         let (wayland_read, _wayland_write) = UnixStream::pair().unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wake.handle().wake().unwrap();
 
         assert_eq!(
@@ -383,7 +389,7 @@ mod tests {
     #[test]
     fn runtime_poll_observes_wayland_only_readiness() {
         let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wayland_write.write_all(&[1]).unwrap();
 
         assert_eq!(
@@ -403,7 +409,7 @@ mod tests {
     #[test]
     fn runtime_poll_preserves_readable_wayland_data_when_peer_hangs_up() {
         let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wayland_write.write_all(&[1]).unwrap();
         drop(wayland_write);
 
@@ -424,7 +430,7 @@ mod tests {
     #[test]
     fn runtime_wake_preempts_a_future_deadline() {
         let (wayland_read, _wayland_write) = UnixStream::pair().unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wake.handle().wake().unwrap();
 
         assert_eq!(
@@ -444,7 +450,7 @@ mod tests {
     #[test]
     fn runtime_poll_observes_combined_wayland_and_wake_readiness() {
         let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wayland_write.write_all(&[1]).unwrap();
         wake.handle().wake().unwrap();
 
@@ -510,7 +516,7 @@ mod tests {
     fn wake_only_readiness_cancels_the_prepared_wayland_read() {
         let (wayland_read, _wayland_write) = UnixStream::pair().unwrap();
         let (guard, reads, cancellations) = fake_prepared_read(wayland_read);
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wake.handle().wake().unwrap();
 
         let outcome = read_events_with_runtime_wake(guard, &wake, Some(Duration::ZERO)).unwrap();
@@ -526,7 +532,7 @@ mod tests {
         let (wayland_read, mut wayland_write) = UnixStream::pair().unwrap();
         wayland_write.write_all(&[1]).unwrap();
         let (guard, reads, cancellations) = fake_prepared_read(wayland_read);
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         wake.handle().wake().unwrap();
 
         let outcome = read_events_with_runtime_wake(guard, &wake, Some(Duration::ZERO)).unwrap();
@@ -682,7 +688,7 @@ mod tests {
         let readiness = poll_runtime_fds_with(10, 11, None, |pollfds, _| {
             calls += 1;
             if calls == 1 {
-                return Err(std::io::Error::from(std::io::ErrorKind::Interrupted));
+                return Err(io::Error::from(ErrorKind::Interrupted));
             }
             pollfds[1].revents = libc::POLLIN;
             Ok(1)
@@ -801,8 +807,7 @@ mod tests {
 
     #[test]
     fn a_failed_file_save_is_not_reported_as_a_screen_sharing_permission() {
-        let error =
-            CaptureError::SaveError(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        let error = CaptureError::SaveError(io::Error::from(ErrorKind::PermissionDenied));
 
         assert_eq!(
             friendly_capture_error(error.failure_kind()),
@@ -812,11 +817,11 @@ mod tests {
 
     #[test]
     fn resume_override_from_env_prefers_runtime_override() {
-        let _guard = crate::test_env::lock();
+        let _guard = test_env::lock();
 
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::set_var(RESUME_SESSION_ENV, "off");
+            env::set_var(RESUME_SESSION_ENV, "off");
         }
         set_runtime_session_override(Some(true));
 
@@ -825,36 +830,36 @@ mod tests {
         set_runtime_session_override(None);
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::remove_var(RESUME_SESSION_ENV);
+            env::remove_var(RESUME_SESSION_ENV);
         }
     }
 
     #[test]
     fn resume_override_from_env_parses_expected_values() {
-        let _guard = crate::test_env::lock();
+        let _guard = test_env::lock();
         set_runtime_session_override(None);
 
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::set_var(RESUME_SESSION_ENV, "enabled");
+            env::set_var(RESUME_SESSION_ENV, "enabled");
         }
         assert_eq!(resume_override_from_env(), Some(true));
 
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::set_var(RESUME_SESSION_ENV, "0");
+            env::set_var(RESUME_SESSION_ENV, "0");
         }
         assert_eq!(resume_override_from_env(), Some(false));
 
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::set_var(RESUME_SESSION_ENV, "maybe");
+            env::set_var(RESUME_SESSION_ENV, "maybe");
         }
         assert_eq!(resume_override_from_env(), None);
 
         // SAFETY: test serialized by env mutex.
         unsafe {
-            std::env::remove_var(RESUME_SESSION_ENV);
+            env::remove_var(RESUME_SESSION_ENV);
         }
     }
 }

@@ -2,10 +2,9 @@
 
 #[cfg(test)]
 use crate::backend::wayland::toolbar::events::HitKind;
-use crate::backend::wayland::toolbar::hit::HitRegion;
 #[cfg(test)]
 use crate::backend::wayland::toolbar::hit::rect_contains_with_min_target;
-use crate::backend::wayland::toolbar::hit::rect_with_min_target;
+use crate::backend::wayland::toolbar::hit::{HitRegion, rect_with_min_target};
 
 use super::node::{WidgetId, WidgetNode};
 

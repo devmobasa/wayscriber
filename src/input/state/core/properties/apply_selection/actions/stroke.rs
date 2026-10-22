@@ -1,5 +1,5 @@
-use crate::draw::Shape;
-use crate::draw::TextMeasurer;
+use crate::domain;
+use crate::draw::{Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::state::PressureThicknessEditMode;
 use crate::input::state::core::base::{InputState, MAX_STROKE_THICKNESS, MIN_STROKE_THICKNESS};
@@ -44,7 +44,7 @@ impl InputState {
                     strength: thick, ..
                 }
                 | Shape::MarkerStroke { thick, .. } => {
-                    let next = crate::domain::step_stroke_thickness(*thick, delta);
+                    let next = domain::step_stroke_thickness(*thick, delta);
                     if (next - *thick).abs() > f64::EPSILON {
                         *thick = next;
                         true
@@ -88,7 +88,7 @@ impl InputState {
             },
         );
 
-        self.report_selection_apply_result(result, tr("thickness"))
+        self.report_selection_apply_result(&result, tr("thickness"))
     }
 }
 

@@ -1,9 +1,22 @@
+use crate::backend::wayland::capture::RegionCapturePhase;
+use crate::backend::wayland::state::eyedropper;
+use crate::backend::wayland::toolbar;
+use crate::input::state::RegionPurposeTag;
+use crate::ui;
+use crate::ui::{
+    CommandPaletteView, HelpContentOptions, RegionAction, RegionActionBar,
+    RegionCaptureLoupeVisual, RegionCutDragVisual, RegionResizeHandles,
+};
+
+use std::time::Instant;
+
+use super::super::WaylandState;
 use super::tool_preview::{draw_stylus_hover_cursor, draw_tool_preview, mouse_tool_preview_redraw};
-use super::*;
 use crate::backend::wayland::state::region_capture::RegionPickerMeasurement;
 use crate::backend::wayland::state::screen_image::{
     displayed_screen_image, image_point_for_screen_point, screen_source_is,
 };
+use crate::input::DrawingState;
 
 impl WaylandState {
     pub(super) fn render_ui_layer(
@@ -103,7 +116,7 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            crate::ui::render_frozen_badge_with_engine(self.render.ui_text(), ctx, width, height);
+            ui::render_frozen_badge_with_engine(self.render.ui_text(), ctx, width, height);
         }
         let mut offset = 0.0;
         if self.input_state.zoom_active()
@@ -111,7 +124,7 @@ impl WaylandState {
             && !self.zoom_chip_visible()
             && fallback_visible
         {
-            offset += crate::ui::render_zoom_badge_with_engine(
+            offset += ui::render_zoom_badge_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
@@ -126,7 +139,7 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            offset += crate::ui::render_pan_badge_with_engine(
+            offset += ui::render_pan_badge_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
@@ -140,13 +153,7 @@ impl WaylandState {
             && !status_visible
             && fallback_visible
         {
-            crate::ui::render_editing_badge_with_engine(
-                self.render.ui_text(),
-                ctx,
-                width,
-                height,
-                offset,
-            );
+            ui::render_editing_badge_with_engine(self.render.ui_text(), ctx, width, height, offset);
         }
     }
 
@@ -158,7 +165,7 @@ impl WaylandState {
         capture_picker: bool,
     ) {
         if !capture_picker && self.input_state.floating_badge_visible() {
-            crate::ui::render_page_badge_with_engine(
+            ui::render_page_badge_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
@@ -171,7 +178,7 @@ impl WaylandState {
             );
         }
         if self.input_state.ui_visibility.show_status_bar {
-            crate::ui::render_status_bar_with_resources(
+            ui::render_status_bar_with_resources(
                 self.render.ui_text(),
                 ctx,
                 self.render.theme(),
@@ -181,11 +188,11 @@ impl WaylandState {
                 height,
             );
             if let Some(tooltip) = self.input_state.status_hud.tooltip() {
-                crate::ui::draw_tooltip(self.render.ui_text(), ctx, tooltip.text, tooltip.rect);
+                ui::draw_tooltip(self.render.ui_text(), ctx, tooltip.text, tooltip.rect);
             }
         }
         if !capture_picker && self.zoom_chip_visible() {
-            crate::ui::render_zoom_chip_with_resources(
+            ui::render_zoom_chip_with_resources(
                 self.render.ui_text(),
                 ctx,
                 self.render.theme(),
@@ -196,7 +203,7 @@ impl WaylandState {
             );
         }
         if !capture_picker && self.input_state.input_hud_visible() {
-            crate::ui::render_input_hud_with_engine(
+            ui::render_input_hud_with_engine(
                 self.render.ui_text(),
                 ctx,
                 &self.input_state,
@@ -219,17 +226,19 @@ impl WaylandState {
                 let (theme, caches, engine, content_cache) = self.render.help_parts_mut();
                 let content = content_cache.get_or_build(
                     &self.input_state,
-                    self.frozen.enabled(),
-                    self.config.ui.help_overlay_context_filter,
-                    self.input_state.boards.board_count() > 1,
-                    self.config.capture.enabled,
+                    HelpContentOptions {
+                        frozen_enabled: self.frozen.enabled(),
+                        context_filter: self.config.ui.help_overlay_context_filter,
+                        board_enabled: self.input_state.boards.board_count() > 1,
+                        capture_enabled: self.config.capture.enabled,
+                    },
                 );
                 let mut render = crate::ui::UiRenderCtx {
                     cairo: ctx,
                     theme,
                     caches,
                 };
-                crate::ui::render_help_overlay_result_with_content(
+                ui::render_help_overlay_result_with_content(
                     engine,
                     &mut render,
                     &self.config.ui.help_overlay_style,
@@ -250,7 +259,7 @@ impl WaylandState {
                 .update_board_picker_layout(ctx, width, height);
             let (caches, ui_caches, engine, measurer) = self.render.draw_ui_text_parts_mut();
             let mut render = crate::draw::RenderCtx::new(ctx, caches);
-            crate::ui::render_board_picker_with_halo(
+            ui::render_board_picker_with_halo(
                 engine,
                 measurer,
                 &mut ui_caches.thumbnails,
@@ -266,7 +275,7 @@ impl WaylandState {
         if !capture_picker && self.input_state.is_color_picker_popup_open() {
             self.input_state
                 .update_color_picker_popup_layout(width, height);
-            crate::ui::render_color_picker_popup_with_engine(
+            ui::render_color_picker_popup_with_engine(
                 self.render.ui_text(),
                 ctx,
                 &self.input_state,
@@ -277,7 +286,7 @@ impl WaylandState {
             self.input_state.clear_color_picker_popup_layout();
         }
         if !capture_picker && self.input_state.is_font_picker_open() {
-            crate::ui::render_font_picker(ctx, &self.input_state, width, height);
+            ui::render_font_picker(ctx, &self.input_state, width, height);
         }
         if !capture_picker && self.input_state.is_precision_entry_open() {
             self.render_precision_entry(ctx, width, height);
@@ -290,14 +299,13 @@ impl WaylandState {
 
     fn render_precision_entry(&mut self, ctx: &cairo::Context, width: u32, height: u32) {
         let snapshot = self.toolbar_snapshot();
-        let (_, top_h) =
-            crate::backend::wayland::toolbar::top_size(self.render.ui_text(), &snapshot);
+        let (_, top_h) = toolbar::top_size(self.render.ui_text(), &snapshot);
         let top_offset = self.toolbar_chrome.top_offset();
         let anchor = (
             self.inline_top_base_x() + top_offset.0,
             self.inline_top_base_y() + top_offset.1 + top_h as f64 + 8.0,
         );
-        crate::ui::render_precision_entry_popup_with_engine(
+        ui::render_precision_entry_popup_with_engine(
             self.render.ui_text(),
             ctx,
             &self.input_state,
@@ -318,7 +326,7 @@ impl WaylandState {
             self.input_state.update_radial_menu_layout(width, height);
             if self
                 .input_state
-                .radial_menu_mark_painted_if_due(std::time::Instant::now())
+                .radial_menu_mark_painted_if_due(Instant::now())
             {
                 let (theme, caches, engine) = self.render.ui_parts_with_text_mut();
                 let mut render = crate::ui::UiRenderCtx {
@@ -326,7 +334,7 @@ impl WaylandState {
                     theme,
                     caches,
                 };
-                crate::ui::render_radial_menu_with_context(
+                ui::render_radial_menu_with_context(
                     engine,
                     &mut render,
                     &self.input_state,
@@ -340,7 +348,7 @@ impl WaylandState {
         if !capture_picker {
             self.render_recognition_chip(ctx, width, height);
         }
-        let toast_geometry = crate::ui::render_ui_toast_with_engine(
+        let toast_geometry = ui::render_ui_toast_with_engine(
             self.render.ui_text(),
             ctx,
             &self.input_state,
@@ -353,14 +361,14 @@ impl WaylandState {
                 .map(|geometry| geometry.1)
                 .unwrap_or([None, None]),
         );
-        crate::ui::render_preset_toast_with_engine(
+        ui::render_preset_toast_with_engine(
             self.render.ui_text(),
             ctx,
             &self.input_state,
             width,
             height,
         );
-        crate::ui::render_blocked_feedback(ctx, &self.input_state, width, height);
+        ui::render_blocked_feedback(ctx, &self.input_state, width, height);
     }
 
     fn render_properties_panel(
@@ -384,7 +392,7 @@ impl WaylandState {
                 width,
                 height,
             );
-        crate::ui::render_properties_panel_with_engine(
+        ui::render_properties_panel_with_engine(
             self.render.ui_text(),
             ctx,
             &self.input_state,
@@ -404,7 +412,7 @@ impl WaylandState {
         if !self.input_state.is_context_menu_open() {
             self.input_state.clear_context_menu_layout();
         }
-        crate::ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
+        ui::render_context_menu_with_engine(self.render.ui_text(), ctx, &self.input_state);
     }
 
     fn render_inline_toolbar_chrome(&mut self, ctx: &cairo::Context, capture_picker: bool) {
@@ -429,9 +437,7 @@ impl WaylandState {
         height: u32,
         capture_picker: bool,
     ) {
-        if self.input_state.region_state().purpose()
-            == Some(crate::input::state::RegionPurposeTag::Measure)
-        {
+        if self.input_state.region_state().purpose() == Some(RegionPurposeTag::Measure) {
             self.render_capture_picker(ctx, width, height);
         }
         self.render_ocr_scan(ctx, width, height);
@@ -440,7 +446,7 @@ impl WaylandState {
             return;
         }
         let card_layout = self.first_run_onboarding_card().map(|card| {
-            crate::ui::render_onboarding_card_with_engine(
+            ui::render_onboarding_card_with_engine(
                 self.render.ui_text(),
                 ctx,
                 width,
@@ -460,8 +466,8 @@ impl WaylandState {
             .ui_damage_mut()
             .record_painted(super::UiEffect::OnboardingCard, painted_card);
         self.onboarding_card.set_layout(card_layout);
-        let palette_view = crate::ui::CommandPaletteView::prepare(&self.input_state, width, height);
-        crate::ui::paint_command_palette(
+        let palette_view = CommandPaletteView::prepare(&self.input_state, width, height);
+        ui::paint_command_palette(
             self.render.theme(),
             self.render.ui_text(),
             ctx,
@@ -478,9 +484,9 @@ impl WaylandState {
         let Some(scan) = self.input_state.ocr_scan() else {
             return;
         };
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         if let Some((outcome, shown)) = scan.result(now) {
-            crate::ui::render_ocr_scan_result(
+            ui::render_ocr_scan_result(
                 self.render.ui_text(),
                 ctx,
                 scan.region(),
@@ -489,33 +495,30 @@ impl WaylandState {
                 (width, height),
             );
         } else if let Some(progress) = scan.sweep_progress(now) {
-            crate::ui::render_ocr_scan_sweep(ctx, scan.region(), progress);
+            ui::render_ocr_scan_sweep(ctx, scan.region(), progress);
         } else if scan.is_scanning() {
             // Reduced motion: the region is still marked as being read, just
             // without a band travelling across it.
-            crate::ui::render_ocr_scan_still(ctx, scan.region());
+            ui::render_ocr_scan_still(ctx, scan.region());
         }
     }
 
     fn render_capture_picker(&self, ctx: &cairo::Context, width: u32, height: u32) {
         let purpose = self.input_state.region_state().purpose();
         if !self.input_state.region_is_active()
-            || !purpose.is_some_and(|purpose| {
-                purpose.is_capture() || purpose == crate::input::state::RegionPurposeTag::Measure
-            })
+            || !purpose
+                .is_some_and(|purpose| purpose.is_capture() || purpose == RegionPurposeTag::Measure)
         {
             return;
         }
 
-        let measure_mode = purpose == Some(crate::input::state::RegionPurposeTag::Measure);
+        let measure_mode = purpose == Some(RegionPurposeTag::Measure);
 
         let options = match self.capture.region_phase() {
-            crate::backend::wayland::capture::RegionCapturePhase::Reserved(intent) => {
-                Some(intent.options())
-            }
-            crate::backend::wayland::capture::RegionCapturePhase::Idle
-            | crate::backend::wayland::capture::RegionCapturePhase::Submitting(_)
-            | crate::backend::wayland::capture::RegionCapturePhase::Accepted => None,
+            RegionCapturePhase::Reserved(intent) => Some(intent.options()),
+            RegionCapturePhase::Idle
+            | RegionCapturePhase::Submitting(_)
+            | RegionCapturePhase::Accepted => None,
         };
         let geometry = self.region_selection_geometry();
         let selection = if measure_mode {
@@ -532,29 +535,25 @@ impl WaylandState {
         .map(|measurement| match measurement {
             RegionPickerMeasurement::Point { x, y } => format!("{x}, {y}"),
             RegionPickerMeasurement::Size { width, height } => {
-                crate::ui::capture_size_text((width, height))
+                ui::capture_size_text((width, height))
             }
         });
         let region_state = self.input_state.region_state();
         let action_bar = if region_state.is_review() {
             geometry.map(|geometry| {
-                crate::ui::RegionActionBar::place(geometry.display_selection(), (width, height))
+                RegionActionBar::place(geometry.display_selection(), (width, height))
             })
         } else {
             None
         };
-        let hovered_action: Option<crate::ui::RegionAction> =
-            action_bar.and_then(|bar| bar.hit(pointer));
+        let hovered_action: Option<RegionAction> = action_bar.and_then(|bar| bar.hit(pointer));
         // Grips belong to the reviewed rectangle, not the window-mode
         // candidate, so they follow `region_selection_geometry` rather than
         // the effective selection the scrim cuts out.
         let resize_handles = (region_state.is_review()
             && !self.region_review_crop_locked()
             && !self.region_cut_mode_armed())
-        .then(|| {
-            geometry
-                .map(|geometry| crate::ui::RegionResizeHandles::place(geometry.display_selection()))
-        });
+        .then(|| geometry.map(|geometry| RegionResizeHandles::place(geometry.display_selection())));
         let resize_handles = resize_handles.flatten();
         // A grip sitting under the action bar is painted over by it, so the
         // bar's hover wins the pointer.
@@ -580,7 +579,7 @@ impl WaylandState {
         };
         let loupe = loupe_source.as_ref().and_then(|(_source, token)| {
             let image_point = image_point_for_screen_point(token, pointer);
-            crate::ui::RegionCaptureLoupeVisual::when_enabled(
+            RegionCaptureLoupeVisual::when_enabled(
                 loupe_enabled,
                 pointer,
                 (image_point.x, image_point.y),
@@ -593,7 +592,7 @@ impl WaylandState {
             highlighted_target: self.region_window_snap_highlighted_index(),
         };
 
-        crate::ui::render_region_capture_picker(
+        ui::render_region_capture_picker(
             self.render.ui_text(),
             ctx,
             width,
@@ -621,7 +620,7 @@ impl WaylandState {
                     }),
                     drag: self
                         .region_cut_drag_overlay()
-                        .map(|(axis, band)| crate::ui::RegionCutDragVisual { axis, band }),
+                        .map(|(axis, band)| RegionCutDragVisual { axis, band }),
                     availability: self.region_cut_availability(),
                     cut_armed: self.region_cut_mode_armed(),
                     status: self.region_cut_status(),
@@ -630,11 +629,7 @@ impl WaylandState {
             },
             |image_x, image_y| {
                 loupe_source.as_ref().and_then(|(source, _token)| {
-                    crate::backend::wayland::state::eyedropper::sample_at(
-                        source.image,
-                        image_x,
-                        image_y,
-                    )
+                    eyedropper::sample_at(source.image, image_x, image_y)
                 })
             },
         );

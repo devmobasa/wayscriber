@@ -1,3 +1,8 @@
+use std::mem;
+
+use crate::backend::wayland::zoom::ZoomTerminalReport;
+use crate::input::state::RegionPurposeTag;
+
 use super::*;
 use crate::backend::wayland::acquisition::ScreenAcquisitionRegistry;
 use crate::input::state::test_support::make_test_input_state;
@@ -5,7 +10,7 @@ use crate::input::state::test_support::make_test_input_state;
 struct TransactionRuntime {
     registry: ScreenAcquisitionRegistry,
     waiter_matches: bool,
-    input_state: crate::input::InputState,
+    input_state: InputState,
     finished_eyedropper: Vec<u64>,
     finished_ocr: Vec<u64>,
     finished_region_capture: Vec<u64>,
@@ -82,7 +87,7 @@ impl AcquisitionTransactionRuntime for TransactionRuntime {
         self.waiter_matches
     }
 
-    fn input_state(&mut self) -> &mut crate::input::InputState {
+    fn input_state(&mut self) -> &mut InputState {
         &mut self.input_state
     }
 
@@ -169,7 +174,7 @@ impl AcquisitionTransactionRuntime for TransactionRuntime {
     }
 
     fn take_frozen_capture_done(&mut self) -> bool {
-        std::mem::take(&mut self.capture_done)
+        mem::take(&mut self.capture_done)
     }
 
     fn frozen_suppressed(&self) -> bool {
@@ -256,7 +261,7 @@ fn region_capture_zoom_abort_and_deactivation_cancel_quietly() {
 fn specific_zoom_failure_report_replaces_the_owner_fallback() {
     let terminal = ZoomSourceTerminal::for_test(
         ZoomSourceOutcome::Failed("specific backend failure".to_string()),
-        Some(crate::backend::wayland::zoom::ZoomTerminalReport {
+        Some(ZoomTerminalReport {
             source: "zoom",
             message: "specific backend failure".to_string(),
         }),
@@ -434,13 +439,13 @@ fn ready_activation_rejection_releases_the_modal_owned_freeze_once() {
                 .input_state
                 .set_eyedropper_pending_capture(EyedropperCaptureSource::Frozen),
             ScreenAcquisitionOwner::Ocr => runtime.input_state.set_region_pending_capture(
-                crate::input::state::RegionPurposeTag::Ocr,
+                RegionPurposeTag::Ocr,
                 1,
                 ScreenCaptureSource::Frozen,
             ),
             ScreenAcquisitionOwner::RegionCapture => {
                 runtime.input_state.set_region_pending_capture(
-                    crate::input::state::RegionPurposeTag::CaptureDeliver,
+                    RegionPurposeTag::CaptureDeliver,
                     1,
                     ScreenCaptureSource::Frozen,
                 )

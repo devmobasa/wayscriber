@@ -1,3 +1,5 @@
+use crate::input::state::InputTextResources;
+
 use super::adapters;
 use super::outcome::{ActionRoute, RoutingOutcome};
 use crate::domain::Action;
@@ -190,7 +192,7 @@ pub(crate) fn classify_action(action: Action) -> ActionRoute {
 /// press, which is most of them, going around it.
 pub(crate) fn route_action_with_resources(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     action: Action,
 ) -> RoutingOutcome {
     // A wheel burst owns a snapshot from the frame where it started. Every

@@ -1,7 +1,7 @@
 use tokio::task;
 
 use crate::capture::types::CaptureError;
-use crate::process_broker::{HelperKind, current};
+use crate::process_broker::{BrokerOutput, HelperKind, current};
 use std::ffi::OsStr;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ fn run_helper(
     arguments: &[&str],
     timeout: Duration,
     output_cap: usize,
-) -> Result<crate::process_broker::BrokerOutput, CaptureError> {
+) -> Result<BrokerOutput, CaptureError> {
     current()
         .and_then(|broker| {
             broker.run(
@@ -256,6 +256,8 @@ fn active_window_geometry(json: &serde_json::Value) -> Result<String, CaptureErr
 
 #[cfg(test)]
 mod tests {
+    use crate::capture::CaptureFailureKind;
+
     use super::*;
 
     #[test]
@@ -284,7 +286,7 @@ mod tests {
 
         assert_eq!(
             error.failure_kind(),
-            crate::capture::CaptureFailureKind::MissingTool("grim")
+            CaptureFailureKind::MissingTool("grim")
         );
     }
 
@@ -294,10 +296,7 @@ mod tests {
 
         let error = helper_run_error("grim", &error);
 
-        assert_eq!(
-            error.failure_kind(),
-            crate::capture::CaptureFailureKind::Other
-        );
+        assert_eq!(error.failure_kind(), CaptureFailureKind::Other);
         assert!(error.to_string().contains("failed to run grim"));
     }
 

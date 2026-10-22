@@ -1,3 +1,5 @@
+use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Type;
+
 /// Physical tool types as defined by the zwp_tablet_tool_v2 protocol.
 ///
 /// See: https://wayland.app/protocols/tablet-v2#zwp_tablet_tool_v2:enum:type
@@ -62,16 +64,8 @@ impl TabletToolType {
     }
 }
 
-impl
-    From<
-        wayland_client::WEnum<wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Type>,
-    > for TabletToolType
-{
-    fn from(
-        tool_type: wayland_client::WEnum<
-            wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Type,
-        >,
-    ) -> Self {
+impl From<wayland_client::WEnum<Type>> for TabletToolType {
+    fn from(tool_type: wayland_client::WEnum<Type>) -> Self {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Type;
         let raw_value: u32 = match tool_type {
             wayland_client::WEnum::Value(v) => match v {

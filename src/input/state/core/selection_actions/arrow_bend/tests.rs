@@ -1,3 +1,9 @@
+use crate::config::Action;
+use crate::input::Key;
+use crate::input::state::core::properties::SelectionPropertyKind;
+use crate::ui::toolbar::ToolbarEvent;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::draw::Color;
 use crate::input::state::DrawingState;
@@ -8,7 +14,7 @@ use crate::input::state::test_support::make_test_input_state;
 /// `head_at_end` is true, so `(x2, y2)` is the tip and the tail-to-tip
 /// direction runs left to right — which is what the bend's sign is measured
 /// against.
-fn add_curved_arrow(state: &mut crate::input::InputState, bend: f64) -> crate::draw::ShapeId {
+fn add_curved_arrow(state: &mut InputState, bend: f64) -> ShapeId {
     state.boards.active_frame_mut().add_shape(Shape::Arrow {
         x1: 0,
         y1: 100,
@@ -97,14 +103,14 @@ fn handle_is_offered_only_for_a_single_unlocked_curved_arrow() {
 
 #[test]
 fn dragging_the_handle_bends_toward_the_pointer() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -129,14 +135,14 @@ fn dragging_the_handle_bends_toward_the_pointer() {
 
 #[test]
 fn dragging_along_the_chord_does_not_change_the_bend() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -161,14 +167,14 @@ fn dragging_along_the_chord_does_not_change_the_bend() {
 
 #[test]
 fn shift_snaps_the_bend_to_tenths() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -213,7 +219,7 @@ fn the_handle_follows_the_head_end() {
     );
 }
 
-fn arrow_bend(state: &crate::input::InputState, id: crate::draw::ShapeId) -> f64 {
+fn arrow_bend(state: &InputState, id: ShapeId) -> f64 {
     match &state.boards.active_frame().shape(id).expect("arrow").shape {
         Shape::Arrow { bend, .. } => *bend,
         other => panic!("expected arrow, got {other:?}"),
@@ -222,8 +228,8 @@ fn arrow_bend(state: &crate::input::InputState, id: crate::draw::ShapeId) -> f64
 
 #[test]
 fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -238,7 +244,7 @@ fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     let mut state = make_test_input_state();
     let id = add_curved_arrow(&mut state, 0.0);
     state.set_selection(vec![id]);
-    let before = crate::draw::frame::ShapeSnapshot {
+    let before = ShapeSnapshot {
         shape: state
             .boards
             .active_frame()
@@ -256,7 +262,7 @@ fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     let bent = arrow_bend(&state, id);
     assert!(bent.abs() > 0.1, "test setup should have bent the arrow");
 
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::CycleArrowStyle);
+    state.handle_action_with_resources(test_text_resources, Action::CycleArrowStyle);
 
     assert!(
         matches!(state.state, DrawingState::Idle),
@@ -268,15 +274,15 @@ fn restyling_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
 
     // Undo the restyle, then the bend, and the arrow is back where it started
     // with nothing in between that was never drawn.
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(arrow_style(&state, id), ArrowStyle::Curved);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(arrow_bend(&state, id), 0.0);
     assert_eq!(arrow_style(&state, id), ArrowStyle::Curved);
 }
 
-fn arrow_style(state: &crate::input::InputState, id: crate::draw::ShapeId) -> ArrowStyle {
+fn arrow_style(state: &InputState, id: ShapeId) -> ArrowStyle {
     match &state.boards.active_frame().shape(id).expect("arrow").shape {
         Shape::Arrow { style, .. } => *style,
         other => panic!("expected arrow, got {other:?}"),
@@ -285,8 +291,8 @@ fn arrow_style(state: &crate::input::InputState, id: crate::draw::ShapeId) -> Ar
 
 #[test]
 fn any_selection_property_change_ends_a_live_bend_first() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let route_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &route_measurer,
         ui_engine: &test_ui_engine,
@@ -302,7 +308,7 @@ fn any_selection_property_change_ends_a_live_bend_first() {
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -316,11 +322,7 @@ fn any_selection_property_change_ends_a_live_bend_first() {
     assert!(state.drag_arrow_bend_to_with(&route_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
 
-    state.adjust_selection_property_kind_with(
-        &route_measurer,
-        crate::input::state::core::properties::SelectionPropertyKind::Thickness,
-        1,
-    );
+    state.adjust_selection_property_kind_with(&route_measurer, SelectionPropertyKind::Thickness, 1);
 
     assert!(
         matches!(state.state, DrawingState::Idle),
@@ -328,14 +330,14 @@ fn any_selection_property_change_ends_a_live_bend_first() {
     );
     // Undoing the thickness change must leave the bend intact rather than
     // rolling the arrow back past a gesture that had already been committed.
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
 }
 
 #[test]
 fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -355,7 +357,7 @@ fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -370,7 +372,7 @@ fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     let bent = arrow_bend(&state, id);
     assert!(bent.abs() > 0.1, "test setup should have bent the arrow");
 
-    state.on_key_press(crate::input::Key::Right);
+    state.on_key_press(Key::Right);
 
     assert!(
         matches!(state.state, DrawingState::Idle),
@@ -379,15 +381,15 @@ fn a_nudge_key_mid_gesture_ends_the_bend_instead_of_stacking_on_it() {
     assert_eq!(state.boards.active_frame().undo_stack_len(), 2);
 
     // Undo the nudge, then the bend. Neither step may resurrect the other.
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert!((arrow_bend(&state, id) - bent).abs() < 1e-9);
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::Undo);
+    state.handle_action_with_resources(test_text_resources, Action::Undo);
     assert_eq!(arrow_bend(&state, id), 0.0);
 }
 
 #[test]
 fn escape_still_cancels_a_bend_rather_than_committing_it() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
+    let test_text_measurer = TextMeasurer::default();
 
     // `route_action` ends a live bend for every action except Exit, whose whole
     // job is to back out of the gesture. Committing first would leave Escape
@@ -398,7 +400,7 @@ fn escape_still_cancels_a_bend_rather_than_committing_it() {
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -411,7 +413,7 @@ fn escape_still_cancels_a_bend_rather_than_committing_it() {
     };
     assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
 
-    state.on_key_press(crate::input::Key::Escape);
+    state.on_key_press(Key::Escape);
 
     assert!(matches!(state.state, DrawingState::Idle));
     assert_eq!(arrow_bend(&state, id), 0.0, "Escape kept the bend");
@@ -448,8 +450,8 @@ fn an_action_with_no_bend_running_leaves_the_interaction_alone() {
 
 #[test]
 fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -464,7 +466,7 @@ fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
     state.set_selection(vec![id]);
     state.state = DrawingState::BendingArrow {
         shape_id: id,
-        snapshot: crate::draw::frame::ShapeSnapshot {
+        snapshot: ShapeSnapshot {
             shape: state
                 .boards
                 .active_frame()
@@ -478,7 +480,7 @@ fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
     assert!(state.drag_arrow_bend_to_with(&test_text_measurer, 200, 20, false));
     let bent = arrow_bend(&state, id);
 
-    state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::UndoAll);
+    state.apply_toolbar_event(ToolbarEvent::UndoAll);
 
     assert!(
         matches!(state.state, DrawingState::Idle),
@@ -486,7 +488,7 @@ fn a_toolbar_event_mid_gesture_ends_the_bend_before_it_can_lose_the_arrow() {
     );
     // The bend was recorded before Undo All ran, so it is on the stack to be
     // undone rather than lost with the shape.
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::RedoAll);
+    state.handle_action_with_resources(test_text_resources, Action::RedoAll);
     assert!(
         (arrow_bend(&state, id) - bent).abs() < 1e-9,
         "the bend was dropped instead of committed before the toolbar event"

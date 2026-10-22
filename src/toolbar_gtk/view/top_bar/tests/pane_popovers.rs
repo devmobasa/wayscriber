@@ -1,12 +1,19 @@
 //! Session, settings, and canvas pane assertions.
 
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+
+use crate::ui::theme::toolbar;
+use crate::ui::toolbar::SessionRecentSnapshot;
+use crate::ui_text::UiTextEngine;
+
 use super::super::{
     FeedbackSender, GtkToolbarFeedback, ToolbarEvent, ToolbarLayoutMode, ToolbarSnapshot, TopBar,
     Updater, model, plan_top_strip,
 };
 use super::widget_support::{collect_descendants, detach_test_popovers, find_widget_named};
-use crate::ui::toolbar::RuntimeUiPersistenceMode;
-use crate::ui::toolbar::RuntimeUiPersistenceSnapshot;
+use crate::ui::toolbar::{RuntimeUiPersistenceMode, RuntimeUiPersistenceSnapshot};
 use gtk4::prelude::*;
 use std::time::Duration;
 
@@ -15,20 +22,19 @@ pub(super) fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
     let mut session_snapshot = regular.clone();
     session_snapshot.session_popover_open = true;
     session_snapshot.active_session_name = Some("lecture.wayscriber-session".to_string());
-    session_snapshot.active_session_path =
-        Some(std::path::PathBuf::from("/tmp/lecture.wayscriber-session"));
-    session_snapshot.recent_sessions = vec![crate::ui::toolbar::SessionRecentSnapshot {
+    session_snapshot.active_session_path = Some(PathBuf::from("/tmp/lecture.wayscriber-session"));
+    session_snapshot.recent_sessions = vec![SessionRecentSnapshot {
         display_name: "recent-0.wayscriber-session".to_string(),
-        path: std::path::PathBuf::from("/tmp/recent-0.wayscriber-session"),
+        path: PathBuf::from("/tmp/recent-0.wayscriber-session"),
     }];
     session_snapshot.home_session_name = Some("home.wayscriber-session".to_string());
     session_snapshot.at_home_session = false;
-    let (tx, menu_rx) = std::sync::mpsc::channel();
+    let (tx, menu_rx) = mpsc::channel();
     let mut menu_top = TopBar::new_for_test(FeedbackSender::new(tx));
     // Building the strip creates the two overflow-anchored native popovers.
     menu_top.build_strip(
         &session_snapshot,
-        &plan_top_strip(&crate::ui_text::UiTextEngine::default(), &session_snapshot),
+        &plan_top_strip(&UiTextEngine::default(), &session_snapshot),
     );
     assert!(menu_top.session.mounted.is_some(), "session popover exists");
     assert!(
@@ -46,7 +52,7 @@ pub(super) fn assert_menu_popover_contracts(regular: &ToolbarSnapshot) {
 fn assert_session_popover_contract(
     top: &TopBar,
     snapshot: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let model = model::ToolbarSessionModel::for_popover(snapshot).expect("session model");
     let content = top.build_session_popover_content(snapshot, 1.0);
@@ -102,7 +108,7 @@ fn assert_session_popover_contract(
 fn assert_settings_popover_contract(
     top: &TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let mut snapshot = regular.clone();
     snapshot.layout_mode = ToolbarLayoutMode::Advanced;
@@ -133,7 +139,7 @@ fn assert_settings_toggle_contract(
     model: &model::ToolbarSettingsModel,
     panel: &gtk4::Widget,
     updaters: &[Updater],
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let mut checks: Vec<gtk4::CheckButton> = Vec::new();
     collect_descendants(panel, &mut checks);
@@ -173,7 +179,7 @@ fn assert_settings_button_contract(
     snapshot: &ToolbarSnapshot,
     model: &model::ToolbarSettingsModel,
     panel: &gtk4::Widget,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let mut buttons: Vec<gtk4::Button> = Vec::new();
     collect_descendants(panel, &mut buttons);
@@ -233,7 +239,7 @@ fn assert_settings_button_contract(
 fn assert_canvas_popover_contract(
     top: &TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     assert!(top.canvas.mounted.is_some(), "canvas popover exists");
     assert_canvas_command_sections(top, regular, rx);
@@ -244,7 +250,7 @@ fn assert_canvas_popover_contract(
 fn assert_canvas_command_sections(
     top: &TopBar,
     regular: &ToolbarSnapshot,
-    rx: &std::sync::mpsc::Receiver<GtkToolbarFeedback>,
+    rx: &Receiver<GtkToolbarFeedback>,
 ) {
     let mut snapshot = regular.clone();
     snapshot.canvas_popover_open = true;
@@ -257,10 +263,7 @@ fn assert_canvas_command_sections(
     let (content, _) = top.build_canvas_popover_content(&snapshot, 1.0);
     let panel =
         find_widget_named(&content, "top.menu.canvas.panel").expect("canvas popover panel box");
-    assert_eq!(
-        panel.width_request(),
-        crate::ui::theme::toolbar::CANVAS_MENU_CONTENT_W as i32
-    );
+    assert_eq!(panel.width_request(), toolbar::CANVAS_MENU_CONTENT_W as i32);
     assert_eq!(panel.margin_start(), 10);
     assert_eq!(panel.margin_end(), 10);
     let mut buttons: Vec<gtk4::Button> = Vec::new();

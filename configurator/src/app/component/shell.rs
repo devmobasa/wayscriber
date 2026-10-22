@@ -2,7 +2,10 @@ use relm4::{ComponentSender, adw, gtk};
 
 use adw::prelude::*;
 
+use gtk::gdk::{Key, ModifierType};
+use gtk::glib::Propagation;
 use wayscriber::i18n::{tr, trf};
+use wayscriber::{build_info, i18n};
 
 use crate::messages::Message;
 use crate::models::TabId;
@@ -39,7 +42,7 @@ pub(super) fn build(
         let sender = sender.clone();
         root.connect_close_request(move |_| {
             sender.input(Message::CloseRequested);
-            gtk::glib::Propagation::Stop
+            Propagation::Stop
         });
     }
     // ---- Sidebar ----------------------------------------------------
@@ -267,13 +270,11 @@ pub(super) fn build(
         // lets widgets such as SearchEntry perform their own Escape behavior.
         controller.set_propagation_phase(gtk::PropagationPhase::Capture);
         controller.connect_key_pressed(move |_, key, _, modifiers| {
-            if modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
-                && matches!(key, gtk::gdk::Key::f | gtk::gdk::Key::F)
-            {
+            if modifiers.contains(ModifierType::CONTROL_MASK) && matches!(key, Key::f | Key::F) {
                 sender.input(Message::SearchFocusRequested);
-                return gtk::glib::Propagation::Stop;
+                return Propagation::Stop;
             }
-            if key == gtk::gdk::Key::Escape {
+            if key == Key::Escape {
                 // The recorder owns Escape while it is open so a recorded
                 // Escape becomes a binding. Confirmation cancel is the
                 // fallback when nothing is recording.
@@ -281,10 +282,10 @@ pub(super) fn build(
             }
             // Tab is the user moving focus deliberately; a still-pending
             // startup search focus must not steal it back later.
-            if matches!(key, gtk::gdk::Key::Tab | gtk::gdk::Key::ISO_Left_Tab) {
+            if matches!(key, Key::Tab | Key::ISO_Left_Tab) {
                 sender.input(Message::StartupInteractionObserved);
             }
-            gtk::glib::Propagation::Proceed
+            Propagation::Proceed
         });
         root.add_controller(controller);
     }
@@ -325,7 +326,7 @@ pub(super) fn build(
         search_entry,
         seen_focus_serial: 0,
         bindings,
-        language: wayscriber::i18n::language(),
+        language: i18n::language(),
         chrome: Chrome {
             build_identity,
             content_page,
@@ -385,10 +386,7 @@ pub(super) fn retitle(widgets: &AppWidgets) {
     }
     chrome.build_identity.set_label(&trf(
         "Version {} · commit {}",
-        &[
-            &wayscriber::build_info::version(),
-            &wayscriber::build_info::commit_hash(),
-        ],
+        &[&build_info::version(), &build_info::commit_hash()],
     ));
     widgets
         .window_title

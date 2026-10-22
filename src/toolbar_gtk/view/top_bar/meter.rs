@@ -2,7 +2,18 @@
 //! button per level. Mirrors the builtin `view/top/meter.rs` slot for slot;
 //! the Pen feel panel lays the same bars across its wider column.
 
-use super::*;
+use gtk4::accessible::Property;
+use gtk4::glib::Propagation;
+
+use crate::toolbar_icons;
+
+use super::super::Updater;
+use super::{STYLE_CAPTION_W, STYLE_METER_W, STYLE_ROW_H, TopBar, set_semantic_widget_id};
+use crate::toolbar_gtk::widgets::{FeedbackSender, send_event, sized_button};
+use crate::ui::toolbar::{ToolbarSnapshot, model};
+use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Gap between neighbouring bars; matches the builtin painter's `BAR_GAP`.
 const METER_BAR_GAP: f64 = 3.0;
@@ -70,7 +81,7 @@ pub(super) fn append_meter_bars(
         if steps != 0 {
             send_event(&sender, setting.nudge_event(steps));
         }
-        gtk4::glib::Propagation::Stop
+        Propagation::Stop
     });
     row.add_controller(wheel);
 
@@ -95,7 +106,7 @@ pub(super) fn append_meter_bars(
                 bar.remove_css_class("filled");
             }
             bar.set_tooltip_text(Some(&segment.tooltip));
-            bar.update_property(&[gtk4::accessible::Property::Label(&segment.tooltip)]);
+            bar.update_property(&[Property::Label(&segment.tooltip)]);
             bar.set_sensitive(enabled);
         }
     };
@@ -127,7 +138,7 @@ pub(super) fn append_meter_zero(
         let (active, hover, enabled) = state.get();
         let _ = ctx.save();
         ctx.scale(scale, scale);
-        crate::toolbar_icons::draw_meter_dot(
+        toolbar_icons::draw_meter_dot(
             ctx,
             (3.0, 0.0, model::METER_ZERO_SLOT_W, row_h),
             active,
@@ -181,7 +192,7 @@ pub(super) fn append_meter_zero(
         area.queue_draw();
         let zero = setting.zero_segment(snapshot, &id_prefix);
         dot.set_tooltip_text(Some(&zero.tooltip));
-        dot.update_property(&[gtk4::accessible::Property::Label(&zero.tooltip)]);
+        dot.update_property(&[Property::Label(&zero.tooltip)]);
         dot.set_sensitive(enabled);
     }
 }
@@ -206,7 +217,7 @@ impl TopBar {
         // bars out abutting, and the width planner budgets exactly that.
         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         set_semantic_widget_id(&row, control.id().as_ref());
-        row.update_property(&[gtk4::accessible::Property::Label(&control.label(snapshot))]);
+        row.update_property(&[Property::Label(&control.label(snapshot))]);
         row.set_valign(gtk4::Align::Center);
         if let Some(caption) = control.caption() {
             let caption_label = gtk4::Label::new(Some(caption));

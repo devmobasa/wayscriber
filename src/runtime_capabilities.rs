@@ -11,6 +11,7 @@ pub struct RuntimeCapabilities {
     pub input_monitor: bool,
 }
 
+#[must_use]
 pub fn current_runtime_capabilities() -> RuntimeCapabilities {
     RuntimeCapabilities {
         portal: portal_runtime_supported(),
@@ -18,6 +19,7 @@ pub fn current_runtime_capabilities() -> RuntimeCapabilities {
     }
 }
 
+#[must_use]
 pub fn render_runtime_capabilities(capabilities: RuntimeCapabilities) -> String {
     format!(
         "portal={}\ninput_monitor={}\n",
@@ -30,11 +32,11 @@ pub fn parse_runtime_capabilities(output: &str) -> Result<RuntimeCapabilities, S
     // Older overlays predate the key; absence means "no system input capture"
     // rather than a malformed report, so the round trip stays compatible.
     let mut input_monitor = false;
-    for line in output
+    let non_empty_lines = output
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty())
-    {
+        .filter(|line| !line.is_empty());
+    for line in non_empty_lines {
         let Some((key, value)) = line.split_once('=') else {
             return Err(format!("Invalid runtime capability line: {line}"));
         };

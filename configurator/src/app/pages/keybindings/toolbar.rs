@@ -2,7 +2,8 @@
 
 use wayscriber::i18n::{tr, trf};
 
-use relm4::{gtk, prelude::*};
+use relm4::gtk;
+use relm4::prelude::*;
 
 use gtk::prelude::*;
 
@@ -138,7 +139,7 @@ fn actions_bar(
     row.append(&reset_all);
     row.append(&review);
 
-    let sort_for_bind = sort.clone();
+    let sort_for_bind = sort;
     bindings.push(Box::new(move |app, _summary| {
         let selected = ShortcutManagerSort::ALL
             .iter()

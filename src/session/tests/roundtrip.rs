@@ -1,3 +1,5 @@
+use crate::{session, test_temp};
+
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::{Color, FontDescriptor, Frame, Shape};
@@ -7,7 +9,7 @@ use std::fs;
 
 #[test]
 fn session_roundtrip_preserves_shapes_across_frames() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-2");
     options.persist_transparent = true;
     options.persist_whiteboard = true;
@@ -88,7 +90,7 @@ fn session_roundtrip_preserves_pages_beyond_visible_shortcuts() {
     const PAGE_COUNT: usize = 12;
     const ACTIVE_PAGE: usize = 10;
 
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-many-pages");
     options.persist_whiteboard = true;
 
@@ -141,7 +143,7 @@ fn session_roundtrip_preserves_pages_beyond_visible_shortcuts() {
 
 #[test]
 fn save_snapshot_rotates_backup_when_enabled() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-backup");
     options.persist_transparent = true;
     options.backup_retention = 1;
@@ -188,7 +190,7 @@ fn save_snapshot_rotates_backup_when_enabled() {
 
 #[test]
 fn save_snapshot_skips_backup_when_disabled() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-no-backup");
     options.persist_transparent = true;
     options.backup_retention = 0;
@@ -233,7 +235,7 @@ fn save_snapshot_skips_backup_when_disabled() {
 
 #[test]
 fn corrupt_session_is_backed_up_and_reset() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-bad");
     options.persist_transparent = true;
 
@@ -243,7 +245,7 @@ fn corrupt_session_is_backed_up_and_reset() {
     let loaded = load_snapshot(&options).expect("load should not error");
     assert!(loaded.is_none());
 
-    let copy = crate::session::append_path_suffix(&session_path, ".corrupt-1");
+    let copy = session::append_path_suffix(&session_path, ".corrupt-1");
     assert_eq!(fs::read(copy).expect("corrupt copy present"), b"not json");
     assert!(!options.backup_file_path().exists());
     assert!(

@@ -1,8 +1,11 @@
+use gtk4::gio::Menu;
+
+use crate::ui::theme::css::GtkStylesheetValues;
+
 use super::support::*;
+use crate::toolbar_gtk::view::capture_suppression::TooltipCapture;
 use crate::toolbar_gtk::view::top_bar::popovers::set_popover_capture_transparent;
-use crate::toolbar_gtk::view::{
-    CaptureProofTarget, CaptureSurfaceContent, capture_suppression::TooltipCapture,
-};
+use crate::toolbar_gtk::view::{CaptureProofTarget, CaptureSurfaceContent};
 use gtk4::prelude::*;
 
 fn anchor() -> (gtk4::Window, gtk4::Button) {
@@ -21,7 +24,7 @@ fn anchor() -> (gtk4::Window, gtk4::Button) {
 }
 
 pub(super) fn popup(user: &gtk4::CssProvider, case: &str) {
-    let values = crate::ui::theme::css::GtkStylesheetValues::new(1.0);
+    let values = GtkStylesheetValues::new(1.0);
     let shadow = match case {
         "popup-none" => "none".to_string(),
         "popup-small" => "0 1px 2px #58c0e8".to_string(),
@@ -49,10 +52,10 @@ pub(super) fn popup(user: &gtk4::CssProvider, case: &str) {
     // Shadow overrides are deliberately ignored in normal and capture modes.
     // Assert the policy before capture too, including smaller/absent shadows:
     // changing extents at capture time would withdraw this native surface.
-    user.load_from_string(
-        &(painted_css("popover, popover > contents, popover > arrow", "none")
-            + &format!("popover > contents {{ box-shadow: {shadow}; }}")),
-    );
+    user.load_from_string(&format!(
+        "{}popover > contents {{ box-shadow: {shadow}; }}",
+        painted_css("popover, popover > contents, popover > arrow", "none")
+    ));
     wait_for_frame(&popup);
     assert_eq!(
         native_size(&popup),
@@ -178,8 +181,10 @@ fn menu_css(case: &str) -> String {
         "menu" | "menu-decorated" => {
             // Preserve the adversarial fixtures that paint every GTK-owned
             // intermediary and explicitly zero the scrollbar's theme metrics.
-            let mut css = painted_css("popover, popover *", "none")
-                + "popover scrollbar, popover scrollbar * { min-width: 0; min-height: 0; padding: 0; margin: 0; }";
+            let mut css = painted_css("popover, popover *", "none");
+            css.push_str(
+                "popover scrollbar, popover scrollbar * { min-width: 0; min-height: 0; padding: 0; margin: 0; }",
+            );
             if case == "menu-decorated" {
                 css += "popover scrolledwindow { padding: 4px; margin: 2px; }";
             }
@@ -190,7 +195,7 @@ fn menu_css(case: &str) -> String {
 }
 
 fn menu_widget(anchor: &gtk4::Button, decorated: bool, long: bool) -> gtk4::PopoverMenu {
-    let model = gtk4::gio::Menu::new();
+    let model = Menu::new();
     if long {
         for item in 0..60 {
             model.append(Some(&format!("Copy item {item}")), Some("clipboard.copy"));

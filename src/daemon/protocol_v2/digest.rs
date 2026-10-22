@@ -41,7 +41,7 @@ mod tests {
             .0
             .iter()
             .map(|pair| {
-                let pair = std::str::from_utf8(pair).unwrap();
+                let pair = str::from_utf8(pair).unwrap();
                 u8::from_str_radix(pair, 16).unwrap()
             })
             .collect()

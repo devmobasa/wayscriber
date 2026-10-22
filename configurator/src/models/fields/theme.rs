@@ -1,6 +1,10 @@
+use std::fmt::{Display, Formatter};
+use std::{fmt, iter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{Language, ReducedMotion, UiTheme};
+use wayscriber::i18n;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiThemeOption {
@@ -43,8 +47,8 @@ impl UiThemeOption {
     }
 }
 
-impl std::fmt::Display for UiThemeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for UiThemeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -90,8 +94,8 @@ impl ReducedMotionOption {
     }
 }
 
-impl std::fmt::Display for ReducedMotionOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ReducedMotionOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -130,8 +134,8 @@ impl LanguageOption {
     /// language, then in each other supported language (`语言 / Language`),
     /// so a user who cannot read the interface still recognizes the row.
     pub fn row_title() -> String {
-        let active = wayscriber::i18n::language();
-        std::iter::once(active)
+        let active = i18n::language();
+        iter::once(active)
             .chain(
                 Language::ALL
                     .into_iter()
@@ -159,8 +163,8 @@ impl LanguageOption {
     }
 }
 
-impl std::fmt::Display for LanguageOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for LanguageOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

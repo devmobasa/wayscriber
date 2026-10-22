@@ -96,7 +96,8 @@ impl LocalFiles {
     fn parse(gitignore: &str) -> Self {
         let mut local = Self::default();
 
-        for line in gitignore.lines().map(str::trim) {
+        let trimmed_lines = gitignore.lines().map(str::trim);
+        for line in trimmed_lines {
             if let Some(included) = line.strip_prefix('!') {
                 let path = included.trim_start_matches('/');
                 if !path.is_empty() && !path.ends_with('/') && !path.contains(['*', '?', '[', '\\'])
@@ -233,7 +234,7 @@ fn audit(entries: &BTreeMap<PathBuf, Entry>) -> Vec<String> {
             continue;
         }
 
-        let Ok(text) = std::str::from_utf8(bytes) else {
+        let Ok(text) = str::from_utf8(bytes) else {
             // An extensionless file may be binary; a source file must be text.
             if path.extension().is_some() {
                 failures.push(format!("{shown}: not UTF-8"));

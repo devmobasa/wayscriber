@@ -1,8 +1,6 @@
 use smithay_client_toolkit::compositor::CompositorHandler;
-use wayland_client::{
-    Connection, QueueHandle,
-    protocol::{wl_output, wl_surface},
-};
+use wayland_client::protocol::{wl_output, wl_surface};
+use wayland_client::{Connection, QueueHandle};
 
 use super::super::AboutWindowState;
 

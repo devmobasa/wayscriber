@@ -1,17 +1,18 @@
 use log::{debug, info};
+use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::ZwpTabletToolV2;
 
 use crate::backend::wayland::toolbar_intent::intent_to_event;
-use crate::{
-    input::{DrawingState, EraserMode, Tool},
-    util::Rect,
-};
+use crate::input::{DrawingState, EraserMode, Tool};
+use crate::util::Rect;
 
-use crate::backend::wayland::{
-    handlers::route::InputSurface,
-    state::{ContactOwner, RegionReviewPress, ReleaseRoute, StylusMotionRoute, WaylandState},
+use crate::backend::wayland::TabletToolType;
+use crate::backend::wayland::handlers::route::InputSurface;
+use crate::backend::wayland::state::{
+    ContactOwner, RegionReviewPress, ReleaseRoute, StylusMotionRoute, WaylandState,
 };
+use crate::input::InputState;
 use crate::input::state::RegionInputSource;
 
 const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
@@ -33,11 +34,7 @@ const STYLUS_CURSOR_DAMAGE_RADIUS: i32 = 64;
 /// of the tip and motion guards: a stroke begun while a capture is still pending
 /// is a real stroke and keeps its pressure. The retired term is what stops that
 /// allowance from also readmitting the contact the modal already took over.
-fn drop_stylus_pressure(
-    on_overlay: bool,
-    contact_retired: bool,
-    input_state: &crate::input::InputState,
-) -> bool {
+fn drop_stylus_pressure(on_overlay: bool, contact_retired: bool, input_state: &InputState) -> bool {
     !on_overlay || contact_retired || input_state.screen_modal_is_active()
 }
 impl WaylandState {
@@ -123,11 +120,7 @@ fn stylus_cursor_damage_rect(pos: (f64, f64), width: i32, height: i32) -> Option
 }
 
 impl WaylandState {
-    fn handle_stylus_proximity_in(
-        &mut self,
-        proxy: &ZwpTabletToolV2,
-        surface: wayland_client::protocol::wl_surface::WlSurface,
-    ) {
+    fn handle_stylus_proximity_in(&mut self, proxy: &ZwpTabletToolV2, surface: WlSurface) {
         let tool_id = proxy.id();
         let tool_type = self.tablet.tool_types.get(&tool_id).copied();
         debug!(
@@ -158,10 +151,7 @@ impl WaylandState {
         }
     }
 
-    fn auto_switch_physical_eraser(
-        &mut self,
-        tool_type: Option<crate::backend::wayland::TabletToolType>,
-    ) {
+    fn auto_switch_physical_eraser(&mut self, tool_type: Option<TabletToolType>) {
         if !self.config.tablet.auto_eraser_switch
             || !tool_type.is_some_and(|tool_type| tool_type.is_eraser())
             || self.input_state.active_tool() == Tool::Eraser

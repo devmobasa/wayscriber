@@ -35,6 +35,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use wayscriber::domain::Language;
+use wayscriber::i18n;
+
 use crate::source::{Tree, files_under, is_word_char, line_of, mask_non_code, repository_root};
 use wayscriber::config::{action_display_label, action_meta_iter};
 
@@ -536,8 +539,8 @@ fn check_entry(failures: &mut Vec<String>, catalogs: &Catalogs, source: &str, wh
 /// draws English source text.
 fn action_meta_strings() -> BTreeMap<String, BTreeSet<String>> {
     assert_eq!(
-        wayscriber::i18n::language(),
-        wayscriber::domain::Language::English,
+        i18n::language(),
+        Language::English,
         "the guard reads source text; nothing in this process may select a language"
     );
     let mut strings: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();

@@ -5,13 +5,20 @@
 //! OCR releases, and a user-owned freeze or zoom survives untouched. Nothing
 //! here mutates annotations, history, boards, sessions, or the active tool.
 
+use std::time::{Duration, Instant};
+
 use crate::backend::wayland::acquisition::{ScreenAcquisitionOutcome, ScreenAcquisitionOwner};
+use crate::backend::wayland::state::screen_image;
 use crate::backend::wayland::zoom::ZoomWaiterOwner;
-use crate::input::state::OcrScanOutcome;
+use crate::config::Action;
 use crate::input::state::{
-    RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority,
+    OcrScanOutcome, RegionInputSource, RegionPurposeTag, ScreenCaptureSource, Toast, ToastPriority,
 };
-use crate::ocr::{OcrFailure, OcrLanguages, OcrPoll, OcrRequest, OcrSubmitError, OcrSuccess};
+use crate::ocr::{
+    OcrFailure, OcrLanguages, OcrPoll, OcrRequest, OcrRequestId, OcrSubmitError, OcrSuccess,
+};
+use crate::screen_pixels::{ImagePixelRect, PackedArgb32};
+use crate::ui;
 
 use super::WaylandState;
 use super::acquisition::report_screen_source_activation_rejected_to;
@@ -19,8 +26,8 @@ use super::region_capture::{
     ActiveScreenRegion, FreezeOwnership, RegionOwnerLoss, RegionSelectionFinalize,
 };
 use super::screen_image::{
-    CropError, DisplayedScreenImage, ScreenSourceEntry, copy_image_rect, displayed_screen_image,
-    screen_source_entry,
+    CropError, DisplayedScreenImage, ScreenSourceConditions, ScreenSourceEntry, copy_image_rect,
+    displayed_screen_image, screen_source_entry,
 };
 use crate::i18n::tr;
 
@@ -95,13 +102,13 @@ impl WaylandState {
         self.retire_stylus_contact();
 
         let generation = self.region_capture.next_generation();
-        match screen_source_entry(
-            self.ocr_screen_source().is_some(),
-            self.input_state.board_is_transparent(),
-            self.zoom.is_engaged(),
-            self.zoom.active,
-            self.frozen.enabled(),
-        ) {
+        match screen_source_entry(ScreenSourceConditions {
+            has_source: self.ocr_screen_source().is_some(),
+            board_is_transparent: self.input_state.board_is_transparent(),
+            zoom_engaged: self.zoom.is_engaged(),
+            zoom_active: self.zoom.active,
+            frozen_enabled: self.frozen.enabled(),
+        }) {
             ScreenSourceEntry::Activate => {
                 if !self.activate_ocr_selector(generation, FreezeOwnership::PreExisting) {
                     self.clear_screen_region_ui_only();
@@ -136,10 +143,8 @@ impl WaylandState {
                 self.input_state.push_toast(
                     ToastPriority::Action,
                     TOAST_SOURCE,
-                    Toast::info(tr("OCR needs a visible screen image.")).action(
-                        "Switch to transparent",
-                        crate::config::Action::ReturnToTransparent,
-                    ),
+                    Toast::info(tr("OCR needs a visible screen image."))
+                        .action("Switch to transparent", Action::ReturnToTransparent),
                 );
             }
             ScreenSourceEntry::CaptureUnavailable => {
@@ -287,7 +292,10 @@ impl WaylandState {
             RegionOwnerLoss::Cancel(RegionPurposeTag::Ocr) => self.cancel_ocr(),
             RegionOwnerLoss::Cancel(RegionPurposeTag::Measure) => self.cancel_measure_mode(),
             RegionOwnerLoss::Cancel(purpose) => {
-                debug_assert!(purpose.is_capture());
+                debug_assert!(
+                    purpose.is_capture(),
+                    "OCR and measure regions are cancelled above, got {purpose:?}"
+                );
                 self.cancel_region_capture()
             }
         }
@@ -347,10 +355,7 @@ impl WaylandState {
     }
 
     /// Recognize an already-chosen rectangle — the whole image, from `Ctrl+A`.
-    pub(in crate::backend::wayland) fn submit_whole_image_ocr(
-        &mut self,
-        rect: crate::screen_pixels::ImagePixelRect,
-    ) {
+    pub(in crate::backend::wayland) fn submit_whole_image_ocr(&mut self, rect: ImagePixelRect) {
         self.submit_ocr_for_rect(rect);
     }
 
@@ -358,15 +363,13 @@ impl WaylandState {
     /// area the sweep will cover, crop while the source is still held, release
     /// it, submit, and start the overlay. Both entry points share it so a fix
     /// to one cannot leave the other behind.
-    fn submit_ocr_for_rect(&mut self, rect: crate::screen_pixels::ImagePixelRect) {
+    fn submit_ocr_for_rect(&mut self, rect: ImagePixelRect) {
         // Mapped before the region is released: the token is what turns the
         // authoritative image rectangle into the surface pixels the sweep is
         // painted over.
         let scan_region = match self.region_capture.active() {
             Some(ActiveScreenRegion::Ready { source, .. }) => {
-                crate::backend::wayland::state::screen_image::screen_rect_for_image_rect(
-                    &source, rect,
-                )
+                screen_image::screen_rect_for_image_rect(&source, rect)
             }
             _ => None,
         };
@@ -390,15 +393,11 @@ impl WaylandState {
             return;
         };
         if let Some(region) = scan_region {
-            self.input_state
-                .begin_ocr_scan(id, region, std::time::Instant::now());
+            self.input_state.begin_ocr_scan(id, region, Instant::now());
         }
     }
 
-    fn crop_ocr_selection(
-        &self,
-        rect: crate::screen_pixels::ImagePixelRect,
-    ) -> Result<crate::screen_pixels::PackedArgb32, &'static str> {
+    fn crop_ocr_selection(&self, rect: ImagePixelRect) -> Result<PackedArgb32, &'static str> {
         let Some(source) = self.ocr_screen_source() else {
             return Err(tr(
                 "The screen image for text recognition is no longer available.",
@@ -412,10 +411,7 @@ impl WaylandState {
 
     /// Hand the crop to the worker, reporting the accepted request. `None`
     /// means nothing is running and no completion will arrive.
-    fn submit_ocr_request(
-        &mut self,
-        pixels: crate::screen_pixels::PackedArgb32,
-    ) -> Option<crate::ocr::OcrRequestId> {
+    fn submit_ocr_request(&mut self, pixels: PackedArgb32) -> Option<OcrRequestId> {
         let languages = OcrLanguages::from_validated(self.config.capture.resolved_ocr_languages());
         log::debug!(
             "OCR submitting {}x{} crop for languages {}",
@@ -427,10 +423,8 @@ impl WaylandState {
             Ok(id) => {
                 // wl-copy needs the overlay to stay alive long enough to serve
                 // the selection it publishes.
-                self.focus.suppress_exit_for(
-                    std::time::Instant::now(),
-                    std::time::Duration::from_millis(1500),
-                );
+                self.focus
+                    .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
                 log::debug!("OCR request {id} started");
                 Some(id)
             }
@@ -474,7 +468,7 @@ impl WaylandState {
                         character_count,
                         replaced_invalid_utf8,
                     },
-                    std::time::Instant::now(),
+                    Instant::now(),
                 );
                 let message = if replaced_invalid_utf8 {
                     tr("Text copied (some characters were unreadable)")
@@ -491,11 +485,8 @@ impl WaylandState {
                 id,
                 outcome: Ok(OcrSuccess::NoTextFound),
             } => {
-                self.input_state.settle_ocr_scan(
-                    id,
-                    OcrScanOutcome::NoTextFound,
-                    std::time::Instant::now(),
-                );
+                self.input_state
+                    .settle_ocr_scan(id, OcrScanOutcome::NoTextFound, Instant::now());
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     TOAST_SOURCE,
@@ -507,11 +498,8 @@ impl WaylandState {
                 outcome: Err(failure),
             } => {
                 log::warn!("OCR request {id} failed: {failure:?}");
-                self.input_state.settle_ocr_scan(
-                    id,
-                    OcrScanOutcome::Failed,
-                    std::time::Instant::now(),
-                );
+                self.input_state
+                    .settle_ocr_scan(id, OcrScanOutcome::Failed, Instant::now());
                 let toast = match failure {
                     OcrFailure::EngineMissing | OcrFailure::LanguageMissing { .. } => {
                         Toast::warning(failure.message())
@@ -523,11 +511,8 @@ impl WaylandState {
             }
             OcrPoll::WorkerLost { id, reason } => {
                 log::error!("OCR request {id} lost its worker: {reason}");
-                self.input_state.settle_ocr_scan(
-                    id,
-                    OcrScanOutcome::Failed,
-                    std::time::Instant::now(),
-                );
+                self.input_state
+                    .settle_ocr_scan(id, OcrScanOutcome::Failed, Instant::now());
                 self.input_state.push_toast(
                     ToastPriority::Critical,
                     TOAST_SOURCE,
@@ -581,11 +566,11 @@ impl WaylandState {
         // reuses the same strip, honours the same `show_legend` setting, and
         // dismisses on the first drag through the shared selector state.
         if self.config.capture.region.show_legend && !self.region_picker_legend_dismissed() {
-            crate::ui::render_region_legend(
+            ui::render_region_legend(
                 self.render.ui_text(),
                 ctx,
                 (screen_width, screen_height),
-                crate::ui::OCR_LEGEND_TEXT,
+                ui::OCR_LEGEND_TEXT,
             );
         }
         let _ = ctx.restore();

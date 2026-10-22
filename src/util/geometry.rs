@@ -32,6 +32,7 @@ pub struct Rect {
 
 impl Rect {
     /// Creates a new rectangle. Width/height must be non-negative.
+    #[must_use]
     pub fn new(x: i32, y: i32, width: i32, height: i32) -> Option<Self> {
         if width <= 0 || height <= 0 {
             None
@@ -46,6 +47,7 @@ impl Rect {
     }
 
     /// Builds a rectangle from min/max bounds (inclusive min, exclusive max).
+    #[must_use]
     pub fn from_min_max(min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Option<Self> {
         let width = i32::try_from(i64::from(max_x) - i64::from(min_x)).ok()?;
         let height = i32::try_from(i64::from(max_y) - i64::from(min_y)).ok()?;
@@ -53,6 +55,7 @@ impl Rect {
     }
 
     /// Returns true if rectangle has a positive area.
+    #[must_use]
     pub fn is_valid(&self) -> bool {
         self.width > 0 && self.height > 0
     }
@@ -73,6 +76,7 @@ impl Rect {
     }
 
     /// Returns true if the point lies within the rectangle (inclusive of min, exclusive of max).
+    #[must_use]
     pub fn contains(&self, x: i32, y: i32) -> bool {
         let x = i64::from(x);
         let y = i64::from(y);
@@ -85,6 +89,7 @@ impl Rect {
     }
 
     /// Returns a new rectangle inflated by `amount` in all directions.
+    #[must_use]
     pub fn inflated(&self, amount: i32) -> Option<Self> {
         if !self.is_valid() {
             return None;
@@ -117,6 +122,7 @@ impl Rect {
 /// - `cx`, `cy` = center point coordinates
 /// - `rx` = horizontal radius (half width)
 /// - `ry` = vertical radius (half height)
+#[must_use]
 pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32) {
     let (cx, rx) = ellipse_axis_bounds(x1, x2);
     let (cy, ry) = ellipse_axis_bounds(y1, y2);

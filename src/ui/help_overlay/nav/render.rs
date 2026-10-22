@@ -1,7 +1,7 @@
 use crate::i18n::tr;
 use crate::ui::primitives::draw_rounded_rect;
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::UiTextStyle;
+use crate::ui_text::{UiTextEngine, UiTextStyle};
 
 use super::super::search::{draw_segmented_text, ellipsize_to_fit_with_engine};
 use super::NavState;
@@ -10,8 +10,8 @@ use super::NavState;
 /// shadow token, but semantically an input well, so it stays file-local.
 const SEARCH_BOX_BG: Rgba = (0.0, 0.0, 0.0, 0.3);
 
-pub(crate) struct NavDrawStyle<'a> {
-    pub(crate) font_family: &'a str,
+pub(crate) struct NavDrawStyle<'font> {
+    pub(crate) font_family: &'font str,
     pub(crate) subtitle_color: [f64; 4],
     pub(crate) search_color: [f64; 4],
     pub(crate) nav_line_gap: f64,
@@ -29,7 +29,7 @@ pub(crate) struct NavRender {
 }
 
 pub(crate) fn draw_nav(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     inner_x: f64,
     mut cursor_y: f64,

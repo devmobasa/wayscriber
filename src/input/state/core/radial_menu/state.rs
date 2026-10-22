@@ -1,10 +1,15 @@
 use std::time::{Duration, Instant};
 
+use crate::draw::TextMeasurer;
+use crate::input::state::InputTextResources;
+use crate::input::state::core::modal::ModalSurface;
+use crate::ui_text::UiTextEngine;
+
 use super::layout::CENTER_RADIUS;
 use super::size_ring::size_ring_value_for_angle;
-use super::{RadialMenuState, RadialRingSwatch, RadialSegmentId};
 use super::{
-    RadialSliceKind, compass_slice, slice_parent, sub_ring_child_count, sub_ring_children,
+    RadialMenuState, RadialRingSwatch, RadialSegmentId, RadialSliceKind, compass_slice,
+    slice_parent, sub_ring_child_count, sub_ring_children,
 };
 use crate::input::events::MouseButton;
 use crate::input::state::InputState;
@@ -16,7 +21,7 @@ impl InputState {
     }
 
     fn open_radial_menu_internal(&mut self, x: f64, y: f64, track_usage: bool) {
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::RadialMenu);
+        self.close_modals_for_open(ModalSurface::RadialMenu);
 
         self.radial_menu.open(x, y, Instant::now());
         if track_usage {
@@ -139,8 +144,8 @@ impl InputState {
 
     /// Select the currently hovered segment and close the menu.
     pub fn radial_menu_select_hovered(&mut self) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.radial_menu_select_hovered_with_resources(crate::input::state::InputTextResources {
             measurer: &measurer,
             ui_engine: &ui_engine,
@@ -149,7 +154,7 @@ impl InputState {
 
     pub(crate) fn radial_menu_select_hovered_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
     ) {
         let hover = match &self.radial_menu.state {
             RadialMenuState::Open { hover, .. } => *hover,
@@ -185,13 +190,13 @@ impl InputState {
 
     /// Adjust thickness via scroll wheel while the menu is open.
     pub fn radial_menu_adjust_thickness(&mut self, delta: f64) -> bool {
-        let measurer = crate::draw::TextMeasurer::default();
+        let measurer = TextMeasurer::default();
         self.radial_menu_adjust_thickness_with_measurer(&measurer, delta)
     }
 
     pub(crate) fn radial_menu_adjust_thickness_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         delta: f64,
     ) -> bool {
         if !self.nudge_thickness_for_active_tool_with(measurer, delta) {
@@ -224,7 +229,7 @@ impl InputState {
     /// (click-to-open browsing).
     pub(crate) fn radial_menu_handle_release_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         button: MouseButton,
         x: f64,
         y: f64,
@@ -323,7 +328,7 @@ impl InputState {
     /// value immediately).
     pub(crate) fn radial_menu_begin_size_drag_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: f64,
         y: f64,
     ) {
@@ -335,7 +340,7 @@ impl InputState {
     /// it to the active tool, regardless of pointer distance.
     pub(crate) fn radial_menu_drag_size_to_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: f64,
         y: f64,
     ) {
@@ -404,11 +409,7 @@ impl InputState {
     // never behave differently from the same action fired by a keybinding
     // or the toolbar.
 
-    fn dispatch_tool_segment_with_resources(
-        &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
-        idx: u8,
-    ) {
+    fn dispatch_tool_segment_with_resources(&mut self, resources: InputTextResources<'_>, idx: u8) {
         if let Some(slice) = compass_slice(idx)
             && let RadialSliceKind::Action(action) = slice.kind
         {
@@ -418,7 +419,7 @@ impl InputState {
 
     fn dispatch_sub_tool_segment_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         parent: u8,
         child: u8,
     ) {
@@ -427,11 +428,7 @@ impl InputState {
         }
     }
 
-    fn dispatch_color_segment_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-        idx: u8,
-    ) {
+    fn dispatch_color_segment_with_measurer(&mut self, measurer: &TextMeasurer, idx: u8) {
         if let Some(swatch) = self.radial_ring_swatches().get(idx as usize) {
             self.apply_color_from_ui_with_measurer(measurer, swatch.color);
         }

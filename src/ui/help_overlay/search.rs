@@ -13,7 +13,9 @@ pub(crate) use crate::ui::text_highlight::{
 };
 // Measured trimming lives with the other shared text primitives so surfaces
 // outside this overlay (the color picker's title) use the same implementation.
+use crate::config;
 pub(crate) use crate::ui::primitives::ellipsize_to_fit_with_engine;
+use crate::ui_text::UiTextEngine;
 
 /// Fuzzy row match: every query token must fuzzy-match the shortcut string
 /// (`key`), the visible action description, or — for rows that carry an action
@@ -30,7 +32,7 @@ pub(crate) fn row_matches(row: &Row, needle_lower: &str) -> bool {
     if tokens.is_empty() {
         return false;
     }
-    let meta = row.action_id.and_then(crate::config::action_meta);
+    let meta = row.action_id.and_then(config::action_meta);
     let key_names = canonical_key_names(&row.key);
     tokens.iter().all(|token| {
         fuzzy_score(token, &row.key) > 0
@@ -53,7 +55,7 @@ pub(crate) fn title_matches(title: &str, needle_lower: &str) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn draw_segmented_text(
-    engine: &crate::ui_text::UiTextEngine,
+    engine: &UiTextEngine,
     ctx: &cairo::Context,
     x: f64,
     baseline: f64,

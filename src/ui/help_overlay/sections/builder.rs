@@ -17,20 +17,24 @@ pub(crate) struct SectionSets {
     pub(crate) quick: Vec<Section>,
 }
 
+/// Runtime capabilities and filtering that decide which help rows exist.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct HelpContentOptions {
+    /// Frozen mode is available, so its toggle is listed.
+    pub frozen_enabled: bool,
+    /// Hide sections for features this runtime does not offer.
+    pub context_filter: bool,
+    /// Board shortcuts apply because more than one board exists.
+    pub board_enabled: bool,
+    /// Screen capture is enabled, so screenshot shortcuts apply.
+    pub capture_enabled: bool,
+}
+
 pub(crate) fn build_section_sets(
     bindings: &HelpOverlayBindings,
-    frozen_enabled: bool,
-    context_filter: bool,
-    board_enabled: bool,
-    capture_enabled: bool,
+    options: HelpContentOptions,
 ) -> SectionSets {
-    let mut sections = build_main_sections(
-        bindings,
-        frozen_enabled,
-        context_filter,
-        board_enabled,
-        capture_enabled,
-    );
+    let mut sections = build_main_sections(bindings, options);
 
     let mut all_sections = vec![
         sections.drawing.clone(),

@@ -3,17 +3,22 @@ pub(in crate::input::state) mod caret_edit;
 mod panels;
 mod text_input;
 
+use std::time::Instant;
+
+use crate::draw::TextMeasurer;
 use crate::input::Modifiers;
 use crate::input::events::Key;
+use crate::input::state::InputTextResources;
+use crate::ui_text::UiTextEngine;
 
 use super::super::{InputState, interaction};
 
 impl InputState {
-    pub(crate) fn note_escape_dismissal(&mut self, now: std::time::Instant) {
+    pub(crate) fn note_escape_dismissal(&mut self, now: Instant) {
         self.keymap.note_escape_dismissal(now);
     }
 
-    pub(crate) fn suppress_escape_after_dismissal(&self, now: std::time::Instant) -> bool {
+    pub(crate) fn suppress_escape_after_dismissal(&self, now: Instant) -> bool {
         self.keymap.suppress_escape_after_dismissal(now)
     }
 
@@ -41,8 +46,8 @@ impl InputState {
     /// - Help toggle (configurable)
     /// - Modifier key tracking
     pub fn on_key_press(&mut self, key: Key) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.on_key_press_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -54,7 +59,7 @@ impl InputState {
 
     pub(crate) fn on_key_press_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) {
         self.note_session_interaction_activity();
@@ -63,8 +68,8 @@ impl InputState {
     }
 
     pub fn on_key_repeat(&mut self, key: Key) {
-        let measurer = crate::draw::TextMeasurer::default();
-        let ui_engine = crate::ui_text::UiTextEngine::default();
+        let measurer = TextMeasurer::default();
+        let ui_engine = UiTextEngine::default();
         self.on_key_repeat_with_resources(
             crate::input::state::InputTextResources {
                 measurer: &measurer,
@@ -76,7 +81,7 @@ impl InputState {
 
     pub(crate) fn on_key_repeat_with_resources(
         &mut self,
-        resources: crate::input::state::InputTextResources<'_>,
+        resources: InputTextResources<'_>,
         key: Key,
     ) {
         self.note_session_interaction_activity();

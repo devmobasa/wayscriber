@@ -1,6 +1,8 @@
-use crate::draw::Shape;
+use std::mem;
+
 use crate::draw::frame::UndoAction;
 use crate::draw::shape::{PolygonKind, has_minimum_distinct_points};
+use crate::draw::{Shape, TextMeasurer};
 use crate::i18n::tr;
 use crate::input::Tool;
 use crate::input::state::{Toast, ToastPriority};
@@ -12,7 +14,7 @@ use super::super::{TEXT_DOUBLE_CLICK_DISTANCE, TEXT_DOUBLE_CLICK_MS};
 impl InputState {
     pub(crate) fn start_building_polygon_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) {
@@ -58,7 +60,7 @@ impl InputState {
 
     pub(crate) fn handle_building_polygon_left_click_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) {
@@ -71,7 +73,7 @@ impl InputState {
 
     pub(crate) fn append_building_polygon_point_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         x: i32,
         y: i32,
     ) {
@@ -89,10 +91,7 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn pop_building_polygon_point_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn pop_building_polygon_point_with_measurer(&mut self, measurer: &TextMeasurer) {
         let DrawingState::BuildingPolygon { points, .. } = &mut self.state else {
             return;
         };
@@ -109,11 +108,8 @@ impl InputState {
         self.needs_redraw = true;
     }
 
-    pub(crate) fn finish_building_polygon_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
-        let state = std::mem::replace(&mut self.state, DrawingState::Idle);
+    pub(crate) fn finish_building_polygon_with_measurer(&mut self, measurer: &TextMeasurer) {
+        let state = mem::replace(&mut self.state, DrawingState::Idle);
         let DrawingState::BuildingPolygon {
             points,
             fill,

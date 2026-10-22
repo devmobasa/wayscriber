@@ -44,10 +44,10 @@ mod tests {
     use super::*;
     use crate::domain::Color;
 
-    fn rendered_bytes(background: BoardBackground) -> Vec<u8> {
+    fn rendered_bytes(background: &BoardBackground) -> Vec<u8> {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap();
         let ctx = cairo::Context::new(&surface).unwrap();
-        render_board_background(&ctx, &background);
+        render_board_background(&ctx, background);
         drop(ctx);
         surface.flush();
         surface.data().unwrap().to_vec()
@@ -55,8 +55,8 @@ mod tests {
 
     #[test]
     fn transparent_background_does_not_paint_but_solid_background_does() {
-        let transparent = rendered_bytes(BoardBackground::Transparent);
-        let solid = rendered_bytes(BoardBackground::Solid(Color {
+        let transparent = rendered_bytes(&BoardBackground::Transparent);
+        let solid = rendered_bytes(&BoardBackground::Solid(Color {
             r: 1.0,
             g: 0.0,
             b: 0.0,

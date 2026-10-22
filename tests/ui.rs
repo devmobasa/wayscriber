@@ -1,15 +1,30 @@
 use cairo::{Context, ImageSurface};
 use wayscriber::config::{Action, Config, HelpOverlayStyle, StatusBarStyle, StatusPosition};
 use wayscriber::draw::{Color, Shape};
+use wayscriber::input::state::HelpOverlayClick;
 use wayscriber::input::{BOARD_ID_BLACKBOARD, BOARD_ID_WHITEBOARD, InputState};
+use wayscriber::ui::{
+    HelpContentOptions, HelpOverlayBindings, OnboardingCard, OnboardingCardAction,
+    OnboardingCardButton, OnboardingChecklistItem,
+};
+use wayscriber::{draw, ui};
+
+/// Every optional help section available and none filtered out.
+const FULL_HELP: HelpContentOptions = HelpContentOptions {
+    frozen_enabled: true,
+    context_filter: false,
+    board_enabled: true,
+    capture_enabled: true,
+};
 
 fn make_input_state() -> InputState {
     InputState::from_config(&Config::default())
 }
 
 fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
-    let surface = ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
-    let ctx = Context::new(&surface).unwrap();
+    let surface = ImageSurface::create(cairo::Format::ARgb32, width, height)
+        .expect("create test image surface");
+    let ctx = Context::new(&surface).expect("create Cairo context for test surface");
     (surface, ctx)
 }
 
@@ -23,7 +38,7 @@ fn surface_has_pixels(surface: &mut ImageSurface) -> bool {
 fn alpha_at(surface: &mut ImageSurface, x: i32, y: i32) -> u8 {
     let stride = surface.stride() as usize;
     let offset = y as usize * stride + x as usize * 4 + 3;
-    surface.data().unwrap()[offset]
+    surface.data().expect("borrow test surface pixel data")[offset]
 }
 
 fn alpha_bounds(surface: &mut ImageSurface) -> Option<(i32, i32, i32, i32)> {
@@ -67,7 +82,7 @@ fn render_status_bar_draws_for_all_positions() {
     for position in positions {
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(position, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        ui::render_status_bar(&ctx, &input, &style, 400, 200);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -81,9 +96,9 @@ fn render_help_overlay_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
     let input = make_input_state();
-    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let bindings = HelpOverlayBindings::from_input_state(&input);
+    ui::render_help_overlay(
+        &ctx, &style, 800, 600, FULL_HELP, 0, &bindings, "", 0.0, false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -101,7 +116,7 @@ fn render_status_bar_draws_in_board_modes() {
         input.switch_board(board_id);
         let (mut surface, ctx) = surface_with_context(400, 200);
         input.update_status_hud_layout(StatusPosition::BottomLeft, &style, 400, 200);
-        wayscriber::ui::render_status_bar(&ctx, &input, &style, 400, 200);
+        ui::render_status_bar(&ctx, &input, &style, 400, 200);
         drop(ctx);
         assert!(
             surface_has_pixels(&mut surface),
@@ -115,9 +130,21 @@ fn render_help_overlay_without_frozen_shortcuts_draws_content() {
     let style = HelpOverlayStyle::default();
     let (mut surface, ctx) = surface_with_context(800, 600);
     let input = make_input_state();
-    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    wayscriber::ui::render_help_overlay(
-        &ctx, &style, 800, 600, false, 0, &bindings, "", false, true, true, 0.0, false,
+    let bindings = HelpOverlayBindings::from_input_state(&input);
+    ui::render_help_overlay(
+        &ctx,
+        &style,
+        800,
+        600,
+        HelpContentOptions {
+            frozen_enabled: false,
+            ..FULL_HELP
+        },
+        0,
+        &bindings,
+        "",
+        0.0,
+        false,
     );
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -132,7 +159,7 @@ fn render_command_palette_with_query_draws_content() {
     input.command_palette.open();
     input.command_palette.set_query("tool".to_string());
 
-    wayscriber::ui::render_command_palette(&ctx, &input, 900, 700);
+    ui::render_command_palette(&ctx, &input, 900, 700);
 
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -144,7 +171,7 @@ fn render_keybinding_capture_draws_content() {
     let mut input = make_input_state();
     assert!(input.begin_keybinding_capture(Action::SelectPenTool));
 
-    wayscriber::ui::render_command_palette(&ctx, &input, 800, 600);
+    ui::render_command_palette(&ctx, &input, 800, 600);
 
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
@@ -153,7 +180,7 @@ fn render_keybinding_capture_draws_content() {
 #[test]
 fn render_frozen_badge_draws_pixels() {
     let (mut surface, ctx) = surface_with_context(400, 200);
-    wayscriber::ui::render_frozen_badge(&ctx, 400, 200);
+    ui::render_frozen_badge(&ctx, 400, 200);
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
@@ -169,7 +196,7 @@ fn render_shape_ellipse_does_not_connect_to_existing_current_path() {
     };
 
     ctx.move_to(10.0, 90.0);
-    wayscriber::draw::render_shape(
+    draw::render_shape(
         &ctx,
         &Shape::Ellipse {
             cx: 80,
@@ -198,24 +225,24 @@ fn render_shape_ellipse_does_not_connect_to_existing_current_path() {
 #[test]
 fn render_onboarding_card_tiny_surface_does_not_panic() {
     let (mut surface, ctx) = surface_with_context(200, 40);
-    let card = wayscriber::ui::OnboardingCard {
+    let card = OnboardingCard {
         eyebrow: "First-run onboarding".to_string(),
         title: "Draw one mark".to_string(),
         body: "Make one quick stroke to start.".to_string(),
-        items: vec![wayscriber::ui::OnboardingChecklistItem {
+        items: vec![OnboardingChecklistItem {
             label: "Draw a stroke".to_string(),
             done: false,
         }],
-        buttons: vec![wayscriber::ui::OnboardingCardButton {
+        buttons: vec![OnboardingCardButton {
             label: "Skip tour".to_string(),
             key_hint: Some("Shift+Esc".to_string()),
-            action: wayscriber::ui::OnboardingCardAction::SkipTour,
+            action: OnboardingCardAction::SkipTour,
             primary: false,
         }],
         footer: "Shift+Escape to skip".to_string(),
     };
 
-    wayscriber::ui::render_onboarding_card(&ctx, 200, 40, &card);
+    ui::render_onboarding_card(&ctx, 200, 40, &card);
     drop(ctx);
     assert!(surface_has_pixels(&mut surface));
 }
@@ -223,7 +250,7 @@ fn render_onboarding_card_tiny_surface_does_not_panic() {
 #[test]
 fn render_onboarding_card_without_checklist_stays_compact() {
     let (mut surface, ctx) = surface_with_context(700, 500);
-    let compact_card = wayscriber::ui::OnboardingCard {
+    let compact_card = OnboardingCard {
         eyebrow: "Step 1 / 5".to_string(),
         title: "Enable background mode?".to_string(),
         body: "Keeps Wayscriber ready in the background for quick overlay access.".to_string(),
@@ -232,21 +259,21 @@ fn render_onboarding_card_without_checklist_stays_compact() {
         footer: "Y = set up now • N = skip • Shift+Escape = skip onboarding".to_string(),
     };
 
-    wayscriber::ui::render_onboarding_card(&ctx, 700, 500, &compact_card);
+    ui::render_onboarding_card(&ctx, 700, 500, &compact_card);
     drop(ctx);
     let (_, compact_min_y, _, compact_max_y) =
         alpha_bounds(&mut surface).expect("rendered compact onboarding card");
     let compact_height = compact_max_y - compact_min_y;
 
     let (mut checklist_surface, checklist_ctx) = surface_with_context(700, 500);
-    let checklist_card = wayscriber::ui::OnboardingCard {
-        items: vec![wayscriber::ui::OnboardingChecklistItem {
+    let checklist_card = OnboardingCard {
+        items: vec![OnboardingChecklistItem {
             label: "Open the configurator".to_string(),
             done: false,
         }],
         ..compact_card
     };
-    wayscriber::ui::render_onboarding_card(&checklist_ctx, 700, 500, &checklist_card);
+    ui::render_onboarding_card(&checklist_ctx, 700, 500, &checklist_card);
     drop(checklist_ctx);
     let (_, checklist_min_y, _, checklist_max_y) =
         alpha_bounds(&mut checklist_surface).expect("rendered checklist onboarding card");
@@ -272,9 +299,9 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     let style = HelpOverlayStyle::default();
     let (_surface, ctx) = surface_with_context(1400, 1000);
     let input = make_input_state();
-    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    let result = wayscriber::ui::render_help_overlay_result(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let bindings = HelpOverlayBindings::from_input_state(&input);
+    let result = ui::render_help_overlay_result(
+        &ctx, &style, 1400, 1000, FULL_HELP, 0, &bindings, "", 0.0, false,
     );
     drop(ctx);
 
@@ -309,9 +336,9 @@ fn help_overlay_footer_offers_the_unbound_actions_toggle() {
     let style = HelpOverlayStyle::default();
     let (_surface, ctx) = surface_with_context(1400, 1000);
     let input = make_input_state();
-    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
-    let result = wayscriber::ui::render_help_overlay_result(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let bindings = HelpOverlayBindings::from_input_state(&input);
+    let result = ui::render_help_overlay_result(
+        &ctx, &style, 1400, 1000, FULL_HELP, 0, &bindings, "", 0.0, false,
     );
     drop(ctx);
 
@@ -326,7 +353,7 @@ fn help_overlay_footer_offers_the_unbound_actions_toggle() {
     interactive.install_help_overlay_render_result(result);
     assert_eq!(
         interactive.help_overlay_click_at(toggle.0, toggle.1),
-        wayscriber::input::state::HelpOverlayClick::ToggleUnbound,
+        HelpOverlayClick::ToggleUnbound,
     );
 }
 
@@ -336,10 +363,10 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
 
     let style = HelpOverlayStyle::default();
     let input = make_input_state();
-    let bindings = wayscriber::ui::HelpOverlayBindings::from_input_state(&input);
+    let bindings = HelpOverlayBindings::from_input_state(&input);
     let (mut owned_surface, ctx) = surface_with_context(1400, 1000);
-    let result = wayscriber::ui::render_help_overlay_result(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let result = ui::render_help_overlay_result(
+        &ctx, &style, 1400, 1000, FULL_HELP, 0, &bindings, "", 0.0, false,
     );
     drop(ctx);
 
@@ -362,12 +389,12 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
     let (about_x, about_y) = about.unwrap();
     assert_eq!(
         interactive.help_overlay_click_at(about_x, about_y),
-        wayscriber::input::state::HelpOverlayClick::Run(Action::OpenAbout),
+        HelpOverlayClick::Run(Action::OpenAbout),
     );
 
     let (mut drawing_surface, ctx) = surface_with_context(1400, 1000);
-    let scroll = wayscriber::ui::render_help_overlay(
-        &ctx, &style, 1400, 1000, true, 0, &bindings, "", false, true, true, 0.0, false,
+    let scroll = ui::render_help_overlay(
+        &ctx, &style, 1400, 1000, FULL_HELP, 0, &bindings, "", 0.0, false,
     );
     drop(ctx);
     assert_eq!(result.scroll_max, scroll);
@@ -380,24 +407,21 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
         "result and drawing-only paths must paint identical pixels"
     );
     let (_surface, ctx) = surface_with_context(320, 240);
-    wayscriber::ui::render_help_overlay(
+    ui::render_help_overlay(
         &ctx,
         &style,
         320,
         240,
-        false,
+        HelpContentOptions::default(),
         0,
         &bindings,
         "no matching action",
-        false,
-        false,
-        false,
         0.0,
         true,
     );
     assert_eq!(
         interactive.help_overlay_click_at(about_x, about_y),
-        wayscriber::input::state::HelpOverlayClick::Run(Action::OpenAbout),
+        HelpOverlayClick::Run(Action::OpenAbout),
         "painting another overlay must not replace the installed owner's map",
     );
     let (x, y) = about.unwrap();
@@ -417,12 +441,12 @@ fn small_palette_surface_and_shadow_fit_the_screen() {
         input.update_screen_dimensions(width, height);
         input.command_palette.open();
         let (x, y, panel_width, panel_height) =
-            wayscriber::ui::command_palette_visual_geometry(&input, width, height).unwrap();
+            ui::command_palette_visual_geometry(&input, width, height).unwrap();
         assert!(x >= 0.0 && y >= 0.0);
         assert!(x + panel_width <= width as f64);
         assert!(y + panel_height <= height as f64);
         let (mut surface, ctx) = surface_with_context(width as i32, height as i32);
-        wayscriber::ui::render_command_palette(&ctx, &input, width, height);
+        ui::render_command_palette(&ctx, &input, width, height);
         drop(ctx);
         let dimmer = alpha_at(&mut surface, 0, 0);
         let panel = alpha_at(&mut surface, (x + 20.0) as i32, (y + 20.0) as i32);

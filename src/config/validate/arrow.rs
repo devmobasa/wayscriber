@@ -1,9 +1,12 @@
-use super::{Config, float::finite_or_default};
+use crate::config::ArrowConfig;
+
+use super::Config;
+use super::float::finite_or_default;
 use crate::config::{ARROW_ANGLE_MAX, ARROW_ANGLE_MIN, ARROW_LENGTH_MAX, ARROW_LENGTH_MIN};
 
 impl Config {
     pub(super) fn validate_arrow(&mut self) {
-        let defaults = crate::config::ArrowConfig::default();
+        let defaults = ArrowConfig::default();
         self.arrow.length = finite_or_default(self.arrow.length, defaults.length, "arrow.length");
         self.arrow.angle_degrees = finite_or_default(
             self.arrow.angle_degrees,

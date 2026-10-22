@@ -1,3 +1,13 @@
+use std::fs;
+
+use crate::config::{BoardGridKindConfig, BoardsConfig, Config};
+use crate::draw::Shape;
+use crate::draw::frame::UndoAction;
+use crate::input::BoardManager;
+use crate::session::ToolStateSnapshot;
+use crate::session::snapshot::types::BoardFile;
+use crate::test_temp;
+
 use super::*;
 use crate::domain::{BoardGrid, BoardGridKind};
 use crate::draw::{Frame, RED};
@@ -7,8 +17,7 @@ use crate::session::{
 };
 
 fn snapshot(explicit: bool) -> SessionSnapshot {
-    let mut boards =
-        crate::input::BoardManager::from_config(crate::config::BoardsConfig::default());
+    let mut boards = BoardManager::from_config(BoardsConfig::default());
     boards.switch_to_id("whiteboard");
     let board = boards.active_board_mut();
     board.spec.grid = BoardGrid::new(BoardGridKind::IsometricDots, 20);
@@ -30,7 +39,7 @@ fn snapshot(explicit: bool) -> SessionSnapshot {
 
 #[test]
 fn appearance_only_roundtrip_and_backup_recovery_preserve_exact_pen_none() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().into(), "paper");
     options.persist_whiteboard = true;
     let original = snapshot(true);
@@ -40,11 +49,8 @@ fn appearance_only_roundtrip_and_backup_recovery_preserve_exact_pen_none() {
     let appearance = loaded.boards[0].appearance.as_ref().unwrap();
     assert!(appearance.explicit);
     assert_eq!(appearance.default_pen_color, None);
-    assert_eq!(
-        appearance.grid.kind,
-        crate::config::BoardGridKindConfig::IsometricDots
-    );
-    std::fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
+    assert_eq!(appearance.grid.kind, BoardGridKindConfig::IsometricDots);
+    fs::rename(options.session_file_path(), options.backup_file_path()).unwrap();
     assert!(load_snapshot(&options).unwrap().unwrap().has_board_data());
 }
 
@@ -54,7 +60,7 @@ fn appearance_history_trimming_retains_only_explicit_empty_paper() {
     for explicit in [false, true] {
         let mut original = snapshot(explicit);
         let frame = &mut original.boards[0].pages.pages[0];
-        let id = frame.add_shape(crate::draw::Shape::Line {
+        let id = frame.add_shape(Shape::Line {
             x1: 0,
             y1: 0,
             x2: 10,
@@ -63,7 +69,7 @@ fn appearance_history_trimming_retains_only_explicit_empty_paper() {
             color: RED,
         });
         frame.push_undo_action(
-            crate::draw::frame::UndoAction::Create {
+            UndoAction::Create {
                 shapes: vec![(0, frame.shape(id).unwrap().clone())],
             },
             100,
@@ -82,13 +88,13 @@ fn appearance_invalid_metadata_cannot_make_an_empty_board_recoverable() {
     original.boards[0].appearance.as_mut().unwrap().grid.spacing = -1;
     assert!(!original.has_board_data());
     let value = serde_json::json!({"id":"whiteboard","pages":[],"active_page":0,"appearance":{"explicit":true,"grid":{"kind":"unknown"}}});
-    let board: crate::session::snapshot::types::BoardFile = serde_json::from_value(value).unwrap();
+    let board: BoardFile = serde_json::from_value(value).unwrap();
     assert!(board.appearance.is_none());
 }
 
 #[test]
 fn appearance_only_named_backup_survives_a_tool_only_primary() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().into(), "paper");
     options.set_named_file_target(temp.path().join("paper.wayscriber"));
     options.persist_whiteboard = true;
@@ -97,9 +103,7 @@ fn appearance_only_named_backup_survives_a_tool_only_primary() {
     let tools_only = SessionSnapshot {
         active_board_id: "whiteboard".into(),
         boards: Vec::new(),
-        tool_state: Some(crate::session::ToolStateSnapshot::from_config(
-            &crate::config::Config::default(),
-        )),
+        tool_state: Some(ToolStateSnapshot::from_config(&Config::default())),
     };
     super::super::save::save_snapshot_with_report_and_clear_boundary(&tools_only, &options, false)
         .unwrap();

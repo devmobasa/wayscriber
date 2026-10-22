@@ -1,10 +1,24 @@
-use super::*;
+use super::super::{
+    ControllerBarrierPhase, RecoveryAttemptId, RecoveryAttemptStep, RecoveryCommandId,
+    RecoveryHandleId, RecoveryLeaseNonce, RuntimeStateFailurePathEffect,
+    RuntimeStateObservedEnvelope, RuntimeStateObservedPathEffect, RuntimeStateRecoveryArtifact,
+    RuntimeStateSourceObservation, RuntimeUiFileStatus, RuntimeUiStateController,
+    SourceMutationResult, validate_source_mutation_evidence,
+};
+use super::{
+    ActiveRecoveryCommand, PersistenceIncident, PersistenceRecoveryEvidence,
+    PersistenceRecoveryHandle, PersistenceRecoveryResult, RecoveryAttemptKind,
+    RecoveryCleanupState, RecoveryCommandExpectation, RecoveryCompletionProtocolError,
+    RecoveryHandleAvailability, RecoveryHandleState, RecoveryIoCommand, RecoveryIoCompletion,
+    RecoveryIoOperation, RecoveryIoResult, SubmitPersistenceRecoveryResult,
+};
+use std::collections::BTreeSet;
 
 impl RuntimeUiStateController {
     pub(super) fn block_protocol_failure(
         &mut self,
         reason: RecoveryCompletionProtocolError,
-        completion: RecoveryIoCompletion,
+        completion: &RecoveryIoCompletion,
     ) -> SubmitPersistenceRecoveryResult {
         self.record_rejected_recovery_completion(completion.clone());
         if let RecoveryIoResult::SourceMutation(result) = &completion.result {

@@ -1,10 +1,16 @@
 //! About-window state: focus, hover, and the actions the handlers trigger.
 
+use std::thread::JoinHandle;
+
 use log::{debug, warn};
 use smithay_client_toolkit::seat::pointer::CursorIcon;
 use wayland_client::Connection;
 
 use crate::i18n::tr;
+use crate::ui::theme::Theme;
+use crate::ui_text::UiTextEngine;
+use crate::update_check;
+use crate::update_check::{CheckOutcome, Freshness};
 
 use super::content::{AboutAction, AboutContent, UpdateState};
 use super::interaction::{self, Element};
@@ -23,16 +29,16 @@ impl AboutWindowState {
         window: super::Window,
         content: AboutContent,
         plan: Plan,
-        theme: crate::ui::theme::Theme,
+        theme: Theme,
     ) -> Self {
         // Opening the dialog costs no network: the row reports whatever the
         // last background check wrote, and the user can ask for a fresh one.
-        let update = UpdateState::from_cache(crate::update_check::cached_status());
+        let update = UpdateState::from_cache(update_check::cached_status());
         let elements = interaction::focus_order(&content, &update);
         let (width, height) = surface_size(&plan);
 
         Self {
-            ui_text: crate::ui_text::UiTextEngine::default(),
+            ui_text: UiTextEngine::default(),
             theme,
             registry_state,
             compositor_state,
@@ -167,7 +173,7 @@ impl AboutWindowState {
         }
     }
 
-    fn track_helper_worker(&mut self, worker: std::thread::JoinHandle<()>) {
+    fn track_helper_worker(&mut self, worker: JoinHandle<()>) {
         self.helper_workers.push(worker);
     }
 
@@ -187,20 +193,18 @@ impl AboutWindowState {
     /// Perform the check synchronously. Called from the event loop, never from a
     /// protocol handler.
     pub(super) fn run_update_check(&mut self) {
-        let next = match crate::update_check::check_now() {
-            Ok(crate::update_check::CheckOutcome::Update(update)) => UpdateState::Available {
+        let next = match update_check::check_now() {
+            Ok(CheckOutcome::Update(update)) => UpdateState::Available {
                 update: Box::new(update),
-                freshness: crate::update_check::Freshness {
+                freshness: Freshness {
                     checked_seconds_ago: Some(0),
                     last_attempt_failed: false,
                 },
             },
-            Ok(crate::update_check::CheckOutcome::UpToDate { .. }) => {
-                UpdateState::UpToDate(crate::update_check::Freshness {
-                    checked_seconds_ago: Some(0),
-                    last_attempt_failed: false,
-                })
-            }
+            Ok(CheckOutcome::UpToDate { .. }) => UpdateState::UpToDate(Freshness {
+                checked_seconds_ago: Some(0),
+                last_attempt_failed: false,
+            }),
             Err(err) => {
                 debug!("About dialog update check failed: {err}");
                 UpdateState::Failed(err)

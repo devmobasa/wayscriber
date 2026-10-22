@@ -368,6 +368,10 @@ fn text_conflict_prompt(conflicts: &[TextShortcutConflict]) -> String {
 #[cfg(test)]
 mod tests {
     use wayscriber::config::keybindings::KeybindingsConfig;
+    use wayscriber::domain::Language;
+    use wayscriber::i18n;
+
+    use crate::test_env;
 
     use super::*;
     use crate::models::keybindings::KeybindingField;
@@ -494,7 +498,7 @@ mod tests {
     #[test]
     fn legacy_stylus_assignment_conflicts_with_canonical_stylus_trigger() {
         let mut draft = draft();
-        draft.legacy_tablet.stylus_primary = Some(wayscriber::config::Action::ToggleRadialMenu);
+        draft.legacy_tablet.stylus_primary = Some(Action::ToggleRadialMenu);
         let binding = Shortcut::parse("StylusPrimary").expect("parses");
         let claimants = other_claimants(&draft, KeybindingField::Undo, &binding);
         assert_eq!(claimants.len(), 1);
@@ -521,7 +525,7 @@ mod tests {
     #[test]
     fn modifiered_stylus_trigger_does_not_claim_the_legacy_barrel() {
         let mut draft = draft();
-        draft.legacy_tablet.stylus_primary = Some(wayscriber::config::Action::ToggleRadialMenu);
+        draft.legacy_tablet.stylus_primary = Some(Action::ToggleRadialMenu);
         let binding = Shortcut::parse("Ctrl+StylusPrimary").expect("parses");
         assert!(other_claimants(&draft, KeybindingField::Undo, &binding).is_empty());
     }
@@ -645,7 +649,7 @@ mod tests {
 
     #[test]
     fn a_pending_conflict_names_its_claimants_in_the_current_language() {
-        crate::test_env::in_language_child(
+        test_env::in_language_child(
             concat!(
                 module_path!(),
                 "::a_pending_conflict_names_its_claimants_in_the_current_language"
@@ -666,7 +670,7 @@ mod tests {
                     conflict.prompt()
                 );
 
-                wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+                i18n::set_language(Language::SimplifiedChinese);
 
                 let prompt = conflict.prompt();
                 assert!(prompt.contains("- 清空画布"), "{prompt}");

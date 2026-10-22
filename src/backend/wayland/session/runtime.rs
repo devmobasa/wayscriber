@@ -1,5 +1,15 @@
-use super::*;
-use crate::session::{SaveAsOverwrite, SessionSnapshot, ToolStateSnapshot};
+use crate::backend::wayland::session;
+use crate::draw::TextMeasurer;
+
+use super::persistence::PersistenceOutcome;
+use super::{SessionState, stored_session};
+use crate::input::InputState;
+use crate::session::{LoadSnapshotOutcome, SaveAsOverwrite, SessionOptions, SessionSnapshot};
+use anyhow::{Result, anyhow};
+use std::fs;
+use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::time::Instant;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -37,10 +47,10 @@ pub(in crate::backend::wayland) struct RuntimeClearToolStateReport {
     pub outcome: Option<stored_session::ClearToolStateOutcome>,
 }
 
-pub(in crate::backend::wayland) struct SessionTransaction<'a> {
-    pub input_state: &'a mut InputState,
-    pub measurer: &'a crate::draw::TextMeasurer,
-    pub session: &'a mut SessionState,
+pub(in crate::backend::wayland) struct SessionTransaction<'state> {
+    pub input_state: &'state mut InputState,
+    pub measurer: &'state TextMeasurer,
+    pub session: &'state mut SessionState,
 }
 
 mod transaction;
@@ -56,8 +66,8 @@ enum SaveAsPreflightDecision {
 }
 
 fn accept_open_preflight(
-    session: &mut crate::backend::wayland::session::SessionState,
-    validation: PersistenceOutcome,
+    session: &mut session::SessionState,
+    validation: &PersistenceOutcome,
 ) -> Result<()> {
     if !matches!(validation, PersistenceOutcome::Unit) {
         return Err(anyhow!("unexpected named-session validation outcome"));
@@ -67,15 +77,15 @@ fn accept_open_preflight(
 }
 
 fn accept_save_as_preflight(
-    session: &mut crate::backend::wayland::session::SessionState,
-    preflight: PersistenceOutcome,
+    session: &mut session::SessionState,
+    preflight: &PersistenceOutcome,
     overwrite: SaveAsOverwrite,
     target_path: &Path,
 ) -> Result<SaveAsPreflightDecision> {
     let PersistenceOutcome::SaveAsPreflight {
         same_target,
         overwrite_required,
-    } = preflight
+    } = *preflight
     else {
         return Err(anyhow!("unexpected Save As preflight outcome"));
     };
@@ -93,7 +103,7 @@ fn accept_save_as_preflight(
 }
 
 fn cancel_pending_output_transition_for_explicit_target(
-    session: &mut crate::backend::wayland::session::SessionState,
+    session: &mut session::SessionState,
     operation: &str,
 ) {
     if let Some(pending) = session.cancel_pending_output_transition() {
@@ -163,7 +173,7 @@ fn has_recovery_artifact(options: &SessionOptions) -> bool {
         return false;
     };
     let preserved_prefix = format!("{recovery_name}.");
-    let Ok(entries) = std::fs::read_dir(parent) else {
+    let Ok(entries) = fs::read_dir(parent) else {
         return false;
     };
     entries.filter_map(Result::ok).any(|entry| {
@@ -176,28 +186,36 @@ fn has_recovery_artifact(options: &SessionOptions) -> bool {
     })
 }
 
+/// What a save knows about the session before it would replace the artifact.
+#[derive(Debug, Clone, Copy, Default)]
+pub(in crate::backend::wayland) struct ContentlessSaveCheck {
+    /// The session started from a file that held board data.
+    pub(in crate::backend::wayland) loaded_board_data: bool,
+    pub(in crate::backend::wayland) session_dirty: bool,
+    pub(in crate::backend::wayland) input_dirty: bool,
+    /// The snapshot about to be saved holds board data.
+    pub(in crate::backend::wayland) has_board_data: bool,
+    pub(in crate::backend::wayland) session_artifact_exists: bool,
+}
+
 pub(in crate::backend::wayland) fn should_skip_unloaded_contentless_save(
-    loaded_board_data: bool,
-    session_dirty: bool,
-    input_dirty: bool,
-    has_board_data: bool,
-    session_artifact_exists: bool,
+    check: ContentlessSaveCheck,
 ) -> bool {
-    !has_board_data
-        && !loaded_board_data
-        && !session_dirty
-        && !input_dirty
-        && session_artifact_exists
+    !check.has_board_data
+        && !check.loaded_board_data
+        && !check.session_dirty
+        && !check.input_dirty
+        && check.session_artifact_exists
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn session_with_pending_transition() -> crate::backend::wayland::session::SessionState {
+    fn session_with_pending_transition() -> session::SessionState {
         let options = SessionOptions::new(PathBuf::from("/tmp"), "source-output");
         let mut staged = options.clone();
         staged.set_output_identity(Some("target-output"));
-        let mut session = crate::backend::wayland::session::SessionState::new(Some(options));
+        let mut session = session::SessionState::new(Some(options));
         session.stage_output_transition(staged, Some("target-output".to_string()), Instant::now());
         session
     }
@@ -206,12 +224,12 @@ mod tests {
     fn open_cancels_pending_transition_only_after_accepted_preflight() {
         let mut rejected = session_with_pending_transition();
         assert!(
-            accept_open_preflight(&mut rejected, PersistenceOutcome::HasArtifacts(false)).is_err()
+            accept_open_preflight(&mut rejected, &PersistenceOutcome::HasArtifacts(false)).is_err()
         );
         assert!(rejected.pending_output_transition().is_some());
 
         let mut accepted = session_with_pending_transition();
-        accept_open_preflight(&mut accepted, PersistenceOutcome::Unit).unwrap();
+        accept_open_preflight(&mut accepted, &PersistenceOutcome::Unit).unwrap();
         assert!(accepted.pending_output_transition().is_none());
     }
 
@@ -222,7 +240,7 @@ mod tests {
         assert!(
             accept_save_as_preflight(
                 &mut denied,
-                PersistenceOutcome::SaveAsPreflight {
+                &PersistenceOutcome::SaveAsPreflight {
                     same_target: false,
                     overwrite_required: true,
                 },
@@ -237,7 +255,7 @@ mod tests {
         assert_eq!(
             accept_save_as_preflight(
                 &mut accepted,
-                PersistenceOutcome::SaveAsPreflight {
+                &PersistenceOutcome::SaveAsPreflight {
                     same_target: false,
                     overwrite_required: false,
                 },
@@ -256,7 +274,7 @@ mod tests {
         assert_eq!(
             accept_save_as_preflight(
                 &mut session,
-                PersistenceOutcome::SaveAsPreflight {
+                &PersistenceOutcome::SaveAsPreflight {
                     same_target: true,
                     overwrite_required: true,
                 },

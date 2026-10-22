@@ -1,8 +1,10 @@
+use crate::draw::TextMeasurer;
+
 use super::*;
 
 #[test]
 fn dragging_text_resize_handle_updates_wrap_width_within_screen() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.update_screen_dimensions(300, 200);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Text {

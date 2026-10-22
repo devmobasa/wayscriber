@@ -1,4 +1,11 @@
-use super::*;
+use super::super::{
+    RuntimeStateFailurePathEffect, RuntimeStateIoError, RuntimeStateObservedEnvelope,
+    RuntimeStateObservedPathEffect, RuntimeStateSourceObservation, RuntimeStateSourceRevision,
+    RuntimeUiStateController, RuntimeUiWireState, SourceMutationResult,
+    validate_source_mutation_evidence,
+};
+use super::protocol::{merge_artifacts, source_mutation_observation_for_protocol_error};
+use super::{RecoveryAttemptKind, SubmitPersistenceRecoveryResult};
 
 impl RuntimeUiStateController {
     pub(super) fn integrate_preserve_invalid_source_mutation(
@@ -55,7 +62,7 @@ impl RuntimeUiStateController {
                 }
                 let observation = if new_source.bytes().is_none() {
                     RuntimeStateSourceObservation {
-                        revision: new_source.clone(),
+                        revision: new_source,
                         envelope: RuntimeStateObservedEnvelope::Missing,
                     }
                 } else {

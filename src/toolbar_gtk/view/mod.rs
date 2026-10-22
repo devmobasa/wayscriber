@@ -7,8 +7,16 @@ mod drag;
 mod sections;
 mod top_bar;
 
-use gtk4::prelude::*;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
+use gtk4::cairo::Region;
+use gtk4::gdk::{Display, FrameClockPhase, MemoryFormat, MemoryTexture, Monitor};
+use gtk4::glib::Bytes;
+use gtk4::prelude::{GtkWindowExt, *};
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
+
+use crate::toolbar_gtk;
 
 use super::widgets::FeedbackSender;
 use super::{GtkToolbarFeedback, GtkToolbarKind, GtkToolbarUpdate};
@@ -27,18 +35,27 @@ struct ToolbarSurfacePresentation {
     input_enabled: bool,
 }
 
-fn toolbar_surface_presentation(
+/// The toolbar surface state one update presents.
+#[derive(Debug, Clone, Copy, Default)]
+struct ToolbarSurfaceState {
+    /// The configuration asks for this toolbar to show.
     configured_visible: bool,
+    /// A capture is in progress and the toolbar must not appear in it.
     capture_suppressed: bool,
+    /// A drag preview stands in for this toolbar's visuals.
     drag_visual_hidden: bool,
+    /// The surface was still mapped when capture suppression began.
     mapped_before_capture: bool,
-) -> ToolbarSurfacePresentation {
-    let window_visible = configured_visible || (capture_suppressed && mapped_before_capture);
+}
+
+fn toolbar_surface_presentation(state: ToolbarSurfaceState) -> ToolbarSurfacePresentation {
+    let window_visible =
+        state.configured_visible || (state.capture_suppressed && state.mapped_before_capture);
     ToolbarSurfacePresentation {
         window_visible,
-        capture_transparent: capture_suppressed,
-        visual_hidden: drag_visual_hidden,
-        input_enabled: window_visible && !capture_suppressed,
+        capture_transparent: state.capture_suppressed,
+        visual_hidden: state.drag_visual_hidden,
+        input_enabled: window_visible && !state.capture_suppressed,
     }
 }
 
@@ -119,7 +136,7 @@ pub(super) fn set_visual_hidden(
     if visual.is_child_visible() == child_visible {
         return;
     }
-    crate::toolbar_gtk::drag_debug_log(format!(
+    toolbar_gtk::drag_debug_log(format!(
         "{kind:?} visual child -> {} (window remains mapped for drag input)",
         if hidden { "hidden" } else { "visible" }
     ));
@@ -141,7 +158,7 @@ pub(super) fn set_visual_hidden(
 pub(super) struct CaptureSurfaceContent {
     root: gtk4::Overlay,
     proof: gtk4::Picture,
-    proof_serial: std::rc::Rc<std::cell::Cell<u8>>,
+    proof_serial: Rc<Cell<u8>>,
     proof_observation: capture_proof::ProofObservation,
 }
 
@@ -150,10 +167,9 @@ impl CaptureSurfaceContent {
         // Keep non-zero RGB data behind a zero alpha channel. Renderers cannot
         // infer an empty node from the texture format or pixels, while normal
         // source-over composition still contributes exactly zero opacity.
-        let bytes = gtk4::glib::Bytes::from_static(&[0xff, 0x00, 0xff, 0x00]);
-        let texture =
-            gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
-        let proof_observation = std::rc::Rc::new(std::cell::Cell::new(None));
+        let bytes = Bytes::from_static(&[0xff, 0x00, 0xff, 0x00]);
+        let texture = MemoryTexture::new(1, 1, MemoryFormat::R8g8b8a8, &bytes, 4);
+        let proof_observation = Rc::new(Cell::new(None));
         let proof = gtk4::Picture::new();
         let paintable =
             capture_proof::CaptureProof::new(&texture, &proof, proof_observation.clone(), 0);
@@ -176,7 +192,7 @@ impl CaptureSurfaceContent {
         Self {
             root,
             proof,
-            proof_serial: std::rc::Rc::new(std::cell::Cell::new(0)),
+            proof_serial: Rc::new(Cell::new(0)),
             proof_observation,
         }
     }
@@ -234,9 +250,8 @@ impl CaptureSurfaceContent {
         } else {
             [0x00, 0xff, 0xff, 0x00]
         };
-        let bytes = gtk4::glib::Bytes::from_owned(bytes);
-        let texture =
-            gtk4::gdk::MemoryTexture::new(1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8, &bytes, 4);
+        let bytes = Bytes::from_owned(bytes);
+        let texture = MemoryTexture::new(1, 1, MemoryFormat::R8g8b8a8, &bytes, 4);
         self.proof_observation.set(None);
         let paintable = capture_proof::CaptureProof::new(
             &texture,
@@ -284,7 +299,7 @@ fn set_capture_transparent_class(widget: &impl IsA<gtk4::Widget>, transparent: b
 fn install_capture_css_provider(scale: f64) -> gtk4::CssProvider {
     let provider = gtk4::CssProvider::new();
     provider.load_from_string(&super::css::capture_stylesheet(scale));
-    if let Some(display) = gtk4::gdk::Display::default() {
+    if let Some(display) = Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,
             &provider,
@@ -301,7 +316,7 @@ struct CaptureProofTarget {
     widget: gtk4::Widget,
     content: CaptureSurfaceContent,
     lifetime: CaptureProofLifetime,
-    on_withdrawn: Option<std::rc::Rc<dyn Fn()>>,
+    on_withdrawn: Option<Rc<dyn Fn()>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -352,7 +367,7 @@ impl CaptureProofTarget {
             widget: widget.clone().upcast(),
             content: content.clone(),
             lifetime: CaptureProofLifetime::WhileMapped,
-            on_withdrawn: Some(std::rc::Rc::new(on_withdrawn)),
+            on_withdrawn: Some(Rc::new(on_withdrawn)),
         }
     }
 
@@ -375,17 +390,17 @@ impl CaptureProofTarget {
     }
 }
 
-pub(super) struct CaptureSurfaceLog<'a> {
-    name: &'a str,
+pub(super) struct CaptureSurfaceLog<'surface> {
+    name: &'surface str,
     configured_visible: bool,
     mapped_before_capture: bool,
     presentation: ToolbarSurfacePresentation,
-    window: &'a gtk4::Window,
-    visual: &'a gtk4::Box,
-    capture_surface: &'a CaptureSurfaceContent,
+    window: &'surface gtk4::Window,
+    visual: &'surface gtk4::Box,
+    capture_surface: &'surface CaptureSurfaceContent,
 }
 
-fn log_capture_surface_state(generation: u64, state: CaptureSurfaceLog<'_>) {
+fn log_capture_surface_state(generation: u64, state: &CaptureSurfaceLog<'_>) {
     let CaptureSurfaceLog {
         name,
         configured_visible,
@@ -394,7 +409,7 @@ fn log_capture_surface_state(generation: u64, state: CaptureSurfaceLog<'_>) {
         window,
         visual,
         capture_surface,
-    } = state;
+    } = *state;
     let surface_mapped = window.surface().is_some_and(|surface| surface.is_mapped());
     log::info!(
         "capture.preflight id={generation} component=gtk surface={name} phase=applied configured_visible={configured_visible} mapped_before_capture={mapped_before_capture} planned_window_visible={} planned_capture_transparent={} planned_visual_hidden={} planned_input_enabled={} window_visible={} window_mapped={} surface_mapped={surface_mapped} visual_child_visible={} can_target={} size={}x{} window_opacity={:.3} content_opacity={:.3?} transparent_proof_visible={}",
@@ -422,13 +437,13 @@ fn set_surface_input_enabled(window: &gtk4::Window, enabled: bool) {
         KeyboardMode::None
     });
     if !enabled {
-        gtk4::prelude::GtkWindowExt::set_focus(window, gtk4::Widget::NONE);
+        GtkWindowExt::set_focus(window, gtk4::Widget::NONE);
     }
     if let Some(surface) = window.surface() {
         if enabled {
             surface.set_input_region(None);
         } else {
-            let empty = gtk4::cairo::Region::create();
+            let empty = Region::create();
             surface.set_input_region(Some(&empty));
         }
     }
@@ -448,9 +463,9 @@ where
         return;
     };
 
-    let callback = std::rc::Rc::new(std::cell::RefCell::new(Some(callback)));
-    let handler = std::rc::Rc::new(std::cell::RefCell::new(None));
-    let callback_slot = callback.clone();
+    let callback = Rc::new(RefCell::new(Some(callback)));
+    let handler = Rc::new(RefCell::new(None));
+    let callback_slot = callback;
     let handler_slot = handler.clone();
     let callback_clock = frame_clock.clone();
     let handler_id = frame_clock.connect_after_paint(move |_| {
@@ -464,7 +479,7 @@ where
 
     *handler.borrow_mut() = Some(handler_id);
     widget.queue_draw();
-    frame_clock.request_phase(gtk4::gdk::FrameClockPhase::PAINT);
+    frame_clock.request_phase(FrameClockPhase::PAINT);
 }
 
 pub(super) struct Windows {
@@ -482,7 +497,7 @@ impl Windows {
     pub(super) fn new(feedback: FeedbackSender) -> Self {
         let css_provider = gtk4::CssProvider::new();
         css_provider.load_from_string(&super::css::stylesheet(1.0));
-        if let Some(display) = gtk4::gdk::Display::default() {
+        if let Some(display) = Display::default() {
             gtk4::style_context_add_provider_for_display(
                 &display,
                 &css_provider,
@@ -531,7 +546,7 @@ impl Windows {
                 self.wait_for_capture_paints(generation, top_mapped)
                     .await?;
 
-                let display = gtk4::gdk::Display::default().ok_or_else(|| {
+                let display = Display::default().ok_or_else(|| {
                     "GTK display disappeared during capture suppression".to_string()
                 })?;
                 display.sync();
@@ -668,14 +683,11 @@ fn widget_native_is_mapped(widget: &gtk4::Widget) -> bool {
             .is_some_and(|surface| surface.is_mapped())
 }
 
-fn monitor_by_connector(connector: &str) -> Option<gtk4::gdk::Monitor> {
-    let display = gtk4::gdk::Display::default()?;
+fn monitor_by_connector(connector: &str) -> Option<Monitor> {
+    let display = Display::default()?;
     let monitors = display.monitors();
     for index in 0..monitors.n_items() {
-        let monitor = monitors
-            .item(index)?
-            .downcast::<gtk4::gdk::Monitor>()
-            .ok()?;
+        let monitor = monitors.item(index)?.downcast::<Monitor>().ok()?;
         if monitor.connector().as_deref() == Some(connector) {
             return Some(monitor);
         }
@@ -722,7 +734,11 @@ mod tests {
     #[test]
     fn capture_suppression_keeps_a_configured_toolbar_mapped_but_transparent() {
         assert_eq!(
-            toolbar_surface_presentation(true, true, false, false),
+            toolbar_surface_presentation(ToolbarSurfaceState {
+                configured_visible: true,
+                capture_suppressed: true,
+                ..ToolbarSurfaceState::default()
+            }),
             ToolbarSurfacePresentation {
                 window_visible: true,
                 capture_transparent: true,
@@ -735,7 +751,10 @@ mod tests {
     #[test]
     fn capture_suppression_does_not_map_a_configured_hidden_toolbar() {
         assert_eq!(
-            toolbar_surface_presentation(false, true, false, false),
+            toolbar_surface_presentation(ToolbarSurfaceState {
+                capture_suppressed: true,
+                ..ToolbarSurfaceState::default()
+            }),
             ToolbarSurfacePresentation {
                 window_visible: false,
                 capture_transparent: true,
@@ -748,7 +767,11 @@ mod tests {
     #[test]
     fn capture_suppression_preserves_a_surface_that_was_still_mapped() {
         assert_eq!(
-            toolbar_surface_presentation(false, true, false, true),
+            toolbar_surface_presentation(ToolbarSurfaceState {
+                capture_suppressed: true,
+                mapped_before_capture: true,
+                ..ToolbarSurfaceState::default()
+            }),
             ToolbarSurfacePresentation {
                 window_visible: true,
                 capture_transparent: true,
@@ -761,7 +784,11 @@ mod tests {
     #[test]
     fn drag_preview_keeps_the_mapped_surface_interactive() {
         assert_eq!(
-            toolbar_surface_presentation(true, false, true, false),
+            toolbar_surface_presentation(ToolbarSurfaceState {
+                configured_visible: true,
+                drag_visual_hidden: true,
+                ..ToolbarSurfaceState::default()
+            }),
             ToolbarSurfacePresentation {
                 window_visible: true,
                 capture_transparent: false,
@@ -774,7 +801,10 @@ mod tests {
     #[test]
     fn ending_capture_restores_pixels_and_input_without_remapping() {
         assert_eq!(
-            toolbar_surface_presentation(true, false, false, false),
+            toolbar_surface_presentation(ToolbarSurfaceState {
+                configured_visible: true,
+                ..ToolbarSurfaceState::default()
+            }),
             ToolbarSurfacePresentation {
                 window_visible: true,
                 capture_transparent: false,
@@ -786,7 +816,10 @@ mod tests {
 
     #[test]
     fn idle_hidden_strip_stays_mapped_transparent_and_click_through() {
-        let shown = toolbar_surface_presentation(true, false, false, false);
+        let shown = toolbar_surface_presentation(ToolbarSurfaceState {
+            configured_visible: true,
+            ..ToolbarSurfaceState::default()
+        });
         assert_eq!(shown.with_idle_hidden(false), shown);
         assert_eq!(
             shown.with_idle_hidden(true),
@@ -799,7 +832,11 @@ mod tests {
         );
 
         // Capture suppression already owns transparency and input.
-        let capturing = toolbar_surface_presentation(true, true, false, false);
+        let capturing = toolbar_surface_presentation(ToolbarSurfaceState {
+            configured_visible: true,
+            capture_suppressed: true,
+            ..ToolbarSurfaceState::default()
+        });
         assert_eq!(capturing.with_idle_hidden(true), capturing);
         assert_eq!(capturing.with_idle_hidden(false), capturing);
     }

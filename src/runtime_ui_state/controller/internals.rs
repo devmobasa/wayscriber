@@ -1,4 +1,14 @@
-use super::*;
+use super::super::{
+    AbandonedPreviewResolutionReason, ActiveControllerBarrier, ControllerBarrierId,
+    ControllerBarrierOperation, ControllerBarrierPhase, IntegratedSourceMutation,
+    RuntimeStateObservedPathEffect, RuntimeStateRecoveryArtifact, RuntimeStateSourceObservation,
+    RuntimeUiFileStatus, RuntimeUiLiveState, RuntimeUiWireState, SourceMutationKind,
+    SourceMutationResult, WirePassthrough,
+};
+use super::{
+    ExternalReconciliationEvidence, RuntimeUiStateController, SubmitSourceMutationResult,
+    SupportedResetAuthoritySnapshot, SupportedResetAuthorityState, UnsupportedResetConfirmation,
+};
 
 impl RuntimeUiStateController {
     pub(super) fn canonical_wire(&self) -> RuntimeUiWireState {
@@ -82,7 +92,7 @@ impl RuntimeUiStateController {
 
     pub(super) fn finish_supported_reset_success(
         &mut self,
-        integrated: IntegratedSourceMutation,
+        integrated: &IntegratedSourceMutation,
     ) -> SubmitSourceMutationResult {
         let recovery_artifacts = match &integrated.result {
             SourceMutationResult::Applied {
@@ -94,7 +104,10 @@ impl RuntimeUiStateController {
             .supported_reset
             .take()
             .expect("matching reset acknowledgement requires transaction");
-        debug_assert_eq!(transaction.through, integrated.request.accepted_through);
+        debug_assert_eq!(
+            transaction.through, integrated.request.accepted_through,
+            "a reset acknowledgement must cover the revision its transaction reset through"
+        );
         self.model.clear();
         self.passthrough = WirePassthrough::default();
         self.live_only_overlay.clear();

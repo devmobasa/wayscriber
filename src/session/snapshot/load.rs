@@ -1,15 +1,10 @@
-use super::compression::{
-    DEFAULT_MAX_EXPANDED_SESSION_BYTES, ExpandedSessionTooLarge, is_gzip,
-    maybe_decompress_with_limit,
-};
-use super::history::{
-    apply_history_policies, enforce_shape_limits, max_history_depth, strip_history_fields,
-};
-use super::types::{
-    BoardFile, BoardPagesSnapshot, BoardSnapshot, CURRENT_VERSION, SessionFile, SessionSnapshot,
-};
-use crate::draw::Frame;
-use crate::draw::frame::MAX_COMPOUND_DEPTH;
+use std::error;
+
+use crate::session;
+use crate::session::catalog;
+
+use super::compression::DEFAULT_MAX_EXPANDED_SESSION_BYTES;
+use super::types::SessionSnapshot;
 use crate::session::lock::{
     lock_shared, open_existing_runtime_lock_file_for_read, open_runtime_lock_file, unlock,
 };
@@ -19,12 +14,9 @@ use crate::session::primary::{
     session_artifact_metadata_if_exists,
 };
 use anyhow::{Context, Result, anyhow};
-use log::{debug, info, warn};
-use serde_json::Value;
-use std::fmt;
-use std::fs;
-use std::io::Read;
+use log::{info, warn};
 use std::path::{Path, PathBuf};
+use std::{fmt, fs};
 
 mod artifact_outcome;
 mod corrupt;
@@ -35,12 +27,11 @@ mod payload;
 
 pub(crate) use artifact_outcome::CorruptArtifactPreservationFailed;
 use artifact_outcome::{CorruptLoadAction, artifact_load_outcome};
-use corrupt::{preserve_newer_version_session, quarantine_corrupt_artifact};
 use fallback::load_normal_session_or_empty;
 use markers::{
-    backup_is_newer_than_primary, clear_marker_metadata, clear_marker_suppresses_artifact,
-    preserve_unloadable_recovery, recoverable_backup_marker_metadata,
-    recoverable_recovery_marker_metadata, should_prefer_recovery,
+    clear_marker_metadata, clear_marker_suppresses_artifact, preserve_unloadable_recovery,
+    recoverable_backup_marker_metadata, recoverable_recovery_marker_metadata,
+    should_prefer_recovery,
 };
 use named_candidate::{load_named_candidate_with_fallbacks, log_named_candidate_outcome};
 use payload::load_snapshot_opened_with_expanded_limit;
@@ -109,7 +100,7 @@ impl fmt::Display for NewerVersionPreservationFailed {
     }
 }
 
-impl std::error::Error for NewerVersionPreservationFailed {}
+impl error::Error for NewerVersionPreservationFailed {}
 
 impl LoadSnapshotOutcome {
     #[allow(dead_code)]
@@ -184,7 +175,7 @@ pub(super) fn load_named_session_candidate_with_expanded_limit(
     }
 
     let session_path = options.session_file_path();
-    crate::session::validate_named_session_file_for_open(&session_path)?;
+    session::validate_named_session_file_for_open(&session_path)?;
 
     let result = load_named_candidate_with_fallbacks(&session_path, options, max_expanded_size);
 
@@ -274,7 +265,7 @@ fn load_snapshot_with_expanded_limit_inner(
             return load_normal_session_or_empty(
                 options,
                 &session_path,
-                session_metadata,
+                session_metadata.as_ref(),
                 max_expanded_size,
                 clear_marker_metadata.as_ref(),
                 backup_recovery_marker_metadata.as_ref(),
@@ -335,7 +326,7 @@ fn load_snapshot_with_expanded_limit_inner(
     load_normal_session_or_empty(
         options,
         &session_path,
-        session_metadata,
+        session_metadata.as_ref(),
         max_expanded_size,
         clear_marker_metadata.as_ref(),
         backup_recovery_marker_metadata.as_ref(),
@@ -482,7 +473,7 @@ fn record_named_session_opened_for_outcome(
                 | LoadSnapshotOutcome::RestoredAfterCorruption { .. }
         )
     {
-        crate::session::catalog::record_named_session_opened(options);
+        catalog::record_named_session_opened(options);
     }
 }
 

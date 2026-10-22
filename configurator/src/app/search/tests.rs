@@ -5,6 +5,9 @@
 //! that every control label a page shows is indexed by the search terms —
 //! return with the GTK page registry, once every page is ported.
 
+use wayscriber::domain::Language;
+use wayscriber::i18n;
+
 use super::*;
 use std::path::PathBuf;
 
@@ -12,6 +15,7 @@ use crate::models::session::SessionArtifactSummary;
 use crate::models::{
     KeybindingField, KeybindingsTabId, SearchQuery, SessionCatalogItem, TabId, UiTabId,
 };
+use crate::test_env;
 use wayscriber::config::toolbar_item_ids as ids;
 
 #[test]
@@ -856,13 +860,13 @@ fn catalog_item(id: &str) -> SessionCatalogItem {
 /// found, and titles as displayed find their tab, sub-tab and section.
 #[test]
 fn chinese_ui_search_matches_english_terms_and_displayed_titles() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::chinese_ui_search_matches_english_terms_and_displayed_titles"
         ),
         || {
-            wayscriber::i18n::set_language(wayscriber::domain::Language::SimplifiedChinese);
+            i18n::set_language(Language::SimplifiedChinese);
             let (mut app, _effects) = ConfiguratorApp::new_app();
             let tabs_for = |app: &mut ConfiguratorApp, query: &str| {
                 app.search_query = SearchQuery::new(query);
@@ -889,17 +893,14 @@ fn chinese_ui_search_matches_english_terms_and_displayed_titles() {
 
 #[test]
 fn language_search_reveals_general_ui_in_either_language() {
-    crate::test_env::in_language_child(
+    test_env::in_language_child(
         concat!(
             module_path!(),
             "::language_search_reveals_general_ui_in_either_language"
         ),
         || {
-            for language in [
-                wayscriber::domain::Language::English,
-                wayscriber::domain::Language::SimplifiedChinese,
-            ] {
-                wayscriber::i18n::set_language(language);
+            for language in [Language::English, Language::SimplifiedChinese] {
+                i18n::set_language(language);
                 let (mut app, _effects) = ConfiguratorApp::new_app();
                 for query in ["language", "locale", "English", "简体中文", "中文", "语言"] {
                     app.search_query = SearchQuery::new(query);

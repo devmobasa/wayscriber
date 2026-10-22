@@ -19,10 +19,15 @@
 //! one. It is created on the first write and left in place; it carries no
 //! contents and is never read.
 
+use std::fmt::{Display, Formatter};
+use std::{error, fmt, thread};
+
 use anyhow::{Context, Result, anyhow};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+
+use crate::durable_io;
 
 /// How long a save waits for another writer's window to close.
 ///
@@ -50,8 +55,8 @@ pub struct ConfigWriteLockTimeout {
     pub waited: Duration,
 }
 
-impl std::fmt::Display for ConfigWriteLockTimeout {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ConfigWriteLockTimeout {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
             "another editor is writing {} (waited {:?} for the config write lock)",
@@ -61,7 +66,7 @@ impl std::fmt::Display for ConfigWriteLockTimeout {
     }
 }
 
-impl std::error::Error for ConfigWriteLockTimeout {}
+impl error::Error for ConfigWriteLockTimeout {}
 
 /// The lock file guarding one config file's writes.
 ///
@@ -94,7 +99,7 @@ impl Drop for ConfigWriteLock {
             // Closing the descriptor would release it anyway; unlocking first
             // says so at the point where the window ends. A failure here leaves
             // the close to do it, so there is nothing for the caller to act on.
-            let _ = crate::durable_io::unlock(file);
+            let _ = durable_io::unlock(file);
         }
     }
 }
@@ -115,7 +120,7 @@ pub(super) fn acquire_at(path: &Path, timeout: Duration) -> Result<ConfigWriteLo
     let file = open_lock_file(path)?;
     let started = Instant::now();
     loop {
-        match crate::durable_io::try_lock_exclusive(&file) {
+        match durable_io::try_lock_exclusive(&file) {
             Ok(()) => return Ok(ConfigWriteLock { file: Some(file) }),
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 let waited = started.elapsed();
@@ -125,7 +130,7 @@ pub(super) fn acquire_at(path: &Path, timeout: Duration) -> Result<ConfigWriteLo
                         waited,
                     }));
                 }
-                std::thread::sleep(LOCK_RETRY.min(timeout - waited));
+                thread::sleep(LOCK_RETRY.min(timeout - waited));
             }
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => {
@@ -163,6 +168,8 @@ fn open_lock_file(path: &Path) -> Result<File> {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
 
     /// A lock somebody else is holding is waited for, then reported — never
@@ -170,7 +177,7 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn a_held_lock_is_reported_as_a_timeout_rather_than_taken() {
-        let temp = crate::test_temp::tempdir().expect("tempdir");
+        let temp = test_temp::tempdir().expect("tempdir");
         let destination = temp.path().join("config.toml");
         let path = config_write_lock_path(&destination).expect("a lock path");
 

@@ -10,6 +10,7 @@ use std::collections::HashSet;
 
 use crate::config::Action;
 use crate::draw::Color;
+use crate::label_format;
 
 use super::super::ToolbarEvent;
 use super::activation::ToolbarControlId;
@@ -123,7 +124,7 @@ impl ToolbarTooltip {
         match self {
             Self::None => None,
             Self::Text(text) => Some(text.to_string()),
-            Self::Binding { label, binding } => Some(crate::label_format::format_binding_label(
+            Self::Binding { label, binding } => Some(label_format::format_binding_label(
                 label,
                 binding.as_deref(),
             )),

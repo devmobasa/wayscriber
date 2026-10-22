@@ -1,3 +1,6 @@
+use crate::draw;
+use crate::input::tool;
+
 use super::{ToolbarEvent, ToolbarSliderSpec, ToolbarSnapshot};
 
 /// What the marker opacity slider paints instead of a plain track and a
@@ -102,8 +105,7 @@ impl StylePillSlider {
         (self == Self::Opacity).then(|| {
             let (spec, value) = self.value(snapshot);
             let color = snapshot.color;
-            let stroke_alpha =
-                |opacity: f64| crate::input::tool::marker_color_with_opacity(color, opacity).a;
+            let stroke_alpha = |opacity: f64| tool::marker_color_with_opacity(color, opacity).a;
             let min_alpha = stroke_alpha(spec.min);
             let max_alpha = stroke_alpha(spec.max);
             let position_for_alpha = |alpha| {
@@ -131,7 +133,7 @@ impl StylePillSlider {
         match self {
             Self::Thickness => |value| format!("{value:.0}px"),
             Self::Opacity => |value| format!("{:.0}%", value * 100.0),
-            Self::SpotlightMagnification => crate::draw::format_spotlight_magnification,
+            Self::SpotlightMagnification => draw::format_spotlight_magnification,
             Self::FontSize => |value| format!("{value:.0}pt"),
         }
     }

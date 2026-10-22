@@ -1,10 +1,12 @@
-use crate::config::QuickColorPalette;
-use crate::config::{ResolvedToolbarItems, ToolbarItemId, ToolbarLayoutMode, TopDisplayMode};
-use crate::draw::{ArrowStyle, Color, EraserKind, FontDescriptor};
+use crate::config::{
+    QuickColorPalette, ResolvedToolbarItems, StatusBarItem, ToolbarItemId, ToolbarLayoutMode,
+    ToolbarStrokeControls, TopDisplayMode,
+};
+use crate::draw::{ArrowStyle, Color, EraserKind, FontDescriptor, SpotlightMagnifierSource};
 use crate::i18n::tr;
 use crate::input::state::PresetFeedbackKind;
 use crate::input::tool::{ToolControlGroup, ToolProfile};
-use crate::input::{EraserMode, Tool};
+use crate::input::{EraserMode, SelectionPropertyEntry, Tool};
 use std::path::PathBuf;
 
 use super::super::bindings::ToolbarBindingHints;
@@ -92,6 +94,7 @@ pub struct ToolContext {
 
 impl ToolContext {
     /// Compute the tool context from the current toolbar state.
+    #[must_use]
     pub fn from_snapshot(snapshot: &ToolbarSnapshot) -> Self {
         // If context-aware UI is disabled, show all sections (classic behavior)
         if !snapshot.context_aware_ui {
@@ -298,7 +301,7 @@ pub struct ToolbarSnapshot {
     /// Only the backend that owns the canvas can decide this, so a snapshot
     /// built from `InputState` alone leaves it unset rather than guessing; an
     /// unset source simply shows no inline status.
-    pub spotlight_magnifier_source: Option<crate::draw::SpotlightMagnifierSource>,
+    pub spotlight_magnifier_source: Option<SpotlightMagnifierSource>,
     /// Highest magnification among selected Spotlights, when the selection
     /// holds any. Drives the docked selection control's inline status,
     /// which reports on the selected shape rather than the tool default.
@@ -358,7 +361,7 @@ pub struct ToolbarSnapshot {
     /// Current toolbar layout mode
     pub layout_mode: ToolbarLayoutMode,
     /// How the style pill shows pen smoothing and Shape Pen sensitivity
-    pub stroke_controls: crate::config::ToolbarStrokeControls,
+    pub stroke_controls: ToolbarStrokeControls,
     /// Resolved known item-level toolbar visibility config.
     pub resolved_toolbar_items: ResolvedToolbarItems,
     /// Whether to show extended color palette
@@ -486,7 +489,7 @@ pub struct ToolbarSnapshot {
     /// Selection-property entries docked into the style pill while the
     /// select tool has an active selection (mirrors the overlay properties
     /// popup's entry list; empty when nothing is selected).
-    pub selection_properties: Vec<crate::input::SelectionPropertyEntry>,
+    pub selection_properties: Vec<SelectionPropertyEntry>,
 }
 
 impl ToolbarSnapshot {
@@ -499,35 +502,39 @@ impl ToolbarSnapshot {
         }
     }
 
-    pub fn status_bar_item_visible(&self, item: crate::config::StatusBarItem) -> bool {
+    #[must_use]
+    pub fn status_bar_item_visible(&self, item: StatusBarItem) -> bool {
         match item {
-            crate::config::StatusBarItem::ActiveOutput => self.show_active_output_badge,
-            crate::config::StatusBarItem::SelectionInfo => self.show_status_selection_info,
-            crate::config::StatusBarItem::Board => self.show_status_board_badge,
-            crate::config::StatusBarItem::Page => self.show_status_page_badge,
-            crate::config::StatusBarItem::Color => self.show_status_color,
-            crate::config::StatusBarItem::Tool => self.show_status_tool,
-            crate::config::StatusBarItem::Size => self.show_status_size,
-            crate::config::StatusBarItem::ContextIndicators => self.show_status_context_indicators,
-            crate::config::StatusBarItem::ToolbarHint => self.show_toolbar_hint,
-            crate::config::StatusBarItem::Help => self.show_status_help,
-            crate::config::StatusBarItem::About => self.show_status_about,
+            StatusBarItem::ActiveOutput => self.show_active_output_badge,
+            StatusBarItem::SelectionInfo => self.show_status_selection_info,
+            StatusBarItem::Board => self.show_status_board_badge,
+            StatusBarItem::Page => self.show_status_page_badge,
+            StatusBarItem::Color => self.show_status_color,
+            StatusBarItem::Tool => self.show_status_tool,
+            StatusBarItem::Size => self.show_status_size,
+            StatusBarItem::ContextIndicators => self.show_status_context_indicators,
+            StatusBarItem::ToolbarHint => self.show_toolbar_hint,
+            StatusBarItem::Help => self.show_status_help,
+            StatusBarItem::About => self.show_status_about,
         }
     }
 
     /// Whether the top strip renders as the micro chip. Minimized wins when
     /// both states are somehow set (e.g. a hand-edited config): the restore
     /// tab is the more explicit "bring me back" affordance.
+    #[must_use]
     pub fn top_micro_active(&self) -> bool {
         self.top_display_mode == TopDisplayMode::Micro && !self.top_minimized
     }
 
     /// Whether the idle fade has the strip fully hidden. Every frontend keeps
     /// the surface mapped but lets pointer input through to the canvas.
+    #[must_use]
     pub fn top_strip_hidden(&self) -> bool {
         super::fade::top_strip_hidden(self.top_fade)
     }
 
+    #[must_use]
     pub fn toolbar_item_hidden(&self, item: ToolbarItemId) -> bool {
         self.resolved_toolbar_items.is_hidden(item)
     }

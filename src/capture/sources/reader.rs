@@ -1,12 +1,16 @@
 #![cfg(feature = "portal")]
 
+use std::io::ErrorKind;
+use std::{env, io};
+
 use crate::capture::types::CaptureError;
 use crate::env_vars::XDG_RUNTIME_DIR_ENV;
-use crate::file_uri;
+use crate::{file_uri, paths};
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::{thread, time::Duration};
+use std::thread;
+use std::time::Duration;
 
 const MAX_PORTAL_IMAGE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_ATTEMPTS: usize = 60;
@@ -111,12 +115,12 @@ fn is_deletable_portal_temp_path(path: &Path) -> bool {
 
 fn allowed_portal_temp_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
-    if let Some(runtime) = std::env::var_os(XDG_RUNTIME_DIR_ENV)
+    if let Some(runtime) = env::var_os(XDG_RUNTIME_DIR_ENV)
         && !runtime.is_empty()
     {
         roots.push(PathBuf::from(runtime));
     }
-    if let Some(cache) = crate::paths::cache_dir() {
+    if let Some(cache) = paths::cache_dir() {
         roots.push(cache.join("xdg-desktop-portal"));
     }
     roots
@@ -129,7 +133,7 @@ enum PortalOpenError {
 
 fn open_portal_image(path: &Path, max_bytes: u64) -> Result<File, PortalOpenError> {
     let file = open_portal_file(path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
+        if err.kind() == ErrorKind::NotFound {
             PortalOpenError::NotReady(err.to_string())
         } else {
             PortalOpenError::Rejected {
@@ -163,7 +167,7 @@ fn open_portal_image(path: &Path, max_bytes: u64) -> Result<File, PortalOpenErro
 }
 
 #[cfg(unix)]
-fn open_portal_file(path: &Path) -> std::io::Result<File> {
+fn open_portal_file(path: &Path) -> io::Result<File> {
     use std::fs::OpenOptions;
     use std::os::unix::fs::OpenOptionsExt;
 
@@ -184,6 +188,10 @@ fn decode_file_uri(uri: &str) -> Result<PathBuf, CaptureError> {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix;
+
+    use crate::test_env;
+
     use super::*;
     use crate::env_vars::XDG_RUNTIME_DIR_ENV;
     use crate::test_temp::TempDir;
@@ -198,7 +206,7 @@ mod tests {
     }
 
     fn with_runtime_dir<T>(dir: &Path, body: impl FnOnce() -> T) -> T {
-        crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(dir.as_os_str()), body)
+        test_env::with_env_var(XDG_RUNTIME_DIR_ENV, Some(dir.as_os_str()), body)
     }
 
     #[test]
@@ -206,7 +214,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         with_runtime_dir(temp.path(), || {
             let file_path = temp.path().join("capture file.png");
-            std::fs::write(&file_path, b"portal-bytes").unwrap();
+            fs::write(&file_path, b"portal-bytes").unwrap();
 
             let data = read_image_from_uri(&file_uri_for(&file_path)).expect("read succeeds");
             assert_eq!(data, b"portal-bytes");
@@ -221,11 +229,11 @@ mod tests {
     fn reads_and_leaves_files_outside_portal_temp_roots() {
         let temp = TempDir::new().unwrap();
         let outside = temp.path().join("Pictures");
-        std::fs::create_dir(&outside).unwrap();
+        fs::create_dir(&outside).unwrap();
         let file_path = outside.join("shot.png");
-        std::fs::write(&file_path, b"portal-bytes").unwrap();
+        fs::write(&file_path, b"portal-bytes").unwrap();
         let trusted = temp.path().join("runtime");
-        std::fs::create_dir(&trusted).unwrap();
+        fs::create_dir(&trusted).unwrap();
 
         with_runtime_dir(&trusted, || {
             let data = read_image_from_uri(&file_uri_for(&file_path)).expect("read succeeds");
@@ -242,7 +250,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         with_runtime_dir(temp.path(), || {
             let file_path = temp.path().join("huge.png");
-            std::fs::write(&file_path, b"12345").unwrap();
+            fs::write(&file_path, b"12345").unwrap();
             let err = read_image_from_uri_with_limit(&file_uri_for(&file_path), 4)
                 .expect_err("oversize file");
             match err {
@@ -262,11 +270,11 @@ mod tests {
     fn oversized_files_outside_temp_roots_are_not_deleted() {
         let temp = TempDir::new().unwrap();
         let outside = temp.path().join("Pictures");
-        std::fs::create_dir(&outside).unwrap();
+        fs::create_dir(&outside).unwrap();
         let file_path = outside.join("huge.png");
-        std::fs::write(&file_path, b"12345").unwrap();
+        fs::write(&file_path, b"12345").unwrap();
         let trusted = temp.path().join("runtime");
-        std::fs::create_dir(&trusted).unwrap();
+        fs::create_dir(&trusted).unwrap();
 
         with_runtime_dir(&trusted, || {
             let err = read_image_from_uri_with_limit(&file_uri_for(&file_path), 4)
@@ -290,9 +298,9 @@ mod tests {
         let temp = TempDir::new().unwrap();
         with_runtime_dir(temp.path(), || {
             let target = temp.path().join("target.png");
-            std::fs::write(&target, b"secret").unwrap();
+            fs::write(&target, b"secret").unwrap();
             let link = temp.path().join("link.png");
-            std::os::unix::fs::symlink(&target, &link).unwrap();
+            unix::fs::symlink(&target, &link).unwrap();
 
             read_image_from_uri(&file_uri_for(&link)).expect_err("symlink");
             assert!(target.exists());
@@ -316,11 +324,11 @@ mod tests {
     fn deletable_portal_path_requires_runtime_or_cache_root() {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("shot.png");
-        std::fs::write(&file_path, b"x").unwrap();
+        fs::write(&file_path, b"x").unwrap();
         with_runtime_dir(temp.path(), || {
             assert!(is_deletable_portal_temp_path(&file_path));
         });
-        crate::test_env::with_env_var(XDG_RUNTIME_DIR_ENV, None, || {
+        test_env::with_env_var(XDG_RUNTIME_DIR_ENV, None, || {
             assert!(!is_deletable_portal_temp_path(&file_path));
         });
     }

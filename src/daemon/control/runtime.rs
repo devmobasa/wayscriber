@@ -1,3 +1,5 @@
+use std::io;
+
 use super::DaemonRuntimeInfo;
 use super::queue::{clear_daemon_toggle_request_file, clear_file, write_file_atomic};
 use crate::paths::{daemon_lock_file, daemon_pid_file};
@@ -5,8 +7,7 @@ use crate::session::try_lock_exclusive;
 use anyhow::{Context, Result, anyhow};
 use log::warn;
 use std::fs;
-use std::fs::File;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 
 pub(crate) fn write_daemon_pid_file(pid: u32, token: &str) -> Result<()> {
@@ -144,7 +145,7 @@ pub(super) fn signal_daemon_pid(pid: u32) -> Result<()> {
             return Err(anyhow!(
                 "failed to signal wayscriber daemon {}: {}",
                 pid,
-                std::io::Error::last_os_error()
+                io::Error::last_os_error()
             ));
         }
         Ok(())

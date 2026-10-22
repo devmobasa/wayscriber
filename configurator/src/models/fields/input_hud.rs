@@ -1,3 +1,6 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{InputHudMode, InputHudPosition};
@@ -40,8 +43,8 @@ impl InputHudModeOption {
     }
 }
 
-impl std::fmt::Display for InputHudModeOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for InputHudModeOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -118,8 +121,8 @@ impl InputHudPositionOption {
     }
 }
 
-impl std::fmt::Display for InputHudPositionOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for InputHudPositionOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }

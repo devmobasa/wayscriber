@@ -30,13 +30,24 @@
 - Review changed functions after `cargo fmt`. Formatter success verifies mechanical layout; also verify visually that logical chunks are clearly separated and easy to scan.
 - Apply these rules to new and materially changed code. Do not reformat unrelated existing code solely to adopt them.
 
+## Rust Style
+- Rust code follows the [Google Rust style guide](https://google.github.io/styleguide/rustguide.html) as application code. Its rules that Clippy can check are workspace lints in `Cargo.toml`, configured in `clippy.toml`. Fix a warning rather than suppressing it. When a site truly cannot comply, use `#[expect(lint, reason = "...")]` with the concrete constraint, never `#[allow]`.
+- Each `use` statement imports from one module: `use foo::bar::{Bar, Baz};`, not `use foo::{Foo, bar::Bar};`. `tests/repository_guards/use_statements.rs` checks this because rustfmt's `imports_granularity` is unstable.
+- Do not use glob imports, except `use super::*` in test modules and third-party preludes.
+- Import type and trait names and use them unqualified; call functions through their module (`fs::read`). Keep ambiguous names such as `io::Error` and `fmt::Result` module-qualified. A gated import carries the same `#[cfg(...)]` as the code that uses it.
+- Borrow instead of cloning or taking ownership (`&str`, `&[T]`, `Option<&T>`). Replace more than three bool parameters with enums or an options struct.
+- Use `expect` with a reason instead of `unwrap` in production code. Give assertions messages that explain the invariant, and document panics in `# Panics`.
+- Never reach inside a poisoned lock. Use `expect` when the critical section cannot panic, or a fallback that leaves the data alone. Tests that serialize on process-wide state use `test_env::lock()` or a `test_env::Lease`.
+- `catch_unwind` is reserved for the reviewed worker-isolation sites that carry an `#[expect]` reason. Tests observe panics through a joined scoped thread.
+- Getters are `foo()`/`foo_mut()`, a fallible constructor is `try_new`, and type lifetimes have descriptive names. Every `unsafe` block has a `// SAFETY:` comment that says why it is sound.
+
 ## Coupled Changes
 - Config changes often require `config.example.toml`, `docs/CONFIG.md`, configurator models/views, schema behavior, and tests.
 - Tool/action/keybinding changes often require config defaults, action metadata, help/command UI, toolbar UI, configurator labels/search, docs, and tests.
 - Daemon, service, shortcut, path, and packaging changes often need updates across `src/daemon/`, `src/paths/`, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, `configurator/src/app/daemon_setup/`, and `packaging/`.
 
 ## Validation
-- Full local CI is `./tools/lint-and-test.sh`. It needs the .NET SDK selected by `global.json`. Without it, `cargo test` still runs the Rust source guards in `tests/repository_guards` (process sites, config writers, shared dependencies, no Python), but not the C# checks, including the source-coverage check that finds `.rs` files Cargo never compiles.
+- Full local CI is `./tools/lint-and-test.sh`. It needs the .NET SDK selected by `global.json`. Without it, `cargo test` still runs the Rust source guards in `tests/repository_guards` (process sites, config writers, shared dependencies, use statements, no Python), but not the C# checks, including the source-coverage check that finds `.rs` files Cargo never compiles.
 - That script runs the C# repository checks (assets, version, nixpkgs recipe, source coverage, legacy tools), the C# tool tests (which also run the packaging shell contracts), `cargo fmt --all -- --check`, clippy with all targets/features, all-feature tests, and no-default-feature tests.
 - Run `git diff --check` before handoff. When relevant files are untracked and the index must stay unchanged, check those files directly as well.
 - For docs-only `AGENTS.md` edits, make new files visible to Git before whitespace checks, for example `rg --files --hidden -g AGENTS.md -0 | xargs -0 git add -N --` followed by `git diff --check`.

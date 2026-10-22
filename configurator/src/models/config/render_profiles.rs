@@ -1,3 +1,6 @@
+use std::fmt::{Display, Formatter};
+use std::{fmt, iter};
+
 use wayscriber::i18n::tr;
 
 use wayscriber::config::{
@@ -56,8 +59,8 @@ impl RenderProfileExportOption {
     }
 }
 
-impl std::fmt::Display for RenderProfileExportOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RenderProfileExportOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
 }
@@ -70,7 +73,7 @@ pub enum RenderProfileSelectionOption {
 
 impl RenderProfileSelectionOption {
     pub fn list(profile_ids: &[String]) -> Vec<Self> {
-        std::iter::once(Self::Off)
+        iter::once(Self::Off)
             .chain(profile_ids.iter().cloned().map(Self::Profile))
             .collect()
     }
@@ -84,8 +87,8 @@ impl RenderProfileSelectionOption {
     }
 }
 
-impl std::fmt::Display for RenderProfileSelectionOption {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for RenderProfileSelectionOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Off => f.write_str("Off"),
             Self::Profile(id) => f.write_str(id),

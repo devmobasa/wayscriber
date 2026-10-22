@@ -1,7 +1,6 @@
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, fs};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=WAYSCRIBER_RELEASE_VERSION");

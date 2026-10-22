@@ -4,6 +4,9 @@
 //! preceding cut. The engine is backend-neutral: it does not know about Wayland,
 //! Cairo, source tokens, or capture destinations.
 
+use std::fmt;
+use std::fmt::{Display, Formatter};
+
 use crate::screen_pixels::PackedArgb32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,8 +31,8 @@ pub(crate) enum BandCutError {
     InvalidPixels,
 }
 
-impl std::fmt::Display for BandCutError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for BandCutError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyRange => formatter.write_str("cut range is empty"),
             Self::OutOfBounds => formatter.write_str("cut range leaves the current output"),
@@ -41,7 +44,7 @@ impl std::fmt::Display for BandCutError {
 }
 
 impl CutBand {
-    pub(crate) fn new(axis: CutAxis, start: u32, end: u32) -> Result<Self, BandCutError> {
+    pub(crate) fn try_new(axis: CutAxis, start: u32, end: u32) -> Result<Self, BandCutError> {
         if start >= end {
             return Err(BandCutError::EmptyRange);
         }
@@ -54,7 +57,7 @@ impl CutBand {
         first: u32,
         second: u32,
     ) -> Result<Self, BandCutError> {
-        Self::new(axis, first.min(second), first.max(second))
+        Self::try_new(axis, first.min(second), first.max(second))
     }
 
     pub(crate) const fn axis(self) -> CutAxis {
@@ -299,7 +302,7 @@ mod tests {
                     x as u8,
                     y as u8,
                     (y.wrapping_mul(width).wrapping_add(x)) as u8,
-                    0x80 | ((x + y) as u8 & 0x3F),
+                    0x80 | ((x + y) as u8 & 0x3f),
                 ]);
             }
         }
@@ -326,7 +329,7 @@ mod tests {
     }
 
     fn cut(axis: CutAxis, start: u32, end: u32) -> CutBand {
-        CutBand::new(axis, start, end).expect("valid cut")
+        CutBand::try_new(axis, start, end).expect("valid cut")
     }
 
     fn reference_one(pixels: &PackedArgb32, cut: CutBand) -> Result<PackedArgb32, BandCutError> {
@@ -528,7 +531,7 @@ mod tests {
     #[test]
     fn empty_half_open_range_is_rejected() {
         assert_eq!(
-            CutBand::new(CutAxis::Columns, 3, 3),
+            CutBand::try_new(CutAxis::Columns, 3, 3),
             Err(BandCutError::EmptyRange)
         );
         assert_eq!(
@@ -637,7 +640,7 @@ mod tests {
                     };
                     for start in 0..extent {
                         for end in (start + 1)..=extent {
-                            let Ok(band) = CutBand::new(axis, start, end) else {
+                            let Ok(band) = CutBand::try_new(axis, start, end) else {
                                 continue;
                             };
                             let optimized = apply_band_cuts(&source, &[band]);

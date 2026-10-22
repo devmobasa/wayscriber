@@ -66,12 +66,14 @@ impl HelpHitMap {
     }
 
     /// Register the painted unbound-actions toggle, as `(x, y, width, height)`.
+    #[must_use]
     pub fn with_unbound_toggle(mut self, rect: (f64, f64, f64, f64)) -> Self {
         self.unbound_toggle = Some(HitRect::from_tuple(rect));
         self
     }
 
     /// Return the most specific target at a point, including rectangle edges.
+    #[must_use]
     pub fn region_at(&self, x: f64, y: f64) -> Option<HelpOverlayRegion> {
         if !self.box_rect?.contains(x, y) {
             return None;

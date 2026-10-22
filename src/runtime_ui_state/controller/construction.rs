@@ -1,4 +1,19 @@
-use super::*;
+use std::mem;
+
+use super::super::{
+    AbandonedPreviewResolution, AbandonedPreviewResolutionReason, ActiveControllerBarrier,
+    ControllerBarrierId, ControllerBarrierOperation, ControllerId, InteractionSeedRegistry,
+    InteractionSeedTarget, PersistenceIncidentId, PersistencePipeline,
+    RuntimeStateFailurePathEffect, RuntimeStateIoError, RuntimeStateRecoveryArtifact,
+    RuntimeStateSourceObservation, RuntimeStateSourceRevision, RuntimeUiFileStatus,
+    RuntimeUiLiveOnlyOverlay, RuntimeUiLiveState, RuntimeUiModel, RuntimeUiWireState,
+    ValidatedInteractionSeeds,
+};
+use super::{NEXT_CONTROLLER_ID, RuntimeUiStateController};
+use std::cell::Cell;
+use std::collections::{BTreeSet, VecDeque};
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::channel;
 
 impl RuntimeUiStateController {
     pub(crate) fn new(
@@ -102,7 +117,7 @@ impl RuntimeUiStateController {
     pub(crate) fn new_startup_unhealthy(
         seeds: ValidatedInteractionSeeds,
         observed: RuntimeStateSourceObservation,
-        error: RuntimeStateIoError,
+        error: &RuntimeStateIoError,
         recovery_artifacts: Vec<RuntimeStateRecoveryArtifact>,
         path_effect: RuntimeStateFailurePathEffect,
     ) -> (Self, PersistenceIncidentId) {
@@ -171,7 +186,7 @@ impl RuntimeUiStateController {
     }
 
     pub(crate) fn take_preview_resolutions(&mut self) -> Vec<AbandonedPreviewResolution> {
-        std::mem::take(&mut self.preview_resolution_outbox)
+        mem::take(&mut self.preview_resolution_outbox)
     }
 
     pub(in crate::runtime_ui_state) fn close_barrier_and_resolve_previews(

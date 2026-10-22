@@ -1,3 +1,5 @@
+use std::{env, iter};
+
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
 use anyhow::{Context, Result, bail};
 use std::ffi::OsStr;
@@ -6,9 +8,11 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::process_broker::HelperKind;
 use crate::systemd_user_service::{
     USER_SERVICE_NAME, render_user_service_unit, user_service_unit_path,
 };
+use crate::{durable_io, process_broker};
 
 #[derive(Debug, Clone)]
 pub(crate) struct BackgroundModeSetupSummary {
@@ -34,7 +38,7 @@ fn ensure_user_service_file() -> Result<PathBuf> {
         })?;
     }
 
-    let executable = std::env::current_exe().context("failed to resolve wayscriber executable")?;
+    let executable = env::current_exe().context("failed to resolve wayscriber executable")?;
     let executable = service_executable(executable)?;
     let service_contents = render_user_service_unit(&executable);
     write_if_changed(&service_path, &service_contents)?;
@@ -69,7 +73,7 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
         }
     }
 
-    crate::durable_io::write_text_atomic(
+    durable_io::write_text_atomic(
         path,
         content,
         AtomicWriteOptions {
@@ -86,10 +90,10 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
 
 fn run_systemctl_user(args: &[&str]) -> Result<()> {
     let arguments = systemctl_user_arguments(args);
-    let output = crate::process_broker::current()
+    let output = process_broker::current()
         .and_then(|broker| {
             broker.run(
-                crate::process_broker::HelperKind::Systemctl,
+                HelperKind::Systemctl,
                 OsStr::new("systemctl"),
                 &arguments,
                 Vec::new(),
@@ -119,7 +123,7 @@ fn run_systemctl_user(args: &[&str]) -> Result<()> {
 }
 
 fn systemctl_user_arguments<'a>(args: &'a [&'a str]) -> Vec<&'a OsStr> {
-    std::iter::once(OsStr::new("--user"))
+    iter::once(OsStr::new("--user"))
         .chain(args.iter().map(OsStr::new))
         .collect()
 }
@@ -135,6 +139,8 @@ fn systemctl_error_detail(stdout: &str, stderr: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_temp;
+
     use super::*;
 
     #[test]
@@ -156,7 +162,7 @@ mod tests {
 
     #[test]
     fn a_replaced_or_missing_executable_is_not_written_into_the_unit() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let installed = temp.path().join("wayscriber");
         fs::write(&installed, b"binary").unwrap();
 

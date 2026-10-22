@@ -86,7 +86,7 @@ impl ClaimedCommand {
             latest.action_status = ActionStatus::Abandoned {
                 action_id: prepared.action_id.clone(),
                 action_order: prepared.action_order,
-                digest: prepared.digest.clone(),
+                digest: prepared.digest,
                 reason: reason.to_owned(),
             };
             bump_revision(&mut latest)?;
@@ -187,9 +187,7 @@ impl ClaimedCommand {
         let (status, response) = match result {
             FinalEffect::Completed => (
                 EffectStatus::Completed,
-                CommandResponse::Succeeded {
-                    effect_id: effect_id.clone(),
-                },
+                CommandResponse::Succeeded { effect_id },
             ),
             FinalEffect::Indeterminate => {
                 let reason = bounded_reason(
@@ -198,10 +196,7 @@ impl ClaimedCommand {
                 );
                 (
                     EffectStatus::Indeterminate(reason.clone()),
-                    CommandResponse::CommittedIndeterminate {
-                        effect_id: effect_id.clone(),
-                        reason,
-                    },
+                    CommandResponse::CommittedIndeterminate { effect_id, reason },
                 )
             }
         };

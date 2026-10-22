@@ -1,12 +1,12 @@
 use crate::domain::Action;
-use crate::draw::Frame;
+use crate::draw::{Frame, TextMeasurer};
 
 use super::super::InputState;
 
 impl InputState {
     pub(in crate::input::state) fn handle_history_action_with_measurer(
         &mut self,
-        measurer: &crate::draw::TextMeasurer,
+        measurer: &TextMeasurer,
         action: Action,
     ) -> bool {
         match action {
@@ -46,17 +46,11 @@ impl InputState {
         }
     }
 
-    pub(crate) fn undo_all_immediate_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn undo_all_immediate_with_measurer(&mut self, measurer: &TextMeasurer) {
         while self.step_history_with(measurer, Frame::undo_last) {}
     }
 
-    pub(crate) fn redo_all_immediate_with_measurer(
-        &mut self,
-        measurer: &crate::draw::TextMeasurer,
-    ) {
+    pub(crate) fn redo_all_immediate_with_measurer(&mut self, measurer: &TextMeasurer) {
         while self.step_history_with(measurer, Frame::redo_last) {}
     }
 }

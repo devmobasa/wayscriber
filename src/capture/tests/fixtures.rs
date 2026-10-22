@@ -1,15 +1,12 @@
-use std::{
-    future::Future,
-    path::PathBuf,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::future::Future;
+use std::io;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
-use crate::capture::{
-    dependencies::{CaptureClipboard, CaptureFileSaver, CaptureSource},
-    file::FileSaveConfig,
-    types::{CaptureError, CaptureType},
-};
+use crate::capture::dependencies::{CaptureClipboard, CaptureFileSaver, CaptureSource};
+use crate::capture::file::FileSaveConfig;
+use crate::capture::types::{CaptureError, CaptureType};
 
 #[derive(Clone)]
 pub(super) struct MockSource {
@@ -45,9 +42,7 @@ impl CaptureFileSaver for MockSaver {
     fn save(&self, _image_data: &[u8], _config: &FileSaveConfig) -> Result<PathBuf, CaptureError> {
         *self.calls.lock().unwrap() += 1;
         if self.should_fail {
-            Err(CaptureError::SaveError(std::io::Error::other(
-                "save failed",
-            )))
+            Err(CaptureError::SaveError(io::Error::other("save failed")))
         } else {
             Ok(self.path.clone())
         }

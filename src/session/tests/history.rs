@@ -1,3 +1,6 @@
+use crate::draw::{Frame, ShapeId, TextMeasurer};
+use crate::test_temp;
+
 use super::super::*;
 use super::helpers::dummy_input_state;
 use crate::draw::frame::{ShapeSnapshot, UndoAction};
@@ -7,7 +10,7 @@ use std::fs;
 
 #[test]
 fn snapshot_preserves_history_only_frames() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-history");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -59,7 +62,7 @@ fn snapshot_preserves_history_only_frames() {
 
 #[test]
 fn modify_delete_cycle_survives_restore() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-modify-delete");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -155,7 +158,7 @@ fn modify_delete_cycle_survives_restore() {
 
 #[test]
 fn clear_all_can_be_undone_after_restore() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-clear-all");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -203,8 +206,8 @@ fn clear_all_can_be_undone_after_restore() {
 
 #[test]
 fn moved_multi_selection_with_history_survives_save_restore() {
-    let route_measurer = crate::draw::TextMeasurer::default();
-    let temp = crate::test_temp::tempdir().unwrap();
+    let route_measurer = TextMeasurer::default();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-multi-move");
     options.persist_transparent = true;
     options.persist_history = true;
@@ -279,7 +282,7 @@ fn moved_multi_selection_with_history_survives_save_restore() {
     );
 }
 
-fn freehand_points(frame: &crate::draw::Frame, id: crate::draw::ShapeId) -> Vec<(f64, f64)> {
+fn freehand_points(frame: &Frame, id: ShapeId) -> Vec<(f64, f64)> {
     let shape = frame.shape(id).expect("shape exists");
     match &shape.shape {
         Shape::Freehand { points, .. } => points.clone(),
@@ -289,7 +292,7 @@ fn freehand_points(frame: &crate::draw::Frame, id: crate::draw::ShapeId) -> Vec<
 
 #[test]
 fn corrupted_history_is_dropped_but_shapes_load() {
-    let temp = crate::test_temp::tempdir().unwrap();
+    let temp = test_temp::tempdir().unwrap();
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "display-corrupt");
     options.persist_transparent = true;
     options.persist_history = true;

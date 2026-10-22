@@ -27,6 +27,9 @@ pub(crate) use region::{
 mod tests {
     use std::sync::Arc;
 
+    use crate::draw;
+    use crate::draw::{EraserBrush, EraserKind, RenderCaches, TextMeasurer};
+
     use super::*;
     use crate::canvas_export::page::draw_canvas_page_with_measurer;
     use crate::canvas_export::png::render_canvas_surface;
@@ -200,8 +203,8 @@ mod tests {
         {
             let ctx = cairo::Context::new(&surface).expect("context");
             draw_canvas_page_with_measurer(
-                &crate::draw::TextMeasurer::default(),
-                &mut crate::draw::RenderCtx::new(&ctx, &mut crate::draw::RenderCaches::default()),
+                &TextMeasurer::default(),
+                &mut crate::draw::RenderCtx::new(&ctx, &mut RenderCaches::default()),
                 &page_snapshot(frame),
                 2.0,
             )
@@ -517,9 +520,9 @@ mod tests {
         });
         frame.add_shape(Shape::EraserStroke {
             points: vec![(6, 6)],
-            brush: crate::draw::EraserBrush {
+            brush: EraserBrush {
                 size: 6.0,
-                kind: crate::draw::EraserKind::Circle,
+                kind: EraserKind::Circle,
             },
         });
         let mut export = snapshot(
@@ -553,9 +556,9 @@ mod tests {
         });
         frame.add_shape(Shape::EraserStroke {
             points: vec![(6, 6)],
-            brush: crate::draw::EraserBrush {
+            brush: EraserBrush {
                 size: 6.0,
-                kind: crate::draw::EraserKind::Circle,
+                kind: EraserKind::Circle,
             },
         });
         let mut surface = render_canvas_surface(&snapshot(
@@ -586,13 +589,13 @@ mod tests {
             cy: 60,
             rx: 14,
             ry: 14,
-            magnification: crate::draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
+            magnification: draw::DEFAULT_SPOTLIGHT_MAGNIFICATION,
         });
         frame.add_shape(Shape::EraserStroke {
             points: vec![(40, 60), (110, 60)],
-            brush: crate::draw::EraserBrush {
+            brush: EraserBrush {
                 size: 12.0,
-                kind: crate::draw::EraserKind::Circle,
+                kind: EraserKind::Circle,
             },
         });
 

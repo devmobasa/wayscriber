@@ -2,6 +2,8 @@
 //! Pen detection. The Pen feel chip is the default; meters and steppers put
 //! one inline control per setting in the pill.
 
+use crate::{config, draw};
+
 use super::*;
 use crate::config::ToolbarStrokeControls;
 
@@ -233,10 +235,10 @@ fn the_smoothing_stepper_moves_one_whole_pass_at_a_time() {
         "there is nothing below off"
     );
 
-    snapshot.pen_smoothing = crate::draw::MAX_PEN_SMOOTHING;
+    snapshot.pen_smoothing = draw::MAX_PEN_SMOOTHING;
     assert_eq!(
         stepper.required_steps(&snapshot)[1].event,
-        ToolbarEvent::SetPenSmoothing(crate::draw::MAX_PEN_SMOOTHING)
+        ToolbarEvent::SetPenSmoothing(draw::MAX_PEN_SMOOTHING)
     );
 }
 
@@ -259,7 +261,7 @@ fn the_sensitivity_stepper_stays_in_range() {
     );
     assert_eq!(steps[1].tooltip, "Recognize rougher strokes");
 
-    let max = crate::config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
+    let max = config::MAX_SHAPE_RECOGNITION_SENSITIVITY;
     snapshot.shape_recognition_sensitivity = 0;
     assert_eq!(
         stepper.required_steps(&snapshot)[0].event,

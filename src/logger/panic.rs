@@ -3,6 +3,7 @@
 use std::backtrace::Backtrace;
 use std::fmt::Display;
 use std::panic::{self, Location, PanicHookInfo};
+use std::thread;
 
 use log::{Level, Log, Record};
 
@@ -27,7 +28,7 @@ fn chain_hook(report: impl Fn(&PanicHookInfo<'_>) + Send + Sync + 'static) {
 }
 
 fn report_panic(logger: &dyn Log, info: &PanicHookInfo<'_>) {
-    let thread = std::thread::current();
+    let thread = thread::current();
     let report = panic_report(
         thread.name(),
         info.location(),
@@ -62,6 +63,8 @@ fn panic_report(
 
 #[cfg(test)]
 mod tests {
+    use std::thread::Builder;
+
     use super::*;
     use log::Metadata;
     use std::sync::{Arc, Mutex};
@@ -73,10 +76,7 @@ mod tests {
 
     impl CapturingLogger {
         fn records(&self) -> Vec<(Level, String)> {
-            self.records
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .clone()
+            self.records.lock().expect("captured log records").clone()
         }
     }
 
@@ -88,7 +88,7 @@ mod tests {
         fn log(&self, record: &Record<'_>) {
             self.records
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .expect("captured log records")
                 .push((record.level(), record.args().to_string()));
         }
 
@@ -120,13 +120,13 @@ mod tests {
         panic::set_hook(Box::new(move |info| {
             replaced_payloads
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .expect("replaced hook payloads")
                 .push(info.payload_as_str().unwrap_or_default().to_owned());
         }));
         let hook_logger = logger.clone();
         chain_hook(move |info| report_panic(&hook_logger, info));
 
-        let result = std::thread::Builder::new()
+        let result = Builder::new()
             .name("panic-hook-probe".into())
             .spawn(|| panic!("panic hook probe payload"))
             .unwrap()
@@ -147,7 +147,7 @@ mod tests {
         assert!(
             replaced
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .expect("replaced hook payloads")
                 .iter()
                 .any(|payload| payload == "panic hook probe payload")
         );

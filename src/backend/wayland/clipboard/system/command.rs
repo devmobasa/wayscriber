@@ -1,3 +1,5 @@
+use crate::process_broker;
+
 use super::super::WAYSCRIBER_SELECTION_MIME;
 use crate::process_broker::{BrokerOutput, HelperKind};
 use std::ffi::OsStr;
@@ -18,7 +20,7 @@ pub(super) struct WlClipboardCommandRunner;
 
 impl ClipboardCommandRunner for WlClipboardCommandRunner {
     fn list_types(&self) -> anyhow::Result<BrokerOutput> {
-        crate::process_broker::current()?.run(
+        process_broker::current()?.run(
             HelperKind::WlPaste,
             OsStr::new("wl-paste"),
             [OsStr::new("--list-types")],
@@ -34,7 +36,7 @@ impl ClipboardCommandRunner for WlClipboardCommandRunner {
         timeout: Duration,
         output_cap: usize,
     ) -> anyhow::Result<BrokerOutput> {
-        crate::process_broker::current()?.run_prefix(
+        process_broker::current()?.run_prefix(
             HelperKind::WlPaste,
             OsStr::new("wl-paste"),
             [OsStr::new("--type"), OsStr::new(mime_type)],
@@ -45,7 +47,7 @@ impl ClipboardCommandRunner for WlClipboardCommandRunner {
     }
 
     fn copy_selection(&self, payload: &[u8], timeout: Duration) -> anyhow::Result<BrokerOutput> {
-        crate::process_broker::current()?.publish(
+        process_broker::current()?.publish(
             HelperKind::WlCopy,
             OsStr::new("wl-copy"),
             [OsStr::new("--type"), OsStr::new(WAYSCRIBER_SELECTION_MIME)],

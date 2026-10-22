@@ -3,6 +3,7 @@ use crate::backend::wayland::toolbar::view::{WidgetKind, WidgetTree};
 use crate::config::ToolbarStrokeControls;
 use crate::input::Tool;
 use crate::input::state::test_support::make_test_input_state;
+use crate::ui::theme::toolbar;
 use crate::ui::toolbar::{ToolbarBindingHints, ToolbarEvent, ToolbarSnapshot, model};
 use crate::ui_text::{UiTextEngine, UiTextStyle};
 
@@ -38,7 +39,7 @@ fn feel_ids(tree: &WidgetTree) -> Vec<String> {
 
 fn text_style(size: f64, bold: bool) -> UiTextStyle<'static> {
     UiTextStyle {
-        family: crate::ui::theme::toolbar::FONT_FAMILY_DEFAULT,
+        family: toolbar::FONT_FAMILY_DEFAULT,
         slant: cairo::FontSlant::Normal,
         weight: if bold {
             cairo::FontWeight::Bold
@@ -142,7 +143,7 @@ fn the_open_panel_shows_the_sections_the_tool_uses() {
 
     let shape_pen = snapshot_for(Tool::LiveShape, ToolbarStrokeControls::Panel, true);
     let tree = tree_for(&shape_pen);
-    let mut both = smoothing_only.clone();
+    let mut both = smoothing_only;
     both.extend(
         [
             "top.feel.detection.label",
@@ -346,8 +347,8 @@ fn panel_text_fits_its_column() {
             .expect("text measures")
             .width()
     };
-    let caption = crate::ui::theme::toolbar::FONT_SIZE_TOOLTIP;
-    let hint = crate::ui::theme::toolbar::FONT_SIZE_SMALL;
+    let caption = toolbar::FONT_SIZE_TOOLTIP;
+    let hint = toolbar::FONT_SIZE_SMALL;
 
     for (setting, levels) in [
         (model::StrokeSetting::Smoothing, 0..=6),

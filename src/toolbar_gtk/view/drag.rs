@@ -6,7 +6,12 @@
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 
+use gtk4::gdk::Display;
 use gtk4::prelude::*;
+
+use crate::backend::wayland;
+use crate::toolbar_gtk;
+use crate::toolbar_gtk::GtkToolbarSurfaceSize;
 
 use super::super::widgets::FeedbackSender;
 use super::super::{GtkToolbarDragPhase, GtkToolbarFeedback, GtkToolbarKind};
@@ -145,7 +150,7 @@ pub(super) fn cancel_move_drag(
         return;
     }
     drag_active.set(false);
-    crate::toolbar_gtk::drag_debug_log(format!(
+    toolbar_gtk::drag_debug_log(format!(
         "{kind:?} cancel generation={generation} action={action:?}"
     ));
 
@@ -156,7 +161,7 @@ pub(super) fn cancel_move_drag(
 
     seq.set(seq.get().wrapping_add(1));
     let (x, y) = offsets.get();
-    let surface_size = crate::toolbar_gtk::GtkToolbarSurfaceSize::from_window(window);
+    let surface_size = GtkToolbarSurfaceSize::from_window(window);
     let end = match kind {
         GtkToolbarKind::Top => GtkToolbarFeedback::SetTopOffset {
             x,
@@ -180,18 +185,18 @@ pub(super) fn clamp_drag_offsets(
     (end_x, end_y): (f64, f64),
 ) -> (f64, f64) {
     if let Some(surface) = window.surface()
-        && let Some(display) = gtk4::gdk::Display::default()
+        && let Some(display) = Display::default()
         && let Some(monitor) = display.monitor_at_surface(&surface)
     {
         let geometry = monitor.geometry();
-        let (x, _, _) = crate::backend::wayland::clamp_floating_axis_offset(
+        let (x, _, _) = wayland::clamp_floating_axis_offset(
             x,
             geometry.width() as f64,
             window.width() as f64,
             base_x,
             end_x,
         );
-        let (y, _, _) = crate::backend::wayland::clamp_floating_axis_offset(
+        let (y, _, _) = wayland::clamp_floating_axis_offset(
             y,
             geometry.height() as f64,
             window.height() as f64,

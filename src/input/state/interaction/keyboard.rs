@@ -1,3 +1,5 @@
+use crate::input::state::InputTextResources;
+
 use super::actions::route_action_with_resources;
 use super::adapters;
 use super::outcome::{ConsumedBy, NoRouteReason, RoutingOutcome};
@@ -12,7 +14,7 @@ use super::super::core::SequenceMatch;
 
 pub(crate) fn route_key_press_with_resources(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> RoutingOutcome {
     route_key_event(state, resources, key, false)
@@ -20,7 +22,7 @@ pub(crate) fn route_key_press_with_resources(
 
 pub(crate) fn route_key_repeat_with_resources(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
 ) -> RoutingOutcome {
     route_key_event(state, resources, key, true)
@@ -28,7 +30,7 @@ pub(crate) fn route_key_repeat_with_resources(
 
 fn route_key_event(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
     is_repeat: bool,
 ) -> RoutingOutcome {
@@ -54,7 +56,7 @@ fn route_key_event(
 
 fn route_key_event_inner(
     state: &mut InputState,
-    resources: crate::input::state::InputTextResources<'_>,
+    resources: InputTextResources<'_>,
     key: Key,
     is_repeat: bool,
 ) -> RoutingOutcome {

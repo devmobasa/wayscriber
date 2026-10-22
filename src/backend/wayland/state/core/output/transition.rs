@@ -1,8 +1,17 @@
-use super::*;
+use super::{
+    LiveSourceReconcileContext, OutputTransitionContext, OutputTransitionStart,
+    live_source_reconciliation_ready, output_transition_retry_at, output_transition_start,
+};
+use crate::backend::wayland::backend::event_loop::session_save;
 use crate::backend::wayland::session::{
     SessionCommand, SourceWriteRefused, interaction_defer_interval,
 };
+use crate::backend::wayland::state::WaylandState;
 use crate::i18n::trf;
+use crate::input::state::{Toast, ToastPriority};
+use crate::session;
+use log::{info, warn};
+use std::time::Instant;
 
 impl WaylandState {
     pub(in crate::backend::wayland) fn begin_session_output_transition(
@@ -31,14 +40,14 @@ impl WaylandState {
         let live_source_resolution_pending = self
             .session
             .resolve_live_source_resolution(input_dirty, interaction_active);
-        let start = output_transition_start(
-            self.session.is_loaded(),
-            changed,
+        let start = output_transition_start(OutputTransitionContext {
+            loaded: self.session.is_loaded(),
+            target_changed: changed,
             matching_pending,
             same_epoch_pending,
             live_source_resolution_pending,
             interaction_active,
-        );
+        });
 
         let retry_at = Instant::now() + interaction_defer_interval();
         match start {
@@ -109,7 +118,7 @@ impl WaylandState {
             OutputTransitionStart::LoadInitial | OutputTransitionStart::ResolveTransition => {
                 if let Err(err) = self.run_output_transition(
                     staged_options.clone(),
-                    physical_output_identity.clone(),
+                    physical_output_identity.as_deref(),
                     reason,
                 ) {
                     warn!("Failed to complete session transition for {reason}: {err:#}");
@@ -157,7 +166,7 @@ impl WaylandState {
         };
         if let Err(err) = self.run_output_transition(
             pending.staged_options.clone(),
-            pending.physical_output_identity.clone(),
+            pending.physical_output_identity.as_deref(),
             "deferred output transition",
         ) {
             let retry_at = output_transition_retry_at(self.output_transition_failure_backoff());
@@ -204,12 +213,12 @@ impl WaylandState {
         }
         let interaction_active =
             self.session_transaction.is_some() || session_save::should_defer_for_interaction(self);
-        if !live_source_reconciliation_ready(
-            true,
-            self.session.pending_output_transition().is_some(),
+        if !live_source_reconciliation_ready(LiveSourceReconcileContext {
+            live_source_resolution_pending: true,
+            output_transition_pending: self.session.pending_output_transition().is_some(),
             interaction_active,
-            self.persistence.is_healthy(),
-        ) {
+            worker_healthy: self.persistence.is_healthy(),
+        }) {
             return false;
         }
 
@@ -241,7 +250,7 @@ impl WaylandState {
     fn run_output_transition(
         &mut self,
         staged_options: session::SessionOptions,
-        physical_output_identity: Option<String>,
+        physical_output_identity: Option<&str>,
         reason: &str,
     ) -> anyhow::Result<()> {
         if self.session_transaction.is_some() || session_save::should_defer_for_interaction(self) {
@@ -263,14 +272,14 @@ impl WaylandState {
             .session
             .pending_output_transition()
             .is_some_and(|pending| {
-                pending.physical_output_identity == physical_output_identity
+                pending.physical_output_identity.as_deref() == physical_output_identity
                     && pending.staged_options.session_file_path()
                         == staged_options.session_file_path()
             })
         {
             self.session.stage_output_transition(
                 staged_options,
-                physical_output_identity.clone(),
+                physical_output_identity.map(str::to_string),
                 Instant::now(),
             );
         }
@@ -282,7 +291,7 @@ impl WaylandState {
         let remembered = self.unloaded_remembered_session();
         let home = self
             .session_home
-            .options_for_output(physical_output_identity.as_deref())
+            .options_for_output(physical_output_identity)
             .map(Box::new);
         let leaves_placeholder = physical_output_identity.is_some()
             && self.session_options().is_some_and(|current| {

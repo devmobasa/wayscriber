@@ -3,7 +3,7 @@ use super::ToolbarSnapshot;
 #[test]
 fn shared_selection_preserves_text_order_locked_notes_and_normalized_spotlights() {
     let mut state = make_test_input_state();
-    state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SelectTool(Tool::Select));
+    state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Select));
     let mut bold = state.style.font_descriptor.clone();
     bold.weight = "bold".to_string();
     let mut normal = state.style.font_descriptor.clone();
@@ -102,11 +102,11 @@ fn shared_selection_preserves_text_order_locked_notes_and_normalized_spotlights(
     }
 }
 
-use crate::{
-    draw::{Frame, Shape},
-    input::state::SelectionPropertyKind,
-    input::{InputState, Tool, state::test_support::make_test_input_state},
-};
+use crate::draw::{Frame, Shape};
+use crate::input::state::SelectionPropertyKind;
+use crate::input::state::test_support::make_test_input_state;
+use crate::input::{InputState, Tool};
+use crate::ui::toolbar::ToolbarEvent;
 
 #[test]
 fn complete_snapshot_resolves_selection_once_without_per_id_lookups() {
@@ -119,7 +119,7 @@ fn complete_snapshot_resolves_selection_once_without_per_id_lookups() {
 
     for case in [Fixture::Rectangles, Fixture::TextLast, Fixture::LockedText] {
         let mut state = make_test_input_state();
-        state.apply_toolbar_event(crate::ui::toolbar::ToolbarEvent::SelectTool(Tool::Select));
+        state.apply_toolbar_event(ToolbarEvent::SelectTool(Tool::Select));
         let mut font = state.style.font_descriptor.clone();
         font.weight = "bold".to_string();
         let color = state.style.current_color;

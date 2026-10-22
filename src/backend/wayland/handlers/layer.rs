@@ -1,8 +1,8 @@
 // Responds to layer-shell configure/close events, keeping dimensions in sync with the compositor.
 use log::{debug, info};
-use smithay_client_toolkit::shell::{
-    WaylandSurface,
-    wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
+use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::{
+    LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
 };
 use wayland_client::{Connection, Proxy, QueueHandle};
 

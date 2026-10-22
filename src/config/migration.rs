@@ -20,11 +20,13 @@ pub struct MigrationChange {
 
 impl MigrationChange {
     /// The `[keybindings]` key the change applies to.
+    #[must_use]
     pub fn config_key(&self) -> &'static str {
         self.config_key
     }
 
     /// The human-facing name of the action that key binds.
+    #[must_use]
     pub fn action_label(&self) -> &'static str {
         self.action_label
     }
@@ -32,12 +34,14 @@ impl MigrationChange {
     /// The shortcuts the source spells out today. An omitted field reads as
     /// the default this build filled in, which is the value the migration is
     /// reacting to.
+    #[must_use]
     pub fn before(&self) -> &[String] {
         &self.before
     }
 
     /// The shortcuts the migration proposes. Empty means the action would be
     /// left unbound.
+    #[must_use]
     pub fn after(&self) -> &[String] {
         &self.after
     }
@@ -68,6 +72,7 @@ impl MigrationPreview {
     /// — a file whose fields are customized, or one that spells nothing out,
     /// keeps its own values under every recipe's own gating, and a stamp with
     /// no accompanying change is not worth asking about.
+    #[must_use]
     pub fn for_authored_config(authored: &Config) -> Option<Self> {
         if authored.config_revision >= CURRENT_CONFIG_REVISION {
             return None;
@@ -103,12 +108,14 @@ impl MigrationPreview {
     }
 
     /// The proposed field changes, in keymap traversal order.
+    #[must_use]
     pub fn changes(&self) -> &[MigrationChange] {
         &self.changes
     }
 
     /// The `config_revision` an accepted migration records, so the same
     /// proposal is not offered again.
+    #[must_use]
     pub fn proposed_revision(&self) -> u32 {
         self.proposed_revision
     }

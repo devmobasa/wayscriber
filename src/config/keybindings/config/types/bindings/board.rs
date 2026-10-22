@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config::keybindings::defaults::*;
+use crate::config::keybindings::defaults::{
+    default_board_1, default_board_2, default_board_3, default_board_4, default_board_5,
+    default_board_6, default_board_7, default_board_8, default_board_9, default_board_delete,
+    default_board_duplicate, default_board_new, default_board_next, default_board_paper_edit,
+    default_board_picker, default_board_prev, default_focus_next_output, default_focus_prev_output,
+    default_page_delete, default_page_duplicate, default_page_new, default_page_next,
+    default_page_prev, default_return_to_transparent, default_toggle_blackboard,
+    default_toggle_whiteboard,
+};
 
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
 use crate::ui::theme::{self, Rgba};
-use crate::ui_text::{UiTextEngine, UiTextStyle};
+use crate::ui_text::{UiTextEngine, UiTextExtents, UiTextStyle};
 
 pub(crate) fn text_extents_for_with_engine(
     engine: &UiTextEngine,
@@ -396,6 +396,7 @@ pub(crate) const BADGE_RADIUS: f64 = 8.0;
 pub(crate) const BADGE_STACK_GAP: f64 = 8.0;
 
 /// Horizontal anchoring for [`draw_badge_with_engine`].
+#[derive(Clone, Copy)]
 pub(crate) enum BadgeAlign {
     /// `anchor_x` is the badge's left edge.
     Left,
@@ -407,8 +408,8 @@ pub(crate) enum BadgeAlign {
 /// Shared by [`draw_badge_with_engine`] and [`measure_badge_with_engine`] so layout and rendering can
 /// never disagree about badge geometry.
 fn badge_box(
-    label_extents: &crate::ui_text::UiTextExtents,
-    hint_extents: Option<&crate::ui_text::UiTextExtents>,
+    label_extents: &UiTextExtents,
+    hint_extents: Option<&UiTextExtents>,
 ) -> (f64, f64, f64) {
     let padding = BADGE_PADDING;
     match hint_extents {

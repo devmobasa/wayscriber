@@ -15,29 +15,13 @@
 //! into render-only state; failures are reported as typed `Failed` events so a
 //! device or keymap problem can never panic across the libinput FFI edge.
 
-use std::collections::{HashMap, HashSet};
-use std::fs::{File, OpenOptions};
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
-use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::os::fd::{AsRawFd, OwnedFd};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use input::event::device::DeviceEvent;
-use input::event::keyboard::{KeyState, KeyboardEventTrait};
-use input::event::pointer::{Axis, ButtonState, PointerScrollEvent};
-use input::event::tablet_tool::{TabletToolEvent, TipState};
-use input::event::{Event, EventTrait, KeyboardEvent, PointerEvent};
-use input::{DeviceCapability, Libinput, LibinputInterface};
-use xkbcommon::xkb;
-
 use super::super::RuntimeWakeHandle;
-use super::super::handlers::keyboard::{KEY_REPEAT_INITIAL_DELAY, KEY_REPEAT_INTERVAL};
-use super::translate::{
-    EVDEV_KEYCODE_OFFSET, button_label, key_label, modifiers_from_xkb, pen_label, scroll_label,
-};
 
 mod worker;
 
@@ -161,7 +145,7 @@ impl InputMonitor {
         let (sender, events) = channel();
         let join = thread::Builder::new()
             .name("wayscriber-input-monitor".to_string())
-            .spawn(move || run(stop_read, sender, wake))?;
+            .spawn(move || run(&stop_read, &sender, &wake))?;
         Ok(Self {
             join: Some(join),
             stop: stop_write,

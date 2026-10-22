@@ -2,8 +2,11 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
+#[cfg(test)]
+use std::sync::mpsc::Sender;
 
 use gtk4::prelude::*;
+use gtk4::{gdk, glib};
 use gtk4_layer_shell::{KeyboardMode, LayerShell};
 
 use super::GtkToolbarFeedback;
@@ -17,11 +20,15 @@ use crate::ui::theme::toolbar::COLOR_PANEL_BACKGROUND;
 use crate::ui::toolbar::ToolbarEvent;
 mod key_relay;
 mod slider;
+use gtk4::gdk::ModifierType;
+use gtk4::prelude::GtkWindowExt;
 pub(super) use key_relay::install_key_relay;
 #[cfg(test)]
 pub(super) use key_relay::key_relay_controller;
 pub(super) use slider::SliderRow;
 
+use crate::config::keybindings;
+use crate::ui;
 pub(super) use crate::ui::theme::toolbar::COLOR_SWATCH_HAIRLINE;
 /// Sender the view hands to every control closure. Clones share the configured
 /// rebind chord and modifier state captured from the actual GTK click.
@@ -48,7 +55,7 @@ impl FeedbackSink for FeedbackPublisher {
 }
 
 #[cfg(test)]
-impl FeedbackSink for std::sync::mpsc::Sender<GtkToolbarFeedback> {
+impl FeedbackSink for Sender<GtkToolbarFeedback> {
     fn publish(&self, feedback: GtkToolbarFeedback) -> bool {
         self.send(feedback).is_ok()
     }
@@ -76,14 +83,14 @@ impl FeedbackSender {
         }
     }
 
-    fn capture_click_modifiers(&self, state: gtk4::gdk::ModifierType) {
+    fn capture_click_modifiers(&self, state: ModifierType) {
         self.click_in_progress.set(true);
         self.click_shift
-            .set(state.contains(gtk4::gdk::ModifierType::SHIFT_MASK));
+            .set(state.contains(ModifierType::SHIFT_MASK));
         if self.rebind_modifier.get().matches(
-            state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
-            state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
-            state.contains(gtk4::gdk::ModifierType::ALT_MASK),
+            state.contains(ModifierType::CONTROL_MASK),
+            state.contains(ModifierType::SHIFT_MASK),
+            state.contains(ModifierType::ALT_MASK),
         ) {
             self.click_rebind_requested.set(true);
         }
@@ -102,22 +109,19 @@ impl FeedbackSender {
     }
 }
 
-fn gdk_pointer_modifiers(state: gtk4::gdk::ModifierType) -> (bool, bool, bool, bool) {
+fn gdk_pointer_modifiers(state: ModifierType) -> (bool, bool, bool, bool) {
     (
-        state.contains(gtk4::gdk::ModifierType::CONTROL_MASK),
-        state.contains(gtk4::gdk::ModifierType::SHIFT_MASK),
-        state.contains(gtk4::gdk::ModifierType::ALT_MASK),
-        state.contains(gtk4::gdk::ModifierType::SUPER_MASK)
-            || state.contains(gtk4::gdk::ModifierType::META_MASK)
-            || state.contains(gtk4::gdk::ModifierType::HYPER_MASK),
+        state.contains(ModifierType::CONTROL_MASK),
+        state.contains(ModifierType::SHIFT_MASK),
+        state.contains(ModifierType::ALT_MASK),
+        state.contains(ModifierType::SUPER_MASK)
+            || state.contains(ModifierType::META_MASK)
+            || state.contains(ModifierType::HYPER_MASK),
     )
 }
 
-fn pointer_shortcut_feedback(
-    button: u32,
-    state: gtk4::gdk::ModifierType,
-) -> Option<GtkToolbarFeedback> {
-    crate::config::keybindings::gdk::pointer_button(button)?;
+fn pointer_shortcut_feedback(button: u32, state: ModifierType) -> Option<GtkToolbarFeedback> {
+    keybindings::gdk::pointer_button(button)?;
     let (ctrl, shift, alt, logo) = gdk_pointer_modifiers(state);
     Some(GtkToolbarFeedback::PointerShortcut {
         button,
@@ -168,7 +172,7 @@ pub(super) fn install_quick_color_recolor(
     feedback: &FeedbackSender,
 ) {
     let gesture = gtk4::GestureClick::new();
-    gesture.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    gesture.set_button(gdk::BUTTON_SECONDARY);
     let feedback = feedback.clone();
     gesture.connect_pressed(move |gesture, _, _, _| {
         gesture.set_state(gtk4::EventSequenceState::Claimed);
@@ -184,7 +188,7 @@ pub(super) fn secondary_click_gesture(widget: &gtk4::Widget) -> Option<gtk4::Ges
     (0..controllers.n_items())
         .filter_map(|index| controllers.item(index))
         .filter_map(|controller| controller.downcast::<gtk4::GestureClick>().ok())
-        .find(|gesture| gesture.button() == gtk4::gdk::BUTTON_SECONDARY)
+        .find(|gesture| gesture.button() == gdk::BUTTON_SECONDARY)
 }
 
 /// Drive a widget's secondary-click gesture the way `emit_clicked` drives a
@@ -218,7 +222,7 @@ pub(super) fn install_click_modifier_capture(
     let release_feedback = feedback.clone();
     click.connect_released(move |_, _, _, _| {
         let release_feedback = release_feedback.clone();
-        gtk4::glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
+        glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
     });
     widget.as_ref().add_controller(click);
 }
@@ -239,12 +243,12 @@ pub(super) fn sized_button(width: f64, height: f64) -> gtk4::Button {
 fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
     if let Some(window) = widget.root().and_downcast::<gtk4::Window>() {
         window.set_keyboard_mode(KeyboardMode::None);
-        gtk4::prelude::GtkWindowExt::set_focus(&window, None::<&gtk4::Widget>);
+        GtkWindowExt::set_focus(&window, None::<&gtk4::Widget>);
         // Interactivity is double-buffered. Re-arm OnDemand after the
         // focus-dropping commit so a later click can focus an entry without
         // making this surface retain the current keyboard focus.
         let weak = window.downgrade();
-        gtk4::glib::idle_add_local_once(move || {
+        glib::idle_add_local_once(move || {
             if let Some(window) = weak.upgrade() {
                 window.set_keyboard_mode(KeyboardMode::OnDemand);
             }
@@ -273,7 +277,7 @@ fn focus_change_releases_keyboard(focus: &gtk4::Widget) -> bool {
 /// may leave a previously focused entry as the logical focus widget.
 pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &FeedbackSender) {
     window.connect_focus_widget_notify(|window| {
-        let Some(focus) = gtk4::prelude::GtkWindowExt::focus(window) else {
+        let Some(focus) = GtkWindowExt::focus(window) else {
             return;
         };
         if focus_change_releases_keyboard(&focus) {
@@ -296,7 +300,7 @@ pub(super) fn install_shortcut_focus_policy(window: &gtk4::Window, feedback: &Fe
     let release_feedback = feedback.clone();
     click.connect_released(move |_, _, _, _| {
         let release_feedback = release_feedback.clone();
-        gtk4::glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
+        glib::idle_add_local_once(move || release_feedback.finish_pointer_click());
     });
     let weak = window.downgrade();
     click.connect_released(move |_, _, x, y| {
@@ -479,7 +483,7 @@ impl SwatchButton {
             let swatch_path = |ctx: &cairo::Context| {
                 rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
             };
-            crate::ui::checkerboard_behind(ctx, a, swatch_path);
+            ui::checkerboard_behind(ctx, a, swatch_path);
             ctx.set_source_rgba(r, g, b, a);
             swatch_path(ctx);
             let _ = ctx.fill();

@@ -1,10 +1,9 @@
 // Manages seat capabilities (keyboard/pointer availability) and requests the matching devices.
 use log::{debug, info, warn};
-use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState, pointer::ThemeSpec};
-use wayland_client::{
-    Connection, Proxy, QueueHandle,
-    protocol::{wl_keyboard, wl_seat, wl_touch},
-};
+use smithay_client_toolkit::seat::pointer::ThemeSpec;
+use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
+use wayland_client::protocol::{wl_keyboard, wl_seat, wl_touch};
+use wayland_client::{Connection, Proxy, QueueHandle};
 
 use super::super::state::{KeyboardId, WaylandState};
 use crate::input::RegionInputSource;
@@ -119,13 +118,13 @@ fn seat_device_has_release(version: u32) -> bool {
     version >= 3
 }
 
-fn release_keyboard(keyboard: wl_keyboard::WlKeyboard) {
+fn release_keyboard(keyboard: &wl_keyboard::WlKeyboard) {
     if seat_device_has_release(keyboard.version()) {
         keyboard.release();
     }
 }
 
-fn release_touch(touch: wl_touch::WlTouch) {
+fn release_touch(touch: &wl_touch::WlTouch) {
     if seat_device_has_release(touch.version()) {
         touch.release();
     }
@@ -139,7 +138,7 @@ impl WaylandState {
                 debug!("Keyboard initialized");
                 if let Some(replaced) = self.focus.attach_keyboard(seat.clone(), keyboard) {
                     self.key_repeat.forget_keyboard(KeyboardId::of(&replaced));
-                    release_keyboard(replaced);
+                    release_keyboard(&replaced);
                 }
             }
             Err(err) => warn!("Keyboard initialization failed: {}", err),
@@ -149,7 +148,7 @@ impl WaylandState {
     fn release_seat_keyboard(&mut self, seat: &wl_seat::WlSeat) {
         if let Some(keyboard) = self.focus.detach_keyboard(seat) {
             self.key_repeat.forget_keyboard(KeyboardId::of(&keyboard));
-            release_keyboard(keyboard);
+            release_keyboard(&keyboard);
         }
     }
 
@@ -159,7 +158,7 @@ impl WaylandState {
             Ok(touch) => {
                 debug!("Touch initialized");
                 if let Some(replaced) = self.pointer.attach_touch(seat.clone(), touch) {
-                    release_touch(replaced);
+                    release_touch(&replaced);
                 }
             }
             Err(err) => warn!("Touch initialization failed: {}", err),
@@ -172,7 +171,7 @@ impl WaylandState {
             return false;
         };
 
-        release_touch(touch);
+        release_touch(&touch);
         true
     }
 

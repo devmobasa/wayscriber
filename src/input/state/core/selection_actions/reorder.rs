@@ -1,7 +1,6 @@
 use super::super::base::InputState;
-use crate::draw::ShapeId;
-use crate::draw::TextMeasurer;
 use crate::draw::frame::UndoAction;
+use crate::draw::{ShapeId, TextMeasurer};
 use std::collections::HashSet;
 
 impl InputState {

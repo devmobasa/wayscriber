@@ -1,5 +1,6 @@
 use crate::config::{
-    ToolbarItemId, ToolbarItemOrderGroup, ToolbarItemVisibilitySetting as ItemVisibilitySetting,
+    StatusBarItem, ToolbarItemId, ToolbarItemOrderGroup,
+    ToolbarItemVisibilitySetting as ItemVisibilitySetting, ToolbarLayoutMode, ToolbarSectionFlag,
     TopDisplayMode,
 };
 
@@ -116,7 +117,7 @@ pub(crate) enum InteractionSeedTarget {
     /// Whether status-bar segments respond to clicks.
     StatusBarInteractive,
     /// Whether one status-bar segment is shown.
-    StatusBarItem(crate::config::StatusBarItem),
+    StatusBarItem(StatusBarItem),
     /// The status bar as a whole.
     StatusBar,
     /// The board and page badges that float over the canvas.
@@ -139,7 +140,7 @@ pub(crate) enum InteractionSeedTarget {
     /// `ItemVisibility`: a section's visibility has a layout-mode baseline and
     /// a legacy mirror behind it, so it is seeded and restored as its own
     /// value rather than as an individual item override.
-    SectionVisibility(crate::config::ToolbarSectionFlag),
+    SectionVisibility(ToolbarSectionFlag),
     /// The toolbar layout preset the strip's layout button cycles through.
     ToolbarLayoutMode,
     /// The click highlight, and the ring the highlight tool keeps on screen.
@@ -157,7 +158,7 @@ pub(crate) enum InteractionSeedValue {
     ItemOrder(Vec<ToolbarItemId>),
     Position(ToolbarPositionSeed),
     TopDisplayMode(PersistedTopDisplayMode),
-    LayoutMode(crate::config::ToolbarLayoutMode),
+    LayoutMode(ToolbarLayoutMode),
 }
 
 impl InteractionSeedValue {

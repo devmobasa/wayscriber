@@ -1,18 +1,15 @@
 //! Wayland-state glue for clipboard publish and paste requests.
 
 use super::WaylandState;
-use crate::backend::wayland::{
-    RuntimeOperationPoll,
-    clipboard::{
-        self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPublishCompletion,
-        FailedLocalSelectionProbe, PasteAction, TransferEffect, TransferPlan, TransferWarning,
-        transfer,
-    },
+use crate::backend::wayland::RuntimeOperationPoll;
+use crate::backend::wayland::clipboard::{
+    self, ClipboardPasteCompletion, ClipboardPasteResult, ClipboardPublishCompletion,
+    FailedLocalSelectionProbe, PasteAction, TransferEffect, TransferPlan, TransferWarning,
+    transfer,
 };
 use crate::i18n::{tr, trf};
 use crate::input::InputState;
-use crate::input::state::{ClipboardFingerprint, ClipboardPasteRequest};
-use crate::input::state::{Toast, ToastPriority};
+use crate::input::state::{ClipboardFingerprint, ClipboardPasteRequest, Toast, ToastPriority};
 use std::time::{Duration, Instant};
 
 mod fallback_save;
@@ -197,8 +194,8 @@ impl WaylandState {
                 &mut self.input_state,
                 completion.request,
                 generation,
-                expected,
-                current,
+                expected.as_ref(),
+                current.as_ref(),
             );
             self.apply_paste_action(action);
             return;
@@ -363,7 +360,7 @@ impl WaylandState {
         &mut self,
         request: ClipboardPasteRequest,
         generation: u64,
-        expected: Option<crate::input::state::ClipboardFingerprint>,
+        expected: Option<ClipboardFingerprint>,
     ) {
         log::info!(
             "Probing system clipboard fingerprint for paste request {} generation {}",
@@ -612,8 +609,8 @@ fn continue_after_fingerprint_probe(
     input_state: &mut InputState,
     request: ClipboardPasteRequest,
     generation: u64,
-    expected: Option<ClipboardFingerprint>,
-    current: Option<ClipboardFingerprint>,
+    expected: Option<&ClipboardFingerprint>,
+    current: Option<&ClipboardFingerprint>,
 ) -> PasteAction {
     let local_shapes = input_state
         .selection_clipboard_snapshot()
@@ -641,7 +638,7 @@ fn apply_transfer_effects(input_state: &mut InputState, effects: Vec<TransferEff
 }
 
 fn take_pending_clipboard_paste_if_idle(
-    input_state: &mut crate::input::InputState,
+    input_state: &mut InputState,
     clipboard_paste_active: bool,
 ) -> Option<ClipboardPasteRequest> {
     (!clipboard_paste_active)
@@ -652,7 +649,8 @@ fn take_pending_clipboard_paste_if_idle(
 #[cfg(test)]
 mod transport_tests {
     use super::*;
-    use crate::input::state::{PasteAnchor, test_support::make_test_input_state};
+    use crate::input::state::PasteAnchor;
+    use crate::input::state::test_support::make_test_input_state;
     use crate::util::Rect;
 
     fn request(id: u64) -> ClipboardPasteRequest {

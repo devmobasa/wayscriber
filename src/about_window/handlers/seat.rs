@@ -1,6 +1,8 @@
 use log::warn;
-use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState, pointer::ThemeSpec};
-use wayland_client::{Connection, QueueHandle, protocol::wl_seat};
+use smithay_client_toolkit::seat::pointer::ThemeSpec;
+use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
+use wayland_client::protocol::wl_seat;
+use wayland_client::{Connection, QueueHandle};
 
 use super::super::AboutWindowState;
 

@@ -104,7 +104,7 @@ impl Default for SessionConfig {
 
 /// Session storage location options.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionStorageMode {
     Auto,
@@ -114,7 +114,7 @@ pub enum SessionStorageMode {
 
 /// Session compression preferences.
 #[cfg_attr(feature = "config-schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionCompression {
     Auto,

@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::shm::{
-    Shm,
-    slot::{Buffer, SlotPool},
-};
-use wayland_client::{Dispatch, QueueHandle, WEnum, protocol::wl_shm};
+use smithay_client_toolkit::shm::Shm;
+use smithay_client_toolkit::shm::slot::{Buffer, SlotPool};
+use tokio::runtime::Handle;
+use wayland_client::protocol::wl_shm;
+use wayland_client::{Dispatch, QueueHandle, WEnum};
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::{
     Event as FrameEvent, Flags, ZwlrScreencopyFrameV1,
 };
@@ -151,7 +151,7 @@ impl ZoomState {
         backend: ZoomCaptureBackend,
         shm: &Shm,
         qh: &QueueHandle<State>,
-        tokio_handle: &tokio::runtime::Handle,
+        tokio_handle: &Handle,
     ) -> Result<()>
     where
         State:
@@ -212,8 +212,8 @@ impl ZoomState {
         Ok(())
     }
 
-    pub fn handle_frame_event(&mut self, event: FrameEvent, input_state: &mut InputState) {
-        match event {
+    pub fn handle_frame_event(&mut self, event: &FrameEvent, input_state: &mut InputState) {
+        match *event {
             FrameEvent::Buffer {
                 format,
                 width,
@@ -377,6 +377,8 @@ impl ZoomState {
 
 #[cfg(test)]
 mod tests {
+    use crate::backend::wayland::{RuntimeWakeSource, zoom};
+
     use super::*;
     use wayland_client::protocol::wl_output;
 
@@ -411,7 +413,7 @@ mod tests {
         )
         .expect("known output geometry");
         let context = CaptureContext::new(7, geometry, 3);
-        let image = crate::backend::wayland::frozen::FrozenImage {
+        let image = FrozenImage {
             width: 4,
             height: 3,
             stride: 16,
@@ -433,7 +435,7 @@ mod tests {
         )
         .expect("rotated output geometry");
         let context = CaptureContext::new(7, geometry, 3);
-        let image = crate::backend::wayland::frozen::FrozenImage {
+        let image = FrozenImage {
             width: 3,
             height: 2,
             stride: 12,
@@ -472,11 +474,11 @@ mod tests {
 
     #[tokio::test]
     async fn portal_capture_waits_for_suppression_preflight() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().expect("runtime wake");
+        let wake = RuntimeWakeSource::try_new().expect("runtime wake");
         let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
 
         state
-            .start_capture(crate::backend::wayland::zoom::ZoomCaptureBackend::WlrScreencopy)
+            .start_capture(zoom::ZoomCaptureBackend::WlrScreencopy)
             .expect("queue portal zoom capture");
 
         assert!(state.preflight_pending());
@@ -489,7 +491,7 @@ mod tests {
 
     #[test]
     fn preflight_layout_snapshot_goes_stale_when_geometry_changes() {
-        let wake = crate::backend::wayland::RuntimeWakeSource::new().expect("runtime wake");
+        let wake = RuntimeWakeSource::try_new().expect("runtime wake");
         let mut state = ZoomState::new_with_runtime_wake(None, wake.handle());
         state.snapshot_preflight_layout();
         assert!(state.preflight_layout_is_current());

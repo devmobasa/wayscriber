@@ -1,11 +1,14 @@
+use crate::draw::TextMeasurer;
+use crate::ui_text::UiTextEngine;
+
 use super::*;
 use crate::config::{DragButtonConfig, MouseDragToolsConfig};
 use crate::input::{DragBinding, DragTool, DragToolBindings};
 
 #[test]
 fn toggle_floating_badge_action_flips_runtime_visibility() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -17,10 +20,7 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
         "badge visible by default"
     );
 
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::ToggleFloatingBadge,
-    );
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
     assert!(!state.ui_visibility.show_floating_badge);
     assert!(state.needs_redraw);
     // Persisting is the backend's job: it diffs the state before and after
@@ -28,10 +28,7 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
     assert!(!state.has_pending_backend_actions());
     assert!(state.take_pending_backend_action().is_none());
 
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::ToggleFloatingBadge,
-    );
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
     assert!(state.ui_visibility.show_floating_badge);
 }
 
@@ -39,8 +36,8 @@ fn toggle_floating_badge_action_flips_runtime_visibility() {
 /// through a queued request, however many times they are pressed.
 #[test]
 fn repeated_chrome_visibility_toggles_queue_no_backend_work() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -48,16 +45,10 @@ fn repeated_chrome_visibility_toggles_queue_no_backend_work() {
 
     let mut state = create_test_input_state();
 
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::ToggleFloatingBadge,
-    );
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::ToggleFloatingBadge,
-    );
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
 
     assert!(state.ui_visibility.show_floating_badge);
     assert!(state.ui_visibility.show_zoom_chip);
@@ -265,8 +256,8 @@ fn test_adjust_font_size_multiple_adjustments() {
 /// queue through `handle_action`.
 #[test]
 fn chrome_actions_queue_their_own_durable_entry() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -276,17 +267,14 @@ fn chrome_actions_queue_their_own_durable_entry() {
 
     for (action, expected) in [
         (
-            crate::config::Action::ToggleStatusBar,
+            Action::ToggleStatusBar,
             Pending::StatusBar { previous: true },
         ),
         (
-            crate::config::Action::ToggleFloatingBadge,
+            Action::ToggleFloatingBadge,
             Pending::FloatingBadge { previous: true },
         ),
-        (
-            crate::config::Action::ToggleZoomChip,
-            Pending::ZoomChip { previous: true },
-        ),
+        (Action::ToggleZoomChip, Pending::ZoomChip { previous: true }),
     ] {
         let mut state = create_test_input_state();
         state.handle_action_with_resources(test_text_resources, action);
@@ -303,8 +291,8 @@ fn chrome_actions_queue_their_own_durable_entry() {
 /// which a before/after read of the focus flag would get exactly backwards.
 #[test]
 fn a_chrome_toggle_that_breaks_focus_mode_still_persists() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -313,13 +301,13 @@ fn a_chrome_toggle_that_breaks_focus_mode_still_persists() {
     use crate::input::state::PendingToolbarPersistence as Pending;
 
     let mut state = create_test_input_state();
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.focus_mode_active());
     // Focus mode taking chrome over is not a preference.
     assert!(state.take_pending_toolbar_persistence().is_empty());
 
     let previous = state.ui_visibility.show_status_bar;
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
     assert!(!state.focus_mode_active(), "the toggle breaks focus mode");
     assert_eq!(
         state.take_pending_toolbar_persistence(),
@@ -331,8 +319,8 @@ fn a_chrome_toggle_that_breaks_focus_mode_still_persists() {
 /// neither is the user choosing to live without it.
 #[test]
 fn focus_mode_transitions_queue_no_durable_chrome_change() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -340,11 +328,11 @@ fn focus_mode_transitions_queue_no_durable_chrome_change() {
 
     let mut state = create_test_input_state();
 
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(!state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
 
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleFocusMode);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFocusMode);
     assert!(state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
 }
@@ -353,8 +341,8 @@ fn focus_mode_transitions_queue_no_durable_chrome_change() {
 /// preferences keeps one entry each rather than the first swallowing the rest.
 #[test]
 fn a_burst_across_chrome_kinds_keeps_one_entry_each() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -363,12 +351,9 @@ fn a_burst_across_chrome_kinds_keeps_one_entry_each() {
     use crate::input::state::PendingToolbarPersistence as Pending;
 
     let mut state = create_test_input_state();
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleStatusBar);
-    state.handle_action_with_resources(
-        test_text_resources,
-        crate::config::Action::ToggleFloatingBadge,
-    );
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleZoomChip);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleFloatingBadge);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleZoomChip);
 
     assert_eq!(
         state.take_pending_toolbar_persistence(),
@@ -383,16 +368,16 @@ fn a_burst_across_chrome_kinds_keeps_one_entry_each() {
 /// A burst that lands where it started is dropped: nothing durable changed.
 #[test]
 fn a_chrome_toggle_pressed_twice_queues_nothing() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
     };
 
     let mut state = create_test_input_state();
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleStatusBar);
-    state.handle_action_with_resources(test_text_resources, crate::config::Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
+    state.handle_action_with_resources(test_text_resources, Action::ToggleStatusBar);
 
     assert!(state.ui_visibility.show_status_bar);
     assert!(state.take_pending_toolbar_persistence().is_empty());
@@ -402,8 +387,8 @@ fn a_chrome_toggle_pressed_twice_queues_nothing() {
 /// effect, and the explicit toggles move it directly; all of them persist.
 #[test]
 fn highlight_actions_queue_the_click_highlight() {
-    let test_text_measurer = crate::draw::TextMeasurer::default();
-    let test_ui_engine = crate::ui_text::UiTextEngine::default();
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
     let test_text_resources = crate::input::state::InputTextResources {
         measurer: &test_text_measurer,
         ui_engine: &test_ui_engine,
@@ -412,9 +397,9 @@ fn highlight_actions_queue_the_click_highlight() {
     use crate::input::state::PendingToolbarPersistence as Pending;
 
     for action in [
-        crate::config::Action::ToggleClickHighlight,
-        crate::config::Action::ToggleHighlightTool,
-        crate::config::Action::SelectHighlightTool,
+        Action::ToggleClickHighlight,
+        Action::ToggleHighlightTool,
+        Action::SelectHighlightTool,
     ] {
         let mut state = create_test_input_state();
         let previous_enabled = state.click_highlight_enabled();

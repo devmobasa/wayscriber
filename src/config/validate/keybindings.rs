@@ -85,26 +85,31 @@ pub enum KeybindingProblem {
 
 impl InvalidKeybinding {
     /// Whether this binding was dropped from the session keymap.
+    #[must_use]
     pub fn was_dropped(&self) -> bool {
         matches!(self.problem, KeybindingProblem::Unparseable { .. })
     }
 
     /// The problem this binding has.
+    #[must_use]
     pub fn problem(&self) -> &KeybindingProblem {
         &self.problem
     }
 
     /// The rejected string exactly as the file spells it.
+    #[must_use]
     pub fn binding(&self) -> &str {
         &self.binding
     }
 
     /// The `[keybindings]` key the string was removed from.
+    #[must_use]
     pub fn config_key(&self) -> Option<&'static str> {
         KeybindingsConfig::config_key_for_action(self.action)
     }
 
     /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    #[must_use]
     pub fn summary(&self) -> String {
         match &self.problem {
             KeybindingProblem::Unparseable { .. } => format!(
@@ -173,42 +178,50 @@ impl KeybindingConflictResolution {
     ///
     /// For an exact conflict this is also the shortcut the winner kept. Use
     /// [`Self::kept_key`] when a sequence conflicts with one of its prefixes.
+    #[must_use]
     pub fn key(&self) -> &str {
         &self.dropped_key
     }
 
     /// The shortcut retained by the winning action, in normalized form.
+    #[must_use]
     pub fn kept_key(&self) -> &str {
         &self.kept_key
     }
 
     /// The shortcut removed from the losing action, in normalized form.
+    #[must_use]
     pub fn dropped_key(&self) -> &str {
         &self.dropped_key
     }
 
     /// The action that keeps the shortcut for this session.
+    #[must_use]
     pub fn kept(&self) -> Action {
         self.kept
     }
 
     /// The action the shortcut was removed from for this session.
+    #[must_use]
     pub fn dropped(&self) -> Action {
         self.dropped
     }
 
     /// Whether one action listed the same shortcut more than once, rather than
     /// two actions claiming it.
+    #[must_use]
     pub fn is_self_duplicate(&self) -> bool {
         self.kept == self.dropped && self.kept_key == self.dropped_key
     }
 
     /// The `[keybindings]` key the shortcut was removed from.
+    #[must_use]
     pub fn dropped_config_key(&self) -> Option<&'static str> {
         KeybindingsConfig::config_key_for_action(self.dropped)
     }
 
     /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    #[must_use]
     pub fn summary(&self) -> String {
         if self.is_self_duplicate() {
             format!(
@@ -357,16 +370,19 @@ pub struct DefaultShortcutSkipped {
 
 impl DefaultShortcutSkipped {
     /// The omitted action that would have received the shortcut.
+    #[must_use]
     pub fn action(&self) -> Action {
         self.action
     }
 
     /// The skipped shortcut in its normalized form (`Ctrl+Shift+K`).
+    #[must_use]
     pub fn binding(&self) -> &str {
         &self.binding
     }
 
     /// The action the configuration gives the shortcut to instead.
+    #[must_use]
     pub fn claimed_by(&self) -> Action {
         self.claimed_by
     }
@@ -374,11 +390,13 @@ impl DefaultShortcutSkipped {
     /// The `[keybindings]` key that would hold the skipped default. It is
     /// absent from the file, which is the whole reason the default was on
     /// offer.
+    #[must_use]
     pub fn config_key(&self) -> Option<&'static str> {
         KeybindingsConfig::config_key_for_action(self.action)
     }
 
     /// Toast-sized wording; [`fmt::Display`] carries the long form.
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "{} stays with {}, so the new default for {} is inactive.",

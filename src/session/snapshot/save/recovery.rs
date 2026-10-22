@@ -1,6 +1,22 @@
-use super::payload::{log_payload_candidate, snapshot_without_history};
-use super::*;
+use std::io::ErrorKind;
+
+use crate::durable_io;
+use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
+
+use super::super::types::SessionSnapshot;
+use super::model::{SavePayloadTooLarge, SaveSnapshotOutcome, SaveSnapshotReport};
+use super::payload;
+use super::payload::{
+    PayloadCandidate, log_payload_candidate, payload_candidate, snapshot_without_history,
+};
+use crate::session::options::SessionOptions;
 use crate::session::snapshot::generation::{ArtifactStamp, MarkerKind, cleared_by};
+use crate::time_utils::now_rfc3339;
+use anyhow::{Context, Result, anyhow};
+use log::{debug, info, warn};
+use std::fs;
+use std::path::Path;
+use std::time::Instant;
 
 pub(super) fn save_recovery_snapshot(
     snapshot: &SessionSnapshot,
@@ -18,13 +34,13 @@ pub(super) fn save_recovery_snapshot(
     // Through durable_io: it owns the temp-write/fsync/rename/parent-sync
     // sequence, keeps the artifact at 0600 like the rest of the session's
     // private data, and removes its temporary file on every failure path.
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         &recovery_path,
         &payload.bytes,
-        crate::durable_io::AtomicWriteOptions {
-            overwrite: crate::durable_io::OverwriteMode::Replace,
-            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-            symlink: crate::durable_io::SymlinkPolicy::Reject,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::Replace,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
         },
@@ -106,7 +122,7 @@ pub(super) fn remove_session_file_after_clear_marker(session_path: &Path) {
             "Removed session file {} after writing clear marker",
             session_path.display()
         ),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) if err.kind() == ErrorKind::NotFound => {}
         Err(err) => warn!(
             "Clear marker was written, but failed to remove stale session file {}: {}",
             session_path.display(),
@@ -195,13 +211,13 @@ fn write_session_marker(
         Some(g) => super::super::generation::marker_record_bytes(kind, g, written)?,
         None => written.into_bytes(),
     };
-    crate::durable_io::write_atomic(
+    durable_io::write_atomic(
         marker_path,
         &content,
-        crate::durable_io::AtomicWriteOptions {
-            overwrite: crate::durable_io::OverwriteMode::Replace,
-            permissions: crate::durable_io::PermissionPolicy::FixedMode(0o600),
-            symlink: crate::durable_io::SymlinkPolicy::Reject,
+        AtomicWriteOptions {
+            overwrite: OverwriteMode::Replace,
+            permissions: PermissionPolicy::FixedMode(0o600),
+            symlink: SymlinkPolicy::Reject,
             sync_file: true,
             sync_parent: true,
         },

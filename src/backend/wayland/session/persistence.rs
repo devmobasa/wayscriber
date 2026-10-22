@@ -1,9 +1,11 @@
+use std::fmt::{Display, Formatter};
 #[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use std::{error, fmt};
 
 use anyhow::{Context, Result, anyhow};
 
@@ -11,7 +13,7 @@ use crate::backend::wayland::backend::runtime_wake::RuntimeWakeHandle;
 #[cfg(test)]
 use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
 use crate::session::{
-    self, ClearToolStateOutcome, LoadSnapshotOutcome, SaveAsOverwrite, SaveSnapshotReport,
+    ClearToolStateOutcome, LoadSnapshotOutcome, SaveAsOverwrite, SaveSnapshotReport,
     SessionInspection, SessionOptions, SessionSnapshot,
 };
 
@@ -182,8 +184,8 @@ pub(in crate::backend::wayland) enum SubmitError {
     Unhealthy,
 }
 
-impl std::fmt::Display for SubmitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SubmitError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let message = match self {
             Self::Busy => "a persistence operation is already active",
             Self::Full => "persistence request channel unexpectedly full",
@@ -194,7 +196,7 @@ impl std::fmt::Display for SubmitError {
     }
 }
 
-impl std::error::Error for SubmitError {}
+impl error::Error for SubmitError {}
 
 #[derive(Debug)]
 pub(in crate::backend::wayland) struct SubmitFailure {
@@ -222,7 +224,7 @@ impl PersistenceController {
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("wayscriber-persistence".to_string())
-            .spawn(move || worker_main(request_rx, completion_tx, wake))
+            .spawn(move || worker_main(&request_rx, completion_tx, wake))
             .context("failed to start session persistence worker")?;
 
         Ok(Self {
@@ -237,7 +239,8 @@ impl PersistenceController {
 
     #[cfg(test)]
     pub(in crate::backend::wayland) fn start_for_test() -> Result<Self> {
-        let wake = RuntimeWakeSource::new().context("failed to create test runtime wake source")?;
+        let wake =
+            RuntimeWakeSource::try_new().context("failed to create test runtime wake source")?;
         Self::start(wake.handle())
     }
 
@@ -265,7 +268,7 @@ impl PersistenceController {
         &mut self,
         target_epoch: u64,
         operation: PersistenceOperation,
-    ) -> std::result::Result<RequestId, SubmitFailure> {
+    ) -> Result<RequestId, SubmitFailure> {
         if !self.healthy {
             return Err(SubmitFailure {
                 error: SubmitError::Unhealthy,
@@ -467,7 +470,11 @@ fn assert_send_static<T: Send + 'static>() {}
 
 #[cfg(test)]
 mod tests {
+    use std::io::ErrorKind;
     use std::os::fd::AsRawFd;
+    use std::{fs, io};
+
+    use crate::test_temp;
 
     use super::*;
     use crate::session::SaveSnapshotOutcome;
@@ -490,7 +497,7 @@ mod tests {
     }
 
     fn controller_with_wake() -> (RuntimeWakeSource, PersistenceController) {
-        let wake = RuntimeWakeSource::new().unwrap();
+        let wake = RuntimeWakeSource::try_new().unwrap();
         let controller = PersistenceController::start(wake.handle()).unwrap();
         (wake, controller)
     }
@@ -512,8 +519,8 @@ mod tests {
             if ready == 0 {
                 panic!("persistence worker did not wake runtime within one second");
             }
-            let err = std::io::Error::last_os_error();
-            if err.kind() != std::io::ErrorKind::Interrupted {
+            let err = io::Error::last_os_error();
+            if err.kind() != ErrorKind::Interrupted {
                 panic!("runtime wake poll failed: {err}");
             }
         }
@@ -521,7 +528,7 @@ mod tests {
 
     #[test]
     fn real_worker_publishes_completion_before_waking_runtime() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let (wake, mut controller) = controller_with_wake();
         controller
@@ -543,7 +550,7 @@ mod tests {
 
     #[test]
     fn production_error_completion_wakes_runtime_and_worker_remains_healthy() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let missing = temp.path().join("missing.wayscriber-session");
         let (wake, mut controller) = controller_with_wake();
         controller
@@ -578,7 +585,7 @@ mod tests {
 
     #[test]
     fn synchronous_barriers_and_shutdown_tolerate_redundant_unread_wake() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let (wake, mut controller) = controller_with_wake();
 
@@ -594,7 +601,7 @@ mod tests {
 
     #[test]
     fn real_worker_executes_production_operation_off_caller_thread() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let mut controller = PersistenceController::start_for_test().unwrap();
         controller
@@ -614,7 +621,7 @@ mod tests {
 
     #[test]
     fn real_worker_uses_existing_save_pipeline_and_reports_committed_state() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let snapshot = SessionSnapshot {
             active_board_id: "transparent".to_string(),
@@ -653,7 +660,7 @@ mod tests {
 
     #[test]
     fn production_error_does_not_kill_worker() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let missing = temp.path().join("missing.wayscriber-session");
         let options = test_options(temp.path().to_path_buf());
         let mut controller = PersistenceController::start_for_test().unwrap();
@@ -677,10 +684,10 @@ mod tests {
     fn failed_autosave_can_be_followed_by_normal_save_on_same_worker() {
         use std::os::unix::fs::symlink;
 
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let target = temp.path().join("autosave-target.wayscriber-session");
         let alias = temp.path().join("autosave-alias.wayscriber-session");
-        std::fs::write(&target, b"{}").unwrap();
+        fs::write(&target, b"{}").unwrap();
         symlink(&target, &alias).unwrap();
         let mut invalid_options = test_options(temp.path().to_path_buf());
         invalid_options.set_named_file_target(alias);
@@ -730,10 +737,10 @@ mod tests {
     fn save_as_preflight_rejects_same_target_symlink_before_identity_matching() {
         use std::os::unix::fs::symlink;
 
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current_path = temp.path().join("current.wayscriber-session");
         let alias_path = temp.path().join("current-alias.wayscriber-session");
-        std::fs::write(&current_path, b"{}").unwrap();
+        fs::write(&current_path, b"{}").unwrap();
         symlink(&current_path, &alias_path).unwrap();
 
         let mut options = test_options(temp.path().to_path_buf());
@@ -756,9 +763,9 @@ mod tests {
 
     #[test]
     fn save_as_preflight_reports_regular_current_target_after_validation() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let current_path = temp.path().join("current.wayscriber-session");
-        std::fs::write(&current_path, b"{}").unwrap();
+        fs::write(&current_path, b"{}").unwrap();
         let mut options = test_options(temp.path().to_path_buf());
         options.set_named_file_target(current_path.clone());
         let mut controller = PersistenceController::start_for_test().unwrap();
@@ -816,7 +823,7 @@ mod tests {
 
     #[test]
     fn full_try_submit_returns_owned_operation_without_installing_ticket() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let (request_tx, request_rx) = mpsc::sync_channel(1);
         request_tx
@@ -839,12 +846,7 @@ mod tests {
             healthy: true,
         };
 
-        let result = controller.try_submit(
-            0,
-            PersistenceOperation::HasArtifacts {
-                options: options.clone(),
-            },
-        );
+        let result = controller.try_submit(0, PersistenceOperation::HasArtifacts { options });
         let failure = result.expect_err("full request channel must reject submission");
         assert!(matches!(failure.error, SubmitError::Full));
         assert!(matches!(
@@ -858,7 +860,7 @@ mod tests {
 
     #[test]
     fn disconnected_try_submit_returns_owned_operation_without_installing_ticket() {
-        let temp = crate::test_temp::tempdir().unwrap();
+        let temp = test_temp::tempdir().unwrap();
         let options = test_options(temp.path().to_path_buf());
         let (request_tx, request_rx) = mpsc::sync_channel(1);
         drop(request_rx);

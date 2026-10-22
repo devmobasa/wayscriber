@@ -1,7 +1,9 @@
+use crate::draw::Shape;
+use crate::input::state::core::modal::ModalSurface;
+
 use super::super::base::InputState;
 use super::types::{ContextMenuKind, MenuCommand};
-use crate::draw::ShapeId;
-use crate::draw::TextMeasurer;
+use crate::draw::{ShapeId, TextMeasurer};
 
 impl InputState {
     /// Closes the currently open context menu.
@@ -27,7 +29,7 @@ impl InputState {
         if !self.context_menu.enabled {
             return;
         }
-        self.close_modals_for_open(crate::input::state::core::modal::ModalSurface::ContextMenu);
+        self.close_modals_for_open(ModalSurface::ContextMenu);
         self.context_menu
             .open(anchor, shape_ids, kind, hovered_shape_id);
         self.pointer.request_menu_hover_recalc();
@@ -105,17 +107,14 @@ impl InputState {
                     .active_frame()
                     .shape(selection[0])
                     .map(|shape| {
-                        matches!(
-                            shape.shape,
-                            crate::draw::Shape::Text { .. } | crate::draw::Shape::StickyNote { .. }
-                        )
+                        matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
                     })
                     .unwrap_or(false);
             let anchor = self.keyboard_shape_menu_anchor(measurer, &selection);
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
             self.pointer.clear_menu_hover_recalc();
-            if !focus_edit || !self.focus_context_menu_command(MenuCommand::EditText) {
+            if !focus_edit || !self.focus_context_menu_command(&MenuCommand::EditText) {
                 self.focus_first_context_menu_entry();
             }
         }

@@ -6,9 +6,12 @@
 //! dragging it sets that scalar from the pointer's perpendicular distance to
 //! the chord.
 
-use crate::draw::TextMeasurer;
-use crate::draw::{ArrowStyle, Shape, ShapeId};
+use std::mem;
+
+use crate::draw::frame::{ShapeSnapshot, UndoAction};
+use crate::draw::{ArrowStyle, Shape, ShapeId, TextMeasurer};
 use crate::input::InputState;
+use crate::input::state::DrawingState;
 use crate::util::{self, Rect};
 
 /// Side length of the square bend handle, in canvas pixels.
@@ -95,7 +98,7 @@ impl InputState {
         y: i32,
         snap: bool,
     ) -> bool {
-        let crate::input::state::DrawingState::BendingArrow { shape_id, .. } = self.state else {
+        let DrawingState::BendingArrow { shape_id, .. } = self.state else {
             return false;
         };
         let frame = self.boards.active_frame();
@@ -172,14 +175,11 @@ impl InputState {
         // Checked before the take, not after: `mem::replace` would install
         // `Idle` on the way to discovering there was no bend to end, silently
         // cancelling whatever interaction was actually running.
-        if !matches!(
-            self.state,
-            crate::input::state::DrawingState::BendingArrow { .. }
-        ) {
+        if !matches!(self.state, DrawingState::BendingArrow { .. }) {
             return false;
         }
-        let crate::input::state::DrawingState::BendingArrow { shape_id, snapshot } =
-            std::mem::replace(&mut self.state, crate::input::state::DrawingState::Idle)
+        let DrawingState::BendingArrow { shape_id, snapshot } =
+            mem::replace(&mut self.state, DrawingState::Idle)
         else {
             return false;
         };
@@ -193,15 +193,11 @@ impl InputState {
     /// The live updates during the drag deliberately recorded nothing, so the
     /// whole gesture undoes in one step rather than once per motion event. A
     /// drag that ended where it started records nothing at all.
-    pub(crate) fn commit_arrow_bend(
-        &mut self,
-        shape_id: ShapeId,
-        snapshot: crate::draw::frame::ShapeSnapshot,
-    ) {
+    pub(crate) fn commit_arrow_bend(&mut self, shape_id: ShapeId, snapshot: ShapeSnapshot) {
         let Some(shape) = self.boards.active_frame().shape(shape_id) else {
             return;
         };
-        let after = crate::draw::frame::ShapeSnapshot {
+        let after = ShapeSnapshot {
             shape: shape.shape.clone(),
             locked: shape.locked,
         };
@@ -210,7 +206,7 @@ impl InputState {
         }
         let limit = self.history_limits.undo_stack_limit();
         self.boards.active_frame_mut().push_undo_action(
-            crate::draw::frame::UndoAction::Modify {
+            UndoAction::Modify {
                 shape_id,
                 before: snapshot,
                 after,
@@ -223,7 +219,7 @@ impl InputState {
 
 /// Bit pattern of an arrow snapshot's bend, so the comparison above is exact
 /// rather than an epsilon nobody chose.
-fn snapshot_bend(snapshot: &crate::draw::frame::ShapeSnapshot) -> Option<u64> {
+fn snapshot_bend(snapshot: &ShapeSnapshot) -> Option<u64> {
     match &snapshot.shape {
         Shape::Arrow { bend, .. } => Some(bend.to_bits()),
         _ => None,

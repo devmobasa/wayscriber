@@ -1,3 +1,8 @@
+use std::mem;
+use std::sync::Arc;
+
+use crate::input::state::ClipboardFallbackSaveRequest;
+
 use super::{
     ClipboardPasteRequest, KeybindingEditRequest, OutputFocusAction, PendingBackendAction,
     PendingSelectionClipboardPublish, PendingToolbarPersistence, PresetAction, QuickColorEdit,
@@ -17,7 +22,7 @@ use std::collections::VecDeque;
 pub(crate) enum InputEffect {
     Backend(PendingBackendAction),
     /// An accepted file save owns its bytes even if the clipboard fallback changes.
-    ClipboardFallbackSave(std::sync::Arc<crate::input::state::ClipboardFallbackSaveRequest>),
+    ClipboardFallbackSave(Arc<ClipboardFallbackSaveRequest>),
     SpotlightMagnifierFeedback,
     ToolbarPersistence(PendingToolbarPersistence),
     KeybindingEdit(KeybindingEditRequest),
@@ -369,7 +374,7 @@ fn policy(effect: &InputEffect) -> EffectPolicy {
 fn same_slot(left: &InputEffect, right: &InputEffect) -> bool {
     match (left, right) {
         (InputEffect::ToolbarPersistence(left), InputEffect::ToolbarPersistence(right)) => {
-            std::mem::discriminant(left) == std::mem::discriminant(right)
+            mem::discriminant(left) == mem::discriminant(right)
         }
         // Each preset slot and each quick color is a config write of its own,
         // so a later edit replaces only the pending write for the same one.

@@ -1,3 +1,5 @@
+use crate::draw;
+
 use super::*;
 
 fn rectangle(x: i32) -> Shape {
@@ -8,7 +10,7 @@ fn rectangle(x: i32) -> Shape {
         h: 20,
         fill: false,
         fill_color: None,
-        color: crate::draw::WHITE,
+        color: draw::WHITE,
         thick: 2.0,
     }
 }

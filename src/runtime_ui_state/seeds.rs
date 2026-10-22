@@ -100,7 +100,7 @@ impl StagedSeedReload {
     pub(crate) fn stage(
         previous: Option<&Self>,
         current: &InteractionSeedRegistry,
-        seeds: ValidatedInteractionSeeds,
+        seeds: &ValidatedInteractionSeeds,
     ) -> Result<Self, SeedRegistryError> {
         let mut registry = previous
             .map(|staged| staged.registry.clone())
@@ -185,7 +185,7 @@ impl InteractionSeedRegistry {
 
     pub(crate) fn update(
         &mut self,
-        seeds: ValidatedInteractionSeeds,
+        seeds: &ValidatedInteractionSeeds,
     ) -> Result<BTreeSet<InteractionSeedTarget>, SeedRegistryError> {
         let mut next_registry = self.clone();
         let changed = next_registry.update_in_place(seeds)?;
@@ -195,7 +195,7 @@ impl InteractionSeedRegistry {
 
     fn update_in_place(
         &mut self,
-        seeds: ValidatedInteractionSeeds,
+        seeds: &ValidatedInteractionSeeds,
     ) -> Result<BTreeSet<InteractionSeedTarget>, SeedRegistryError> {
         let mut targets = self.states.keys().cloned().collect::<BTreeSet<_>>();
         targets.extend(seeds.values.keys().cloned());
@@ -214,7 +214,10 @@ impl InteractionSeedRegistry {
                     changed.insert(target);
                 }
                 None => {
-                    debug_assert!(next.is_some());
+                    debug_assert!(
+                        next.is_some(),
+                        "a target absent from the registry comes from the new seeds"
+                    );
                     self.states.insert(
                         target.clone(),
                         SeedState {
@@ -287,11 +290,11 @@ mod tests {
     fn staged_remove_then_same_seed_readd_retains_identity_tombstone() {
         let target = InteractionSeedTarget::BoardPin("board-4".to_string());
         let current = InteractionSeedRegistry::from_validated(board_seeds(Some("board-4"), false));
-        let removed = StagedSeedReload::stage(None, &current, board_seeds(None, false)).unwrap();
+        let removed = StagedSeedReload::stage(None, &current, &board_seeds(None, false)).unwrap();
         let restored = StagedSeedReload::stage(
             Some(&removed),
             &current,
-            board_seeds(Some("board-4"), false),
+            &board_seeds(Some("board-4"), false),
         )
         .unwrap();
 

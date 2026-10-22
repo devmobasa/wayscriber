@@ -1,8 +1,10 @@
+use crate::config::BoardItemConfig;
 use crate::config::types::{BoardBackgroundConfig, BoardColorConfig, BoardsConfig};
-use crate::domain::{BoundaryBoardIdSet, clamp_board_rgb};
+use crate::domain::{BoardGrid, BoardGridKind, BoundaryBoardIdSet, clamp_board_rgb};
 use log::warn;
 
-use super::{Config, float::finite_or_default};
+use super::Config;
+use super::float::finite_or_default;
 
 impl Config {
     pub(super) fn validate_boards(&mut self) {
@@ -85,8 +87,8 @@ impl Config {
     }
 }
 
-fn normalize_grid(item: &mut crate::config::BoardItemConfig) {
-    let mut grid = crate::domain::BoardGrid::from(item.grid);
+fn normalize_grid(item: &mut BoardItemConfig) {
+    let mut grid = BoardGrid::from(item.grid);
     if i64::from(grid.spacing()) != item.grid.spacing {
         warn!(
             "Board '{}' grid spacing {} is outside 8–200; using {}",
@@ -95,7 +97,7 @@ fn normalize_grid(item: &mut crate::config::BoardItemConfig) {
             grid.spacing()
         );
     }
-    if item.background.is_transparent() && grid.kind != crate::domain::BoardGridKind::None {
+    if item.background.is_transparent() && grid.kind != BoardGridKind::None {
         warn!("Board '{}' is transparent; disabling its grid", item.id);
         grid = grid.disabled();
     }

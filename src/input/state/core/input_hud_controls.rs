@@ -1,3 +1,4 @@
+use std::collections::vec_deque::Iter;
 use std::time::Instant;
 
 use crate::config::{InputHudMode, InputHudPosition};
@@ -42,7 +43,7 @@ impl InputState {
     }
 
     /// Live chips, oldest first.
-    pub fn input_hud_entries(&self) -> std::collections::vec_deque::Iter<'_, InputHudEntry> {
+    pub fn input_hud_entries(&self) -> Iter<'_, InputHudEntry> {
         self.input_hud.entries()
     }
 

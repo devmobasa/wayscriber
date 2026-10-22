@@ -1,4 +1,5 @@
 //! Owns document transfer to effects and mutually exclusive load/save phases.
+use std::mem;
 use std::path::PathBuf;
 use wayscriber::config::{ConfigDocument, ConfigValidationReport};
 
@@ -78,8 +79,7 @@ impl DocumentWorkflow {
         if !self.is_saving() {
             return None;
         }
-        let DocumentPhase::Saving(context) =
-            std::mem::replace(&mut self.phase, DocumentPhase::Idle)
+        let DocumentPhase::Saving(context) = mem::replace(&mut self.phase, DocumentPhase::Idle)
         else {
             return None;
         };
