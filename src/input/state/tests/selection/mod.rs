@@ -7,4 +7,5 @@ mod deletion;
 mod double_click;
 mod duplicate;
 mod mid_drag_actions;
+mod movement;
 mod reorder;

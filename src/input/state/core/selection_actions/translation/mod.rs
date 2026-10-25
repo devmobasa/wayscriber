@@ -77,17 +77,20 @@ impl InputState {
         let Some(bounds) = self.movable_selection_bounds(measurer) else {
             return false;
         };
-        let screen_width = self.view.screen_width().min(i32::MAX as u32) as i32;
-        if screen_width <= 0 {
+        if self.view.screen_width() == 0 {
             return false;
         }
 
+        let visible = self.visible_canvas_rect();
         let target_x = if to_start {
-            0
+            visible.x
         } else {
-            screen_width - bounds.width
+            visible
+                .x
+                .saturating_add(visible.width)
+                .saturating_sub(bounds.width)
         };
-        let dx = target_x - bounds.x;
+        let dx = target_x.saturating_sub(bounds.x);
         if dx == 0 {
             return false;
         }
@@ -102,17 +105,20 @@ impl InputState {
         let Some(bounds) = self.movable_selection_bounds(measurer) else {
             return false;
         };
-        let screen_height = self.view.screen_height().min(i32::MAX as u32) as i32;
-        if screen_height <= 0 {
+        if self.view.screen_height() == 0 {
             return false;
         }
 
+        let visible = self.visible_canvas_rect();
         let target_y = if to_start {
-            0
+            visible.y
         } else {
-            screen_height - bounds.height
+            visible
+                .y
+                .saturating_add(visible.height)
+                .saturating_sub(bounds.height)
         };
-        let dy = target_y - bounds.y;
+        let dy = target_y.saturating_sub(bounds.y);
         if dy == 0 {
             return false;
         }

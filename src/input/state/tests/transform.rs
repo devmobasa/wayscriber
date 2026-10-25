@@ -374,9 +374,10 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
     let mut state = create_test_input_state();
     state.update_screen_dimensions(100, 100);
+    // Include the stroke padding inside the view before nudging toward its edge.
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 90,
-        y: 90,
+        x: 87,
+        y: 87,
         w: 10,
         h: 10,
         fill: false,

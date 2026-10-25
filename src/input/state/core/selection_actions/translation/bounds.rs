@@ -77,19 +77,30 @@ impl InputState {
         }
     }
 
-    fn clamp_axis_delta(position: i32, size: i32, screen: i32, delta: i32) -> i32 {
-        if screen <= 0 || size <= 0 {
+    fn clamp_axis_delta(position: i32, size: i32, start: i32, extent: i32, delta: i32) -> i32 {
+        if extent <= 0 || size <= 0 {
             return delta;
         }
 
-        let end = position.saturating_add(size);
-        let (min_delta, max_delta) = if size <= screen {
-            (0i32.saturating_sub(position), screen.saturating_sub(end))
+        let position = i64::from(position);
+        let end = position + i64::from(size);
+        let start = i64::from(start);
+        let view_end = start + i64::from(extent);
+        let (min_delta, max_delta) = if size <= extent {
+            (start - position, view_end - end)
         } else {
-            (screen.saturating_sub(end), 0i32.saturating_sub(position))
+            (view_end - end, start - position)
         };
 
-        delta.clamp(min_delta, max_delta)
+        // A panned or zoomed view may already clip the selection. Stop further
+        // outward movement without forcing it back into view against the drag.
+        // Oversized selections can align past the viewport, but their painted
+        // bounds must stay within the coordinate range used by shape transforms.
+        let min_delta = min_delta.min(0).max(i64::from(i32::MIN) - position);
+        let max_delta = max_delta.max(0).min((i64::from(i32::MAX) - end).max(0));
+        let clamped = i64::from(delta).clamp(min_delta, max_delta);
+        i32::try_from(clamped)
+            .expect("clamped movement lies between zero and the requested i32 delta")
     }
 
     pub(super) fn clamp_selection_translation(
@@ -99,21 +110,32 @@ impl InputState {
         dy: i32,
     ) -> Option<(i32, i32)> {
         let bounds = self.movable_selection_bounds(measurer)?;
+        let visible = self.visible_canvas_rect();
         let (screen_width, screen_height) = self.view.screen_size();
-        let screen_width = screen_width.min(i32::MAX as u32) as i32;
-        let screen_height = screen_height.min(i32::MAX as u32) as i32;
 
-        let clamped_dx = if dx == 0 {
-            0
+        // Shape bounds and pointer deltas are canvas coordinates, so clamp
+        // against the viewport after applying the board pan and zoom.
+        let clamped_dx = if dx == 0 || screen_width == 0 {
+            dx
         } else {
-            Self::clamp_axis_delta(bounds.x, bounds.width, screen_width, dx)
+            Self::clamp_axis_delta(bounds.x, bounds.width, visible.x, visible.width, dx)
         };
-        let clamped_dy = if dy == 0 {
-            0
+        let clamped_dy = if dy == 0 || screen_height == 0 {
+            dy
         } else {
-            Self::clamp_axis_delta(bounds.y, bounds.height, screen_height, dy)
+            Self::clamp_axis_delta(bounds.y, bounds.height, visible.y, visible.height, dy)
         };
 
-        Some((clamped_dx, clamped_dy))
+        let frame = self.boards.active_frame();
+        let translation = self
+            .selected_shape_ids()
+            .iter()
+            .filter_map(|id| frame.shape(*id))
+            .filter(|drawn| !drawn.locked)
+            .fold((clamped_dx, clamped_dy), |(dx, dy), drawn| {
+                drawn.shape.constrain_translation(dx, dy)
+            });
+
+        Some(translation)
     }
 }
