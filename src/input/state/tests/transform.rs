@@ -562,3 +562,90 @@ fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
         other => panic!("expected arrow, got {other:?}"),
     }
 }
+
+#[test]
+fn moving_a_selection_on_a_panned_board_follows_the_pointer() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(1920, 1080);
+    assert!(state.boards.switch_to_id(crate::input::BOARD_ID_BLACKBOARD));
+    // Screen (0, 0) is canvas (-3306, 93) on this board.
+    state.boards.active_frame_mut().set_view_offset(-3306, 93);
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: -3200,
+        y: 193,
+        w: 480,
+        h: 100,
+        fill: false,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
+    });
+    state.set_selection(vec![shape_id]);
+
+    let before = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+
+    assert!(state.apply_translation_to_selection_with(&measurer, 5, 0));
+
+    let after = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+    assert_eq!(
+        after.x - before.x,
+        5,
+        "a 5px drag must move the selection by 5 canvas px, not teleport it to the canvas origin"
+    );
+}
+
+#[test]
+fn moving_a_selection_at_zoom_keeps_it_inside_the_visible_canvas() {
+    let measurer = crate::draw::TextMeasurer::default();
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(1920, 1080);
+    assert!(state.boards.switch_to_id(crate::input::BOARD_ID_BLACKBOARD));
+    state.view.set_zoom_status(true, false, 4.0, (0.0, 0.0));
+    // At 4x the visible canvas is 480x270. The 400px-wide selection carries
+    // ~2px of line-width bounds padding, so it may slide 78px before its right
+    // edge reaches the visible canvas edge.
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 0,
+        y: 0,
+        w: 400,
+        h: 100,
+        fill: false,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
+    });
+    state.set_selection(vec![shape_id]);
+
+    let before = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+    state.apply_translation_to_selection_with(&measurer, 300, 0);
+    let after = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+
+    assert_eq!(
+        after.x - before.x,
+        78,
+        "the selection must stop at the visible canvas edge (480 canvas px at 4x), not at the screen width"
+    );
+}
