@@ -77,16 +77,23 @@ impl InputState {
         }
     }
 
-    fn clamp_axis_delta(position: i32, size: i32, screen: i32, delta: i32) -> i32 {
-        if screen <= 0 || size <= 0 {
+    fn clamp_axis_delta(position: i32, size: i32, start: i32, end_limit: i32, delta: i32) -> i32 {
+        if end_limit <= start || size <= 0 {
             return delta;
         }
 
+        let extent = end_limit.saturating_sub(start);
         let end = position.saturating_add(size);
-        let (min_delta, max_delta) = if size <= screen {
-            (0i32.saturating_sub(position), screen.saturating_sub(end))
+        let (min_delta, max_delta) = if size <= extent {
+            (
+                start.saturating_sub(position),
+                end_limit.saturating_sub(end),
+            )
         } else {
-            (screen.saturating_sub(end), 0i32.saturating_sub(position))
+            (
+                end_limit.saturating_sub(end),
+                start.saturating_sub(position),
+            )
         };
 
         delta.clamp(min_delta, max_delta)
@@ -100,18 +107,24 @@ impl InputState {
     ) -> Option<(i32, i32)> {
         let bounds = self.movable_selection_bounds(measurer)?;
         let (screen_width, screen_height) = self.view.screen_size();
-        let screen_width = screen_width.min(i32::MAX as u32) as i32;
-        let screen_height = screen_height.min(i32::MAX as u32) as i32;
+        // Shape bounds are canvas coordinates, so the limit has to be the
+        // visible canvas area: board pan and zoom both move the screen rect
+        // away from the canvas origin. Without a known screen size there is
+        // nothing to clamp against.
+        let visible = self.view.visible_canvas_rect(self.board_view_offset());
+        let (start_x, start_y) = (visible.x, visible.y);
+        let end_x = visible.x.saturating_add(visible.width);
+        let end_y = visible.y.saturating_add(visible.height);
 
-        let clamped_dx = if dx == 0 {
-            0
+        let clamped_dx = if dx == 0 || screen_width == 0 {
+            dx
         } else {
-            Self::clamp_axis_delta(bounds.x, bounds.width, screen_width, dx)
+            Self::clamp_axis_delta(bounds.x, bounds.width, start_x, end_x, dx)
         };
-        let clamped_dy = if dy == 0 {
-            0
+        let clamped_dy = if dy == 0 || screen_height == 0 {
+            dy
         } else {
-            Self::clamp_axis_delta(bounds.y, bounds.height, screen_height, dy)
+            Self::clamp_axis_delta(bounds.y, bounds.height, start_y, end_y, dy)
         };
 
         Some((clamped_dx, clamped_dy))

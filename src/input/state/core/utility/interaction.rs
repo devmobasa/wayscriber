@@ -5,7 +5,7 @@ use crate::util::Rect;
 use std::time::Instant;
 
 impl InputState {
-    fn board_view_offset(&self) -> (f64, f64) {
+    pub(crate) fn board_view_offset(&self) -> (f64, f64) {
         if self.board_is_transparent() || !self.boards.pan_enabled() {
             (0.0, 0.0)
         } else {
