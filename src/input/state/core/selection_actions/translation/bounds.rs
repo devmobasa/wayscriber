@@ -105,26 +105,27 @@ impl InputState {
         dx: i32,
         dy: i32,
     ) -> Option<(i32, i32)> {
+        // Pannable boards (Blackboard, Whiteboard, etc.) have an unbounded canvas;
+        // clamping against the screen viewport creates artificial boundaries
+        // ("invisible walls") and breaks dragging across the canvas.
+        if self.boards.pan_enabled() && !self.board_is_transparent() {
+            return Some((dx, dy));
+        }
+
         let bounds = self.movable_selection_bounds(measurer)?;
         let (screen_width, screen_height) = self.view.screen_size();
-        // Shape bounds are canvas coordinates, so the limit has to be the
-        // visible canvas area: board pan and zoom both move the screen rect
-        // away from the canvas origin. Without a known screen size there is
-        // nothing to clamp against.
-        let visible = self.view.visible_canvas_rect(self.board_view_offset());
-        let (start_x, start_y) = (visible.x, visible.y);
-        let end_x = visible.x.saturating_add(visible.width);
-        let end_y = visible.y.saturating_add(visible.height);
+        let screen_width = screen_width.min(i32::MAX as u32) as i32;
+        let screen_height = screen_height.min(i32::MAX as u32) as i32;
 
-        let clamped_dx = if dx == 0 || screen_width == 0 {
+        let clamped_dx = if dx == 0 || screen_width <= 0 {
             dx
         } else {
-            Self::clamp_axis_delta(bounds.x, bounds.width, start_x, end_x, dx)
+            Self::clamp_axis_delta(bounds.x, bounds.width, 0, screen_width, dx)
         };
-        let clamped_dy = if dy == 0 || screen_height == 0 {
+        let clamped_dy = if dy == 0 || screen_height <= 0 {
             dy
         } else {
-            Self::clamp_axis_delta(bounds.y, bounds.height, start_y, end_y, dy)
+            Self::clamp_axis_delta(bounds.y, bounds.height, 0, screen_height, dy)
         };
 
         Some((clamped_dx, clamped_dy))

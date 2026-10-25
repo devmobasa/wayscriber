@@ -110,19 +110,21 @@ pub(crate) fn handle_active_motion(
         let dragging = grab.track(canvas.x(), canvas.y());
         let dx = canvas.x() - *last_x;
         let dy = canvas.y() - *last_y;
-        if dragging
+        let translated = dragging
             && (dx != 0 || dy != 0)
-            && state.apply_translation_to_selection_with(measurer, dx, dy)
-            && let DrawingState::MovingSelection {
-                last_x,
-                last_y,
-                moved,
-                ..
-            } = &mut state.state
+            && state.apply_translation_to_selection_with(measurer, dx, dy);
+        if let DrawingState::MovingSelection {
+            last_x,
+            last_y,
+            moved,
+            ..
+        } = &mut state.state
         {
             *last_x = canvas.x();
             *last_y = canvas.y();
-            *moved = true;
+            if translated {
+                *moved = true;
+            }
         }
         return Some(RoutingOutcome::Continued(
             ActiveInteractionKind::MovingSelection,
