@@ -374,9 +374,11 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
     let mut state = create_test_input_state();
     state.update_screen_dimensions(100, 100);
+    // Start with the stroke padding inside the canvas: a selection that
+    // already crosses an edge is not pulled back.
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 90,
-        y: 90,
+        x: 87,
+        y: 87,
         w: 10,
         h: 10,
         fill: false,
@@ -667,10 +669,17 @@ fn moving_a_selection_on_transparent_board_clamps_to_screen() {
         thick: state.style.current_thickness,
     });
     state.set_selection(vec![shape_id]);
+    let before = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
 
     // Transparent overlay is bounded by screen (1920x1080).
     // A 100px-wide shape at x=1800 can only slide to x=1820 (with bounds padding) before hitting screen edge.
-    state.apply_translation_to_selection_with(&measurer, 300, 0);
+    assert!(state.apply_translation_to_selection_with(&measurer, 300, 0));
     let after = state
         .boards
         .active_frame()
@@ -679,5 +688,9 @@ fn moving_a_selection_on_transparent_board_clamps_to_screen() {
         .bounding_box()
         .expect("rect should have bounds");
 
-    assert!(after.x + after.width <= 1920);
+    assert_eq!(
+        (after.x + after.width, after.width),
+        (1920, before.width),
+        "the selection must stop exactly at the screen edge, before {before:?}"
+    );
 }

@@ -6,12 +6,24 @@ const TEXT_RESIZE_HANDLE_SIZE: i32 = 10;
 const TEXT_RESIZE_HANDLE_OFFSET: i32 = 6;
 
 impl InputState {
+    /// Returns no handle when it would end past `i32::MAX`, which text
+    /// placed at the coordinate limit can reach.
     fn text_resize_handle_rect(bounds: Rect) -> Option<Rect> {
-        let size = TEXT_RESIZE_HANDLE_SIZE;
-        let half = size / 2;
-        let center_x = bounds.x + bounds.width + TEXT_RESIZE_HANDLE_OFFSET;
-        let center_y = bounds.y + bounds.height + TEXT_RESIZE_HANDLE_OFFSET;
-        Rect::new(center_x - half, center_y - half, size, size)
+        let size = i64::from(TEXT_RESIZE_HANDLE_SIZE);
+        let inset = i64::from(TEXT_RESIZE_HANDLE_OFFSET) - size / 2;
+        let x = i64::from(bounds.x) + i64::from(bounds.width) + inset;
+        let y = i64::from(bounds.y) + i64::from(bounds.height) + inset;
+        let limit = i64::from(i32::MAX);
+        if x + size > limit || y + size > limit {
+            return None;
+        }
+
+        Rect::new(
+            i32::try_from(x).ok()?,
+            i32::try_from(y).ok()?,
+            TEXT_RESIZE_HANDLE_SIZE,
+            TEXT_RESIZE_HANDLE_SIZE,
+        )
     }
 
     pub(crate) fn selected_text_resize_handle_with(

@@ -107,12 +107,17 @@ pub(crate) fn handle_active_motion(
         // The selection holds still until the pointer leaves the click
         // radius, so neither a click nor either half of a double-click nudges
         // it; past the radius it catches up and follows the pointer exactly.
-        let dragging = grab.track(canvas.x(), canvas.y());
+        // The anchor stays at the press until then, which is what lets the
+        // first drag motion catch up.
+        if !grab.track(canvas.x(), canvas.y()) {
+            return Some(RoutingOutcome::Continued(
+                ActiveInteractionKind::MovingSelection,
+            ));
+        }
         let dx = canvas.x() - *last_x;
         let dy = canvas.y() - *last_y;
-        let translated = dragging
-            && (dx != 0 || dy != 0)
-            && state.apply_translation_to_selection_with(measurer, dx, dy);
+        let translated =
+            (dx != 0 || dy != 0) && state.apply_translation_to_selection_with(measurer, dx, dy);
         if let DrawingState::MovingSelection {
             last_x,
             last_y,
@@ -120,6 +125,8 @@ pub(crate) fn handle_active_motion(
             ..
         } = &mut state.state
         {
+            // The anchor follows the pointer even when an edge blocked the
+            // move, so reversing direction moves the selection at once.
             *last_x = canvas.x();
             *last_y = canvas.y();
             if translated {
