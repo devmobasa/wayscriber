@@ -779,7 +779,7 @@ fn collect_value_drifts(
                 };
                 match (example.get(key), defaults.get(key)) {
                     (Some(example), Some(defaults)) => {
-                        collect_value_drifts(&child, example, defaults, drifts)
+                        collect_value_drifts(&child, example, defaults, drifts);
                     }
                     (Some(example), None) => drifts.push(ValueDrift {
                         path: child,

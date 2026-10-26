@@ -607,7 +607,7 @@ mod tests {
         let closed = AtomicBool::new(false);
 
         let result = within_deadline(Instant::now() + limit, limit, future::ready(7), async {
-            closed.store(true, Ordering::SeqCst)
+            closed.store(true, Ordering::SeqCst);
         })
         .await;
 

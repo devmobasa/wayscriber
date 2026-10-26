@@ -143,7 +143,7 @@ fn initialization_borrow_is_released_before_nested_measurement() {
             assert!(measured.logical_width > 0.0);
             owner
                 .with_measurement_context(|inner| {
-                    assert_eq!(outer.to_raw_none(), inner.to_raw_none())
+                    assert_eq!(outer.to_raw_none(), inner.to_raw_none());
                 })
                 .unwrap();
         })

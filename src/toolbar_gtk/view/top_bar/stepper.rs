@@ -61,7 +61,7 @@ impl TopBar {
             );
             refresh(snapshot, control.enabled(snapshot));
             self.updaters.borrow_mut().push(Box::new(move |snapshot| {
-                refresh(snapshot, control.enabled(snapshot))
+                refresh(snapshot, control.enabled(snapshot));
             }));
         }
 

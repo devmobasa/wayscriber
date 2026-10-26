@@ -314,7 +314,7 @@ impl TrayRuntime {
             TrayShutdownOutcome::Joined => info!("System tray thread joined"),
             TrayShutdownOutcome::Panicked => warn!("System tray thread panicked"),
             TrayShutdownOutcome::TimedOut => {
-                warn!("System tray thread did not stop within {TRAY_STOP_TIMEOUT:?}; detaching it")
+                warn!("System tray thread did not stop within {TRAY_STOP_TIMEOUT:?}; detaching it");
             }
         }
     }

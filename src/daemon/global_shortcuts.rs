@@ -360,7 +360,7 @@ mod tests {
             let (polled_tx, polled_rx) = oneshot::channel();
             let operation = async move {
                 polled_tx.send(()).unwrap();
-                future::pending::<()>().await
+                future::pending::<()>().await;
             };
             let shutdown_task = tokio::spawn(async move {
                 polled_rx.await.unwrap();

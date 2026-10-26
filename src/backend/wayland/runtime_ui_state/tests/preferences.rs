@@ -105,7 +105,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
         (
             ToolbarRuntimeUiPersistenceTarget::ToolbarDelaySliders,
             |input| {
-                input.ui_visibility.show_delay_sliders = !input.ui_visibility.show_delay_sliders
+                input.ui_visibility.show_delay_sliders = !input.ui_visibility.show_delay_sliders;
             },
         ),
         (
@@ -119,7 +119,7 @@ fn toolbar_preference_toggles_survive_restart_without_touching_config() {
             ToolbarRuntimeUiPersistenceTarget::FloatingBadgeAlways,
             |input| {
                 input.ui_visibility.show_floating_badge_always =
-                    !input.ui_visibility.show_floating_badge_always
+                    !input.ui_visibility.show_floating_badge_always;
             },
         ),
     ];

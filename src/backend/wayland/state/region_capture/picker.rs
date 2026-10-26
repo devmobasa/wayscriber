@@ -211,7 +211,7 @@ impl WaylandState {
                     .request(ScreenAcquisitionOwner::RegionCapture)
                 {
                     Ok(acquisition) => {
-                        self.set_pending_frozen_screen_region(purpose, generation, acquisition)
+                        self.set_pending_frozen_screen_region(purpose, generation, acquisition);
                     }
                     Err(_) => {
                         self.cancel_region_capture_ui_and_lifecycle();

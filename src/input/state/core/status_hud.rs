@@ -82,7 +82,7 @@ impl InputState {
             StatusBarItem::Tool => self.ui_visibility.show_status_tool = visible,
             StatusBarItem::Size => self.ui_visibility.show_status_size = visible,
             StatusBarItem::ContextIndicators => {
-                self.ui_visibility.show_status_context_indicators = visible
+                self.ui_visibility.show_status_context_indicators = visible;
             }
             StatusBarItem::ToolbarHint => self.ui_visibility.show_toolbar_hint = visible,
             StatusBarItem::Help => self.ui_visibility.show_status_help = visible,

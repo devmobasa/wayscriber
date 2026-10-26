@@ -143,7 +143,7 @@ pub fn render_color_picker_popup(
         input_state,
         screen_width,
         screen_height,
-    )
+    );
 }
 
 pub(crate) fn render_color_picker_popup_with_engine(

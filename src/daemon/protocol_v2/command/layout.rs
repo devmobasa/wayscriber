@@ -131,7 +131,7 @@ fn check_root_shape(root: &Path, collect_temps: bool) -> Result<()> {
                 Ok(()) => log::warn!("Removed leftover v2 admission temporary {name}"),
                 Err(error) if error.kind() == ErrorKind::NotFound => {}
                 Err(error) => {
-                    log::warn!("Failed to remove leftover v2 admission temporary {name}: {error}")
+                    log::warn!("Failed to remove leftover v2 admission temporary {name}: {error}");
                 }
             }
         }

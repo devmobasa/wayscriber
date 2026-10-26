@@ -678,7 +678,7 @@ impl ToolbarRuntimeState {
                 recovery_artifacts, ..
             } => self.note_reset_completed(&recovery_artifacts),
             SubmitSourceMutationResult::Integrated { recovery_artifacts } => {
-                self.note_recovery_artifacts(&recovery_artifacts)
+                self.note_recovery_artifacts(&recovery_artifacts);
             }
             SubmitSourceMutationResult::Rejected(error) => {
                 self.note_lifecycle_error(format!(

@@ -370,7 +370,7 @@ impl WaylandState {
         }
         match (completion.mode, completion.result) {
             (SessionFileDialogMode::Open, Ok(Some(path))) => {
-                self.handle_toolbar_open_session_path(&path)
+                self.handle_toolbar_open_session_path(&path);
             }
             (SessionFileDialogMode::Open, Ok(None)) | (SessionFileDialogMode::SaveAs, Ok(None)) => {
             }
@@ -495,7 +495,7 @@ impl WaylandState {
                 self.set_session_toolbar_info(clear_tools_message(report.outcome));
             }
             SessionCommandReport::Inspection(inspection) => {
-                self.set_session_toolbar_info(session_info_summary(&inspection))
+                self.set_session_toolbar_info(session_info_summary(&inspection));
             }
             SessionCommandReport::Forgotten(path, forgotten) => {
                 let status = if forgotten {
@@ -506,7 +506,7 @@ impl WaylandState {
                 self.set_session_toolbar_error(trf(
                     "Session file missing; {}: {}",
                     &[&status, &session_display_name(&path)],
-                ))
+                ));
             }
         }
     }

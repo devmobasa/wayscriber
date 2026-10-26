@@ -1056,7 +1056,7 @@ fn text_moved_to_the_coordinate_limit_survives_deselect_and_undo() {
 
     match shape(&state, id) {
         Shape::Text { x, y, .. } => {
-            assert_eq!((x, y), (i32::MAX - 1000, 100), "undo must restore the text")
+            assert_eq!((x, y), (i32::MAX - 1000, 100), "undo must restore the text");
         }
         other => panic!("expected text, got {other:?}"),
     }

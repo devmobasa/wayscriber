@@ -62,7 +62,7 @@ fn tab_summary(app: &ConfiguratorApp, tab: TabId) -> Option<TabSearchSummary> {
             TabId::Keybindings => keybinding_matches(app, query, &mut summary),
             #[cfg(feature = "tablet-input")]
             TabId::Tablet => {
-                add_area_if(query, &mut summary, tab, SearchArea::Tablet, TABLET_TERMS)
+                add_area_if(query, &mut summary, tab, SearchArea::Tablet, TABLET_TERMS);
             }
         }
     }

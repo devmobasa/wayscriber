@@ -181,7 +181,7 @@ pub fn render_preset_toast(
         input_state,
         screen_width,
         screen_height,
-    )
+    );
 }
 
 pub(crate) fn render_preset_toast_with_engine(

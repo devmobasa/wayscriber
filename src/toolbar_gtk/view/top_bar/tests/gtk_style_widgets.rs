@@ -25,7 +25,7 @@ pub(super) fn assert_gtk_style_widget(
         model::StylePillRole::Stepper => assert_gtk_style_stepper(widget, control, snapshot, &id),
         model::StylePillRole::Meter => assert_gtk_style_meter(widget, control, snapshot, &id),
         model::StylePillRole::Segmented => {
-            assert_gtk_style_segmented(widget, control, snapshot, &id)
+            assert_gtk_style_segmented(widget, control, snapshot, &id);
         }
     }
 }

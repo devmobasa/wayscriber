@@ -17,7 +17,7 @@ impl SessionState {
     ) {
         match result {
             Err(error) | Ok(PersistenceOutcome::RememberedUnavailable(error)) => {
-                self.block_unpreserved_corruption(error)
+                self.block_unpreserved_corruption(error);
             }
             _ => {}
         }

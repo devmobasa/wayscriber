@@ -403,7 +403,7 @@ fn render_committed_canvas_shapes(
             shape,
             &replay_ctx,
             text_halo_enabled,
-        )
+        );
     };
     let Some(bounds) = union_damage_bounds(damage_world) else {
         for shape in shapes {

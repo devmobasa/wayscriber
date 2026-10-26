@@ -37,6 +37,7 @@ wildcard_imports = "warn"
 cast_lossless = "warn"
 doc_markdown = "warn"
 map_unwrap_or = "warn"
+semicolon_if_nothing_returned = "warn"
 uninlined_format_args = "warn"
 
 [lints]

@@ -17,5 +17,5 @@ fn main() {
         return;
     }
 
-    app::run(startup)
+    app::run(startup);
 }

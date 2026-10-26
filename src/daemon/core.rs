@@ -818,7 +818,7 @@ impl Daemon {
             match self.process_single_toggle(Some(legacy_request), None, false) {
                 Ok(_) => claimed.finalize(FinalEffect::Completed, None)?,
                 Err(error) => {
-                    claimed.finalize(FinalEffect::Indeterminate, Some(&format!("{error:#}")))?
+                    claimed.finalize(FinalEffect::Indeterminate, Some(&format!("{error:#}")))?;
                 }
             }
         }

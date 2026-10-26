@@ -33,7 +33,7 @@ fn retained_palette_engine_matches_public_paint_and_geometry_across_targets() {
             );
             assert!(bounds.2 > 0.0 && bounds.2 < 800.0);
             let actual = pixels(density, |ctx| {
-                render_command_palette_with_engine(&engine, ctx, &input, 800, 600)
+                render_command_palette_with_engine(&engine, ctx, &input, 800, 600);
             });
             let expected = pixels(density, |ctx| render_command_palette(ctx, &input, 800, 600));
             assert!(
@@ -67,7 +67,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
                 560.0,
                 800.0,
                 600.0,
-            )
+            );
         });
         let expected = pixels(density, |ctx| {
             draw_command_palette_action_tooltip(
@@ -79,7 +79,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
                 560.0,
                 800.0,
                 600.0,
-            )
+            );
         });
         assert!(actual == expected, "tooltip density {density}");
         let mut painted = 0;
@@ -101,7 +101,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
         };
         let range = find_match_range(text, "測試").unwrap();
         let highlight = pixels(density, |ctx| {
-            draw_highlight_with_engine(&engine, ctx, 30.0, 40.0, text, range, &style)
+            draw_highlight_with_engine(&engine, ctx, 30.0, 40.0, text, range, &style);
         });
         let fresh = pixels(density, |ctx| {
             draw_highlight_with_engine(
@@ -112,7 +112,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
                 text,
                 range,
                 &style,
-            )
+            );
         });
         assert!(highlight == fresh, "highlight density {density}");
         assert!(highlight.iter().any(|byte| *byte != 0));
@@ -125,7 +125,7 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
                 text,
                 (range.0 + 1, range.1),
                 &style,
-            )
+            );
         });
         assert!(invalid.iter().all(|byte| *byte == 0));
     }
@@ -142,7 +142,7 @@ fn prepared_palette_paints_without_application_state() {
             &CommandPaletteView::Closed,
             800,
             600,
-        )
+        );
     });
     assert!(closed.iter().all(|byte| *byte == 0));
     let view = CommandPaletteView::List(PaletteListView {
@@ -157,7 +157,7 @@ fn prepared_palette_paints_without_application_state() {
         tooltip: None,
     });
     let painted = pixels(1, |ctx| {
-        paint_command_palette(&Theme::dark(), &engine, ctx, &view, 800, 600)
+        paint_command_palette(&Theme::dark(), &engine, ctx, &view, 800, 600);
     });
     assert!(painted.iter().any(|byte| *byte != 0));
     // The dimmer and the panel have different opacity, so this checks the
@@ -288,7 +288,7 @@ fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
     let (selected_row, other_row) = (command_rows[0], command_rows[2]);
 
     let idle = pixels(1, |ctx| {
-        render_command_palette_with_engine(&engine, ctx, &input, 800, 600)
+        render_command_palette_with_engine(&engine, ctx, &input, 800, 600);
     });
     assert!(
         !strip_is_blank(&idle, row_action_strip(&input, selected_row)),
@@ -302,7 +302,7 @@ fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
     let (left, top, _, bottom) = row_action_strip(&input, other_row);
     input.update_pointer_position(left - 200, (top + bottom) / 2);
     let hovered = pixels(1, |ctx| {
-        render_command_palette_with_engine(&engine, ctx, &input, 800, 600)
+        render_command_palette_with_engine(&engine, ctx, &input, 800, 600);
     });
     assert!(
         !strip_is_blank(&hovered, row_action_strip(&input, other_row)),
@@ -328,7 +328,7 @@ fn palette_rows_highlight_literal_label_matches_but_not_fuzzy_matches() {
 
     let count_highlight = |query_view: &CommandPaletteView| {
         let rgba = pixels(1, |ctx| {
-            paint_command_palette(&theme, &engine, ctx, query_view, 800, 600)
+            paint_command_palette(&theme, &engine, ctx, query_view, 800, 600);
         });
         rgba.as_chunks::<4>()
             .0

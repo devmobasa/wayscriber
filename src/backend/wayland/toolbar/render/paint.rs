@@ -375,7 +375,7 @@ fn paint_node(
             // Translucent colors sit on the checkerboard, so a low-alpha
             // swatch reads as see-through rather than as the bar behind it.
             let swatch_path = |ctx: &cairo::Context| {
-                draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0)
+                draw_round_rect(ctx, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0);
             };
             ui::checkerboard_behind(ctx, color.3, swatch_path);
             ctx.set_source_rgba(color.0, color.1, color.2, color.3);

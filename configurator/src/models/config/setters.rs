@@ -341,7 +341,7 @@ impl ConfigDraft {
             TextField::DrawingMarkerOpacity => self.drawing_marker_opacity = value,
             TextField::DrawingPenSmoothing => self.drawing_pen_smoothing = value,
             TextField::DrawingShapeRecognitionSensitivity => {
-                self.drawing_shape_recognition_sensitivity = value
+                self.drawing_shape_recognition_sensitivity = value;
             }
             TextField::DrawingFontFamily => self.drawing_font_family = value,
             TextField::DrawingFontWeight => {
@@ -389,7 +389,7 @@ impl ConfigDraft {
             TextField::HelpPadding => self.help_padding = value,
             TextField::HelpBorderWidth => self.help_border_width = value,
             TextField::UiCommandPaletteToastDurationMs => {
-                self.ui_command_palette_toast_duration_ms = value
+                self.ui_command_palette_toast_duration_ms = value;
             }
             TextField::CaptureSaveDirectory => self.capture.save_directory = value,
             TextField::CaptureFilename => self.capture.filename_template = value,
@@ -397,12 +397,12 @@ impl ConfigDraft {
             TextField::CaptureOcrLanguages => self.capture.ocr_languages = value,
             TextField::ExportPdfFilenameTemplate => self.export_pdf_filename_template = value,
             TextField::ExportPdfAllBoardsFilenameTemplate => {
-                self.export_pdf_all_boards_filename_template = value
+                self.export_pdf_all_boards_filename_template = value;
             }
             TextField::ExportPdfCustomWidth => self.export_pdf_custom_width = value,
             TextField::ExportPdfCustomHeight => self.export_pdf_custom_height = value,
             TextField::ExportPdfContentSourcePadding => {
-                self.export_pdf_content_source_padding = value
+                self.export_pdf_content_source_padding = value;
             }
             TextField::ExportPdfLabelTemplate => self.export_pdf_label_template = value,
             TextField::ExportPdfLabelFontFamily => self.export_pdf_label_font_family = value,
@@ -417,16 +417,16 @@ impl ConfigDraft {
             TextField::SessionMaxShapesPerFrame => self.session_max_shapes_per_frame = value,
             TextField::SessionMaxFileSizeMb => self.session_max_file_size_mb = value,
             TextField::SessionAutoCompressThresholdKb => {
-                self.session_auto_compress_threshold_kb = value
+                self.session_auto_compress_threshold_kb = value;
             }
             TextField::SessionMaxPersistedUndoDepth => {
-                self.session_max_persisted_undo_depth = value
+                self.session_max_persisted_undo_depth = value;
             }
             TextField::SessionBackupRetention => self.session_backup_retention = value,
             TextField::SessionAutosaveIdleMs => self.session_autosave_idle_ms = value,
             TextField::SessionAutosaveIntervalMs => self.session_autosave_interval_ms = value,
             TextField::SessionAutosaveFailureBackoffMs => {
-                self.session_autosave_failure_backoff_ms = value
+                self.session_autosave_failure_backoff_ms = value;
             }
             #[cfg(feature = "tablet-input")]
             TextField::TabletMinThickness => self.tablet_min_thickness = value,
@@ -434,7 +434,7 @@ impl ConfigDraft {
             TextField::TabletMaxThickness => self.tablet_max_thickness = value,
             #[cfg(feature = "tablet-input")]
             TextField::TabletPressureVariationThreshold => {
-                self.tablet_pressure_variation_threshold = value
+                self.tablet_pressure_variation_threshold = value;
             }
             #[cfg(feature = "tablet-input")]
             TextField::TabletPressureScaleStep => self.tablet_pressure_thickness_scale_step = value,
@@ -454,7 +454,7 @@ impl ConfigDraft {
                 .set_component(index, value),
             QuadField::LaserColor => self.laser_color.set_component(index, value),
             QuadField::ExportPdfLabelText => {
-                self.export_pdf_label_text_color.set_component(index, value)
+                self.export_pdf_label_text_color.set_component(index, value);
             }
             QuadField::ExportPdfLabelBackground => self
                 .export_pdf_label_background_color

@@ -109,7 +109,7 @@ impl WaylandState {
                 }
             }
             ReleaseRoute::Unowned => {
-                self.release_by_toolbar_state(event, on_toolbar, inline_active, button)
+                self.release_by_toolbar_state(event, on_toolbar, inline_active, button);
             }
         }
     }

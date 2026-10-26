@@ -481,7 +481,7 @@ impl SwatchButton {
             // translucent color sits on the checkerboard, as the built-in
             // bars paint it.
             let swatch_path = |ctx: &cairo::Context| {
-                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
+                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
             };
             ui::checkerboard_behind(ctx, a, swatch_path);
             ctx.set_source_rgba(r, g, b, a);

@@ -135,7 +135,7 @@ pub fn render_command_palette(
         input_state,
         screen_width,
         screen_height,
-    )
+    );
 }
 
 pub(crate) fn render_command_palette_with_engine(

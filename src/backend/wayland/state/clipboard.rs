@@ -631,7 +631,7 @@ fn apply_transfer_effects(input_state: &mut InputState, effects: Vec<TransferEff
     for effect in effects {
         match effect {
             TransferEffect::SupersedeLocalGeneration { generation } => {
-                input_state.mark_selection_clipboard_superseded_for_generation(Some(generation))
+                input_state.mark_selection_clipboard_superseded_for_generation(Some(generation));
             }
         }
     }

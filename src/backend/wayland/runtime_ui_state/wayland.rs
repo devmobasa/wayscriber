@@ -292,7 +292,7 @@ impl WaylandState {
         for entry in self.input_state.take_pending_toolbar_persistence() {
             match entry {
                 PendingToolbarPersistence::DisplayMode { previous } => {
-                    self.persist_toolbar_display_mode(previous)
+                    self.persist_toolbar_display_mode(previous);
                 }
                 PendingToolbarPersistence::Visibility {
                     previous_top_pinned,

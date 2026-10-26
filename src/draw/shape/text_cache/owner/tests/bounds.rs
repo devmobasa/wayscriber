@@ -106,7 +106,7 @@ fn text_mutations_invalidate_memo_and_select_new_measurement_keys() {
         let before = drawn.bounding_box_with(&owner).unwrap();
         match &mut drawn.shape {
             Shape::Text { wrap_width, .. } | Shape::StickyNote { wrap_width, .. } => {
-                *wrap_width = Some(45)
+                *wrap_width = Some(45);
             }
             _ => unreachable!(),
         }
