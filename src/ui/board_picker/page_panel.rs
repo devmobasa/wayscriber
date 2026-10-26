@@ -341,8 +341,9 @@ fn render_sticky_add_button(
         label,
     );
     let text_x = layout.page_add_button_x + (layout.page_add_button_width - extents.width()) * 0.5;
-    let text_y =
-        layout.page_add_button_y + (layout.page_add_button_height + extents.height()) * 0.5 - 1.0;
+    let text_y = layout.page_add_button_y
+        + f64::midpoint(layout.page_add_button_height, extents.height())
+        - 1.0;
     engine.draw_baseline(ctx, label_style, label, text_x, text_y, None);
 }
 

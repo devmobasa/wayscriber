@@ -132,7 +132,7 @@ pub fn ellipse_bounds(x1: i32, y1: i32, x2: i32, y2: i32) -> (i32, i32, i32, i32
 fn ellipse_axis_bounds(first: i32, second: i32) -> (i32, i32) {
     let first = i64::from(first);
     let second = i64::from(second);
-    let center = (first + second) / 2;
+    let center = i64::midpoint(first, second);
     let radius = (second - first).abs() / 2;
 
     // An average of two i32 values and half their distance always fit in i32.

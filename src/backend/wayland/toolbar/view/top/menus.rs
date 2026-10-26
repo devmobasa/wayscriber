@@ -210,7 +210,7 @@ pub(super) fn push_menu_popover(
     }
     if max_scroll > 0.0 {
         let track = (
-            px + pw - (MENU_PAD + MENU_SCROLLBAR_W) / 2.0,
+            px + pw - f64::midpoint(MENU_PAD, MENU_SCROLLBAR_W),
             py + MENU_PAD,
             MENU_SCROLLBAR_W,
             viewport,

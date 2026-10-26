@@ -283,7 +283,10 @@ mod tests {
             overlay::CURSOR_PREVIEW_DOT_MAX,
             "very thick strokes cap so the bubble stays compact"
         );
-        let mid = (overlay::CURSOR_PREVIEW_DOT_MIN + overlay::CURSOR_PREVIEW_DOT_MAX) / 2.0;
+        let mid = f64::midpoint(
+            overlay::CURSOR_PREVIEW_DOT_MIN,
+            overlay::CURSOR_PREVIEW_DOT_MAX,
+        );
         assert_eq!(
             tool_preview_dot_diameter(mid),
             mid,

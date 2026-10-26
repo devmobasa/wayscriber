@@ -401,8 +401,8 @@ impl ArrowAxis {
     fn curve_control(&self, bend: f64) -> (f64, f64) {
         let chord_len = self.chord_length();
         let mid = (
-            (self.tip.0 + self.tail.0) / 2.0,
-            (self.tip.1 + self.tail.1) / 2.0,
+            f64::midpoint(self.tip.0, self.tail.0),
+            f64::midpoint(self.tip.1, self.tail.1),
         );
         let offset = clamp_arrow_bend(bend) * chord_len;
         (mid.0 + self.perp.0 * offset, mid.1 + self.perp.1 * offset)

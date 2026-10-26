@@ -84,8 +84,8 @@ impl RegionResizeHandles {
         let right = selection.start.0.max(selection.end.0);
         let top = selection.start.1.min(selection.end.1);
         let bottom = selection.start.1.max(selection.end.1);
-        let mid_x = (left + right) / 2.0;
-        let mid_y = (top + bottom) / 2.0;
+        let mid_x = f64::midpoint(left, right);
+        let mid_y = f64::midpoint(top, bottom);
         let horizontal_room = (right - left) >= MIN_SIDE_FOR_EDGE_HANDLE;
         let vertical_room = (bottom - top) >= MIN_SIDE_FOR_EDGE_HANDLE;
         // On a rectangle small enough that four full-size corner targets would

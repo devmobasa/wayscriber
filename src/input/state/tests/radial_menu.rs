@@ -30,7 +30,7 @@ fn compass_angle_degrees(dir: CompassDir) -> f64 {
 }
 
 fn point_in_compass_wedge(layout: &RadialMenuLayout, dir: CompassDir) -> (f64, f64) {
-    let radius = (layout.tool_inner + layout.tool_outer) / 2.0;
+    let radius = f64::midpoint(layout.tool_inner, layout.tool_outer);
     point_at(
         layout.center_x,
         layout.center_y,
@@ -53,7 +53,7 @@ fn point_in_sub_tool_segment(
         f64::from(parent_idx) * seg_angle + f64::from(child_idx) * child_angle + child_angle / 2.0;
     // Convert back to raw atan2 angle (undo the +PI/2 and +half_seg transforms).
     let raw_angle = tool_angle - PI / 2.0 - half_seg;
-    let radius = (layout.sub_inner + layout.sub_outer) / 2.0;
+    let radius = f64::midpoint(layout.sub_inner, layout.sub_outer);
     (
         layout.center_x + radius * raw_angle.cos(),
         layout.center_y + radius * raw_angle.sin(),
@@ -169,7 +169,7 @@ fn compass_wedges_dispatch_fixed_tools_via_handle_action() {
 fn north_wedge_spans_22_5_degrees_around_straight_up() {
     let mut state = create_test_input_state();
     let layout = open_with_layout(&mut state);
-    let radius = (layout.tool_inner + layout.tool_outer) / 2.0;
+    let radius = f64::midpoint(layout.tool_inner, layout.tool_outer);
 
     for (degrees, expected_dir) in [
         (-90.0 + 21.0, CompassDir::N),
@@ -524,7 +524,7 @@ fn color_hit_test_uses_color_ring_alignment_when_tool_count_differs() {
     // Just inside color segment 1 (Green), close to the segment boundary.
     let seg = 2.0 * PI / state.style.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
-    let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
+    let probe_radius = f64::midpoint(layout.color_inner, layout.color_outer);
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
     let probe_y = layout.center_y + probe_radius * probe_angle.sin();
 
@@ -563,7 +563,7 @@ fn color_ring_selection_uses_configured_quick_palette() {
 
     let seg = 2.0 * PI / state.style.quick_colors.radial_rendered_len() as f64;
     let probe_angle = -PI / 2.0 + seg + 0.04;
-    let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
+    let probe_radius = f64::midpoint(layout.color_inner, layout.color_outer);
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
     let probe_y = layout.center_y + probe_radius * probe_angle.sin();
 
@@ -759,7 +759,7 @@ fn blind_flick_into_sub_band_never_commits_a_sub_child() {
     // sub-ring band, all before the menu ever painted.
     let (px, py) = point_in_compass_wedge(&layout, CompassDir::E);
     state.on_mouse_motion(px as i32, py as i32);
-    let sub_r = (layout.sub_inner + layout.sub_outer) / 2.0;
+    let sub_r = f64::midpoint(layout.sub_inner, layout.sub_outer);
     let (sx, sy) = point_at(layout.center_x, layout.center_y, sub_r, 0.0);
     state.on_mouse_motion(sx as i32, sy as i32);
     state.on_mouse_release(MouseButton::Right, sx as i32, sy as i32);
@@ -954,7 +954,7 @@ fn size_ring_angle_value_mapping_roundtrips_and_snaps_the_gap() {
 fn size_ring_hit_test_covers_arc_but_not_gap() {
     let mut state = create_test_input_state();
     let layout = open_with_layout(&mut state);
-    let band_r = (layout.size_inner + layout.size_outer) / 2.0;
+    let band_r = f64::midpoint(layout.size_inner, layout.size_outer);
 
     // West is inside the gauge arc.
     let (wx, wy) = point_at(layout.center_x, layout.center_y, band_r, 180.0);
@@ -974,7 +974,7 @@ fn size_ring_drag_adjusts_thickness_live_and_keeps_menu_open() {
     state.on_mouse_press(MouseButton::Right, 400, 300);
     state.update_radial_menu_layout(800, 600);
     let layout = state.radial_menu.layout.expect("layout");
-    let band_r = (layout.size_inner + layout.size_outer) / 2.0;
+    let band_r = f64::midpoint(layout.size_inner, layout.size_outer);
 
     // Press on the gauge at west starts a drag and applies the value.
     let (px, py) = point_at(layout.center_x, layout.center_y, band_r, 180.0);
@@ -1096,7 +1096,7 @@ fn recent_color_segment_applies_through_the_color_path() {
     assert_eq!(total, quick_len + 1);
     let seg = 2.0 * PI / total as f64;
     let probe_angle = -PI / 2.0 + quick_len as f64 * seg;
-    let probe_radius = (layout.color_inner + layout.color_outer) / 2.0;
+    let probe_radius = f64::midpoint(layout.color_inner, layout.color_outer);
     let probe_x = layout.center_x + probe_radius * probe_angle.cos();
     let probe_y = layout.center_y + probe_radius * probe_angle.sin();
 

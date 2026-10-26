@@ -180,7 +180,7 @@ fn transparent_swatches_keep_checkerboard_across_themes_and_densities() {
             .collect(),
     ));
     let layout = state.radial_menu.layout().unwrap();
-    let radius = (layout.color_inner + layout.color_outer) / 2.0;
+    let radius = f64::midpoint(layout.color_inner, layout.color_outer);
     let mut cache = RadialBaseCache::default();
     for scale in [1.0, 2.0] {
         for theme in [theme::Theme::dark(), theme::Theme::light()] {

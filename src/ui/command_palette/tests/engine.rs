@@ -300,7 +300,7 @@ fn row_shortcut_controls_show_only_on_the_selected_and_hovered_rows() {
     );
 
     let (left, top, _, bottom) = row_action_strip(&input, other_row);
-    input.update_pointer_position(left - 200, (top + bottom) / 2);
+    input.update_pointer_position(left - 200, i32::midpoint(top, bottom));
     let hovered = pixels(1, |ctx| {
         render_command_palette_with_engine(&engine, ctx, &input, 800, 600);
     });

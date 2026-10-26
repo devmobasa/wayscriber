@@ -243,8 +243,8 @@ fn arrow_ends(p1: (i32, i32), p2: (i32, i32), head_at_end: bool) -> ((i32, i32),
 /// point's offset, and always on the curve rather than off it.
 fn arc_midpoint(tip: (i32, i32), tail: (i32, i32), bend: f64) -> Option<(f64, f64)> {
     let (perp, chord_len) = chord_frame(tip, tail)?;
-    let mid_x = (f64::from(tip.0) + f64::from(tail.0)) / 2.0;
-    let mid_y = (f64::from(tip.1) + f64::from(tail.1)) / 2.0;
+    let mid_x = f64::midpoint(f64::from(tip.0), f64::from(tail.0));
+    let mid_y = f64::midpoint(f64::from(tip.1), f64::from(tail.1));
     let offset = util::clamp_arrow_bend(bend) * chord_len / 2.0;
     Some((mid_x + perp.0 * offset, mid_y + perp.1 * offset))
 }
@@ -257,8 +257,8 @@ fn arc_midpoint(tip: (i32, i32), tail: (i32, i32), bend: f64) -> Option<(f64, f6
 /// the arc symmetric no matter where along it the user grabs.
 fn bend_for_pointer(tip: (i32, i32), tail: (i32, i32), pointer: (i32, i32)) -> Option<f64> {
     let (perp, chord_len) = chord_frame(tip, tail)?;
-    let mid_x = (f64::from(tip.0) + f64::from(tail.0)) / 2.0;
-    let mid_y = (f64::from(tip.1) + f64::from(tail.1)) / 2.0;
+    let mid_x = f64::midpoint(f64::from(tip.0), f64::from(tail.0));
+    let mid_y = f64::midpoint(f64::from(tip.1), f64::from(tail.1));
     let offset = (f64::from(pointer.0) - mid_x) * perp.0 + (f64::from(pointer.1) - mid_y) * perp.1;
     Some(2.0 * offset / chord_len)
 }

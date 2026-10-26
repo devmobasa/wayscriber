@@ -117,7 +117,7 @@ pub(in crate::input::state::core::properties) fn balanced_column_budget(
     let mut low = heights.iter().copied().fold(0.0, f64::max);
     let mut high = max_budget.max(low);
     for _ in 0..32 {
-        let middle = (low + high) / 2.0;
+        let middle = f64::midpoint(low, high);
         if columns(middle) <= target {
             high = middle;
         } else {

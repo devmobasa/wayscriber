@@ -94,7 +94,7 @@ pub(in crate::backend::wayland::toolbar::render) fn draw_mini_checkbox(
     let layout = engine.layout(ctx, label_style, label, None);
     let ext = layout.ink_extents();
     let label_x = x + box_size + SPACING_LG + (w - box_size - 12.0 - ext.width()) / 2.0;
-    let label_y = y + (h + ext.height()) / 2.0;
+    let label_y = y + f64::midpoint(h, ext.height());
     set_color(ctx, COLOR_TEXT_SECONDARY);
     layout.show_at_baseline(ctx, label_x, label_y);
 }

@@ -31,8 +31,8 @@ fn head_triangle(
 /// Midpoint of the head's back edge, where the shaft meets the head.
 fn head_base(geometry: &super::arrow::ArrowheadTriangle) -> (f64, f64) {
     (
-        (geometry.left.0 + geometry.right.0) / 2.0,
-        (geometry.left.1 + geometry.right.1) / 2.0,
+        f64::midpoint(geometry.left.0, geometry.right.0),
+        f64::midpoint(geometry.left.1, geometry.right.1),
     )
 }
 
@@ -490,8 +490,8 @@ fn curved_head_aims_along_the_end_tangent_not_the_chord() {
     let skeleton = styled_skeleton(ArrowStyle::Curved, 0.8);
     let head = skeleton.head;
     let base = (
-        (head.left.0 + head.right.0) / 2.0,
-        (head.left.1 + head.right.1) / 2.0,
+        f64::midpoint(head.left.0, head.right.0),
+        f64::midpoint(head.left.1, head.right.1),
     );
     // Direction from the base to the tip: the axis the head is aimed along.
     let aim = (head.tip.0 - base.0, head.tip.1 - base.1);
