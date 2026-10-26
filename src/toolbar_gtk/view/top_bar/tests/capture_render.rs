@@ -87,10 +87,10 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
             wait_for_frame(&window);
             let renderer = window.renderer().unwrap();
             eprintln!("optional Vulkan probe selected {}", renderer.type_().name());
-            if renderer.type_().name() != "GskVulkanRenderer" {
-                outcome = Outcome::VulkanUnavailable;
-            } else {
+            if renderer.type_().name() == "GskVulkanRenderer" {
                 assert_renderer(&window);
+            } else {
+                outcome = Outcome::VulkanUnavailable;
             }
             window.destroy();
         }
@@ -150,13 +150,13 @@ fn roots(user: &gtk4::CssProvider, case: &str) {
     if case == "animation" {
         let mut css = painted_css("window", "none");
         css.push_str(
-            r#"
+            r"
             @keyframes capture-fixture {
                 from { background-color: #23252e; }
                 to { background-color: #e86b18; }
             }
             window { background-image: none; animation: capture-fixture 400ms linear infinite alternate; }
-        "#,
+        ",
         );
         user.load_from_string(&css);
     }

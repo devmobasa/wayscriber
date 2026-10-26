@@ -261,9 +261,9 @@ fn planned_button_size(snapshot: &ToolbarSnapshot, plan: &TopStripPlan) -> (f64,
 
 fn base_bar_height(snapshot: &ToolbarSnapshot) -> f64 {
     if snapshot.use_icons {
-        ToolbarLayoutSpec::TOP_SIZE_ICONS.1 as f64
+        f64::from(ToolbarLayoutSpec::TOP_SIZE_ICONS.1)
     } else {
-        ToolbarLayoutSpec::TOP_SIZE_TEXT.1 as f64
+        f64::from(ToolbarLayoutSpec::TOP_SIZE_TEXT.1)
     }
 }
 
@@ -357,7 +357,7 @@ pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f6
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
-/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// (`natural_height`, `viewport_height`), both in pre-scale spec units; `None`
 /// while no menu popover is open. The wheel path and scrollbar drag use these
 /// same bounds.
 pub fn top_popover_scroll_bounds(

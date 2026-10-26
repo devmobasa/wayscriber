@@ -349,10 +349,10 @@ impl Tool {
         }
     }
 
-    pub(crate) fn provisional_stroke<'a>(
+    pub(crate) fn provisional_stroke(
         self,
-        snapshot: ProvisionalToolSnapshot<'a>,
-    ) -> ProvisionalToolStroke<'a> {
+        snapshot: ProvisionalToolSnapshot<'_>,
+    ) -> ProvisionalToolStroke<'_> {
         debug_assert_eq!(
             self, snapshot.tool,
             "preview a stroke with the tool that captured its snapshot"
@@ -542,7 +542,7 @@ impl Tool {
     }
 }
 
-impl<'stroke> ProvisionalToolStroke<'stroke> {
+impl ProvisionalToolStroke<'_> {
     pub(crate) fn bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         match self {
             Self::BorrowedFreehand { points, size, .. } => bounding_box_for_points(points, *size),
@@ -551,7 +551,7 @@ impl<'stroke> ProvisionalToolStroke<'stroke> {
                 point_thicknesses,
                 ..
             } => {
-                let max_thick = point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)) as f64;
+                let max_thick = f64::from(point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)));
                 bounding_box_for_points(points, max_thick)
             }
             Self::BorrowedMarker { points, size, .. } => {

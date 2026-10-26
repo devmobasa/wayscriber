@@ -134,7 +134,7 @@ impl InputState {
     /// Sets highlight-only tool mode on/off and keeps click highlight in sync.
     pub fn set_highlight_tool(&mut self, enable: bool) {
         let measurer = TextMeasurer::default();
-        self.set_highlight_tool_with_measurer(&measurer, enable)
+        self.set_highlight_tool_with_measurer(&measurer, enable);
     }
 
     pub fn set_highlight_tool_with_measurer(&mut self, measurer: &TextMeasurer, enable: bool) {

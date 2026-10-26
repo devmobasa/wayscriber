@@ -93,7 +93,7 @@ fn paint(
     .unwrap();
     {
         let cairo = cairo::Context::new(&surface).unwrap();
-        cairo.scale(inputs.scale as f64, inputs.scale as f64);
+        cairo.scale(f64::from(inputs.scale), f64::from(inputs.scale));
         cairo.translate(-inputs.origin.0, -inputs.origin.1);
         let frame = CanvasFrame {
             draw_committed: true,

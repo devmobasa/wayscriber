@@ -45,14 +45,14 @@ impl InputState {
         match button {
             MouseButton::Left => {
                 // Update hover at exact click position before selecting
-                self.update_radial_menu_hover(screen_x as f64, screen_y as f64);
+                self.update_radial_menu_hover(f64::from(screen_x), f64::from(screen_y));
                 if self.radial_menu_hover_is_size_ring() {
                     // Pressing the size gauge starts a drag-capture along the
                     // arc instead of selecting.
                     self.radial_menu_begin_size_drag_with_measurer(
                         resources.measurer,
-                        screen_x as f64,
-                        screen_y as f64,
+                        f64::from(screen_x),
+                        f64::from(screen_y),
                     );
                 } else {
                     self.radial_menu_select_hovered_with_resources(resources);
@@ -93,8 +93,8 @@ impl InputState {
             MouseButton::Left => {
                 let action_pressed = self.color_picker_popup_note_action_press(x, y);
                 if !action_pressed && let Some(layout) = self.color_picker_popup_layout() {
-                    let fx = x as f64;
-                    let fy = y as f64;
+                    let fx = f64::from(x);
+                    let fy = f64::from(y);
                     let target = if layout.point_in_sv(fx, fy) {
                         Some(PickerDrag::SatVal)
                     } else if layout.point_in_hue(fx, fy) {

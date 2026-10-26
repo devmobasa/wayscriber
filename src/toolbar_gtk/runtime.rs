@@ -146,7 +146,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, 0) };
+        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
         assert_eq!(ready, 1);
         assert!(health.failed());
         assert_ne!(pollfd.revents & libc::POLLIN, 0);
@@ -168,7 +168,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 0) }, 0);
+        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 0) }, 0);
     }
 
     #[test]

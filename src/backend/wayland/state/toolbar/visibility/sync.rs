@@ -57,9 +57,7 @@ impl WaylandState {
         let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
         let session_env = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
         log::info!(
-            "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{}', session='{}'). Overlay may be limited to the work area on compositors like GNOME.",
-            desktop_env,
-            session_env
+            "Layer-shell protocol unavailable; toolbar surfaces will not appear (desktop='{desktop_env}', session='{session_env}'). Overlay may be limited to the work area on compositors like GNOME."
         );
     }
 
@@ -69,12 +67,12 @@ impl WaylandState {
         let current = self.focus.current_keyboard_interactivity();
 
         let updated = if let Some(layer) = self.surface.layer_surface_mut() {
-            if current != Some(desired) {
+            if current == Some(desired) {
+                false
+            } else {
                 layer.set_keyboard_interactivity(desired);
                 layer.commit();
                 true
-            } else {
-                false
             }
         } else {
             self.focus.set_keyboard_interactivity(None);
@@ -169,8 +167,7 @@ impl WaylandState {
                 let misses = self.toolbar_chrome.configure_miss_count();
                 if debug_toolbar_drag_logging_enabled() && misses.is_multiple_of(60) {
                     debug!(
-                        "Toolbar configure pending: count={}, expected_top={}, configured_top={}",
-                        misses, expected_top, top_configured
+                        "Toolbar configure pending: count={misses}, expected_top={expected_top}, configured_top={top_configured}"
                     );
                 }
             }

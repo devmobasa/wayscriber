@@ -77,8 +77,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     let max_depth = max_history_depth(&value);
     if max_depth > MAX_COMPOUND_DEPTH {
         warn!(
-            "Session history depth {} exceeds limit {}; dropping history",
-            max_depth, MAX_COMPOUND_DEPTH
+            "Session history depth {max_depth} exceeds limit {MAX_COMPOUND_DEPTH}; dropping history"
         );
         strip_history_fields(&mut value);
     }
@@ -88,10 +87,7 @@ pub(super) fn load_snapshot_opened_with_expanded_limit(
     let session_file: SessionFile = match serde_json::from_value(value) {
         Ok(file) => file,
         Err(err) => {
-            warn!(
-                "Failed to deserialize session ({}); retrying without history",
-                err
-            );
+            warn!("Failed to deserialize session ({err}); retrying without history");
             let mut stripped: Value =
                 serde_json::from_slice(&decompressed).context("failed to parse session json")?;
             strip_history_fields(&mut stripped);
@@ -280,8 +276,7 @@ fn resolved_active_board_id(requested: Option<String>, boards: &[BoardSnapshot])
         requested
     } else {
         warn!(
-            "Session active board '{}' missing from restored boards; falling back to '{}'",
-            requested, fallback_id
+            "Session active board '{requested}' missing from restored boards; falling back to '{fallback_id}'"
         );
         fallback_id
     }

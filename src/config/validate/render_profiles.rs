@@ -29,8 +29,7 @@ impl Config {
                     .any(|profile| profile.id == *active)
             {
                 warn!(
-                    "Active render profile '{}' not found; starting with render profiles off",
-                    active
+                    "Active render profile '{active}' not found; starting with render profiles off"
                 );
                 self.render_profiles.active = None;
             }
@@ -52,8 +51,7 @@ impl Config {
                         .any(|profile| profile.id == *export_profile)
                 {
                     warn!(
-                        "Export render profile '{}' not found; disabling canvas export remapping",
-                        export_profile
+                        "Export render profile '{export_profile}' not found; disabling canvas export remapping"
                     );
                     self.render_profiles.export = RenderProfileExportMode::Off;
                     self.render_profiles.export_profile = None;
@@ -91,9 +89,9 @@ fn normalize_profile_identity(
     let mut id = normalize_profile_id(&raw_id);
     if id.is_empty() {
         id = format!("profile-{}", index + 1);
-        warn!("Render profile id was empty; using '{}'", id);
+        warn!("Render profile id was empty; using '{id}'");
     } else if id != raw_id.trim() {
-        warn!("Render profile id '{}' normalized to '{}'", raw_id, id);
+        warn!("Render profile id '{raw_id}' normalized to '{id}'");
     }
 
     let base = id.clone();
@@ -103,7 +101,7 @@ fn normalize_profile_identity(
         suffix += 1;
     }
     if id != base {
-        warn!("Render profile id '{}' deduplicated to '{}'", base, id);
+        warn!("Render profile id '{base}' deduplicated to '{id}'");
     }
     seen_ids.insert(id.clone());
     profile.id = id;

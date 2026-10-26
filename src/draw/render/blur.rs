@@ -276,12 +276,17 @@ pub(super) fn render_blur_placeholder(
     let _ = ctx.stroke();
 
     let band_count = 4;
-    let band_h = (height / band_count as f64).max(1.0);
+    let band_h = (height / f64::from(band_count)).max(1.0);
     for idx in 0..band_count {
         if idx % 2 == 0 {
             continue;
         }
-        ctx.rectangle(left, top + idx as f64 * band_h, width, band_h.min(height));
+        ctx.rectangle(
+            left,
+            top + f64::from(idx) * band_h,
+            width,
+            band_h.min(height),
+        );
         ctx.set_source_rgba(1.0, 1.0, 1.0, 0.06);
         let _ = ctx.fill();
     }
@@ -297,15 +302,15 @@ fn copy_surface_region(
 ) -> Option<cairo::ImageSurface> {
     let region = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).ok()?;
     let ctx = cairo::Context::new(&region).ok()?;
-    let _ = ctx.set_source_surface(surface, -(x as f64), -(y as f64));
+    let _ = ctx.set_source_surface(surface, -f64::from(x), -f64::from(y));
     let _ = ctx.paint();
     Some(region)
 }
 
 fn resample_dimensions(width: i32, height: i32, factor: f64) -> (i32, i32) {
     (
-        ((width as f64) / factor).round().max(1.0) as i32,
-        ((height as f64) / factor).round().max(1.0) as i32,
+        (f64::from(width) / factor).round().max(1.0) as i32,
+        (f64::from(height) / factor).round().max(1.0) as i32,
     )
 }
 
@@ -317,8 +322,8 @@ fn resample_surface(
 ) -> Option<cairo::ImageSurface> {
     let resampled = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).ok()?;
     let ctx = cairo::Context::new(&resampled).ok()?;
-    let scale_x = width as f64 / source.width() as f64;
-    let scale_y = height as f64 / source.height() as f64;
+    let scale_x = f64::from(width) / f64::from(source.width());
+    let scale_y = f64::from(height) / f64::from(source.height());
     ctx.scale(
         scale_x.max(f64::MIN_POSITIVE),
         scale_y.max(f64::MIN_POSITIVE),
@@ -352,14 +357,14 @@ fn average_surface_stats(surface: &mut cairo::ImageSurface) -> Option<BlurSurfac
                 break;
             }
 
-            let alpha = row[idx + 3] as f64 / 255.0;
+            let alpha = f64::from(row[idx + 3]) / 255.0;
             if alpha <= f64::EPSILON {
                 continue;
             }
 
-            let blue = row[idx] as f64 / 255.0;
-            let green = row[idx + 1] as f64 / 255.0;
-            let red = row[idx + 2] as f64 / 255.0;
+            let blue = f64::from(row[idx]) / 255.0;
+            let green = f64::from(row[idx + 1]) / 255.0;
+            let red = f64::from(row[idx + 2]) / 255.0;
             let inv_alpha = alpha.recip();
             let red = (red * inv_alpha).clamp(0.0, 1.0);
             let green = (green * inv_alpha).clamp(0.0, 1.0);
@@ -570,16 +575,19 @@ pub(super) fn render_blur_rect_with_cache(
     };
     let overlay_palette = blur_overlay_palette(blurred.stats, recipe.overlay_alpha);
 
-    let dest_x = origin_x + src_x as f64 / scale_x;
-    let dest_y = origin_y + src_y as f64 / scale_y;
-    let dest_w = src_w as f64 / scale_x;
-    let dest_h = src_h as f64 / scale_y;
+    let dest_x = origin_x + f64::from(src_x) / scale_x;
+    let dest_y = origin_y + f64::from(src_y) / scale_y;
+    let dest_w = f64::from(src_w) / scale_x;
+    let dest_h = f64::from(src_h) / scale_y;
 
     let _ = ctx.save();
     ctx.rectangle(left, top, width, height);
     ctx.clip();
     ctx.translate(dest_x, dest_y);
-    ctx.scale(dest_w / src_w.max(1) as f64, dest_h / src_h.max(1) as f64);
+    ctx.scale(
+        dest_w / f64::from(src_w.max(1)),
+        dest_h / f64::from(src_h.max(1)),
+    );
     let pattern = cairo::SurfacePattern::create(&blurred.surface);
     pattern.set_filter(cairo::Filter::Bilinear);
     let _ = ctx.set_source(&pattern);

@@ -526,7 +526,7 @@ impl TopBar {
             move_drag: None,
             move_drag_cancel: None,
             offsets: Rc::new(Cell::new((0.0, 0.0))),
-            base_x: Rc::new(Cell::new(BASE_MARGIN.1 as f64)),
+            base_x: Rc::new(Cell::new(f64::from(BASE_MARGIN.1))),
             offset_seq: Rc::new(Cell::new(0)),
             capture_suppressed: false,
             mapped_before_capture: false,
@@ -680,7 +680,7 @@ impl TopBar {
             return;
         }
         let (left, x) = super::drag::rounded_margin_and_offset(self.base_x.get(), offsets.0);
-        let (top, y) = super::drag::rounded_margin_and_offset(BASE_MARGIN.0 as f64, offsets.1);
+        let (top, y) = super::drag::rounded_margin_and_offset(f64::from(BASE_MARGIN.0), offsets.1);
         self.offsets.set((x, y));
         self.window.set_margin(Edge::Left, left);
         self.window.set_margin(Edge::Top, top);

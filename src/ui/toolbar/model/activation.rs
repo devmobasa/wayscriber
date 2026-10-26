@@ -353,7 +353,7 @@ mod tests {
         ] {
             assert_eq!(spec.curve, SliderCurve::Linear);
             assert_eq!(spec.tick_positions().count(), 0);
-            assert_close(spec.t_from_value((spec.min + spec.max) / 2.0), 0.5);
+            assert_close(spec.t_from_value(f64::midpoint(spec.min, spec.max)), 0.5);
         }
     }
 

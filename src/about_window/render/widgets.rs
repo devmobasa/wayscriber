@@ -141,7 +141,7 @@ pub(super) fn draw_icon(
     icon: &cairo::ImageSurface,
     rect: (f64, f64, f64, f64),
 ) {
-    let (width, height) = (icon.width() as f64, icon.height() as f64);
+    let (width, height) = (f64::from(icon.width()), f64::from(icon.height()));
     if width <= 0.0 || height <= 0.0 {
         return;
     }

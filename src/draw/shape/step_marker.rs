@@ -18,8 +18,7 @@ pub(crate) fn step_marker_radius_with(
     let font_desc_str = font_descriptor.to_pango_string(size);
     let max_dim = measurer
         .measure(&text, &font_desc_str, size, None)
-        .map(|m| m.ink_width.max(m.ink_height))
-        .unwrap_or(size * 0.6);
+        .map_or(size * 0.6, |m| m.ink_width.max(m.ink_height));
     let padding = (size * STEP_MARKER_PADDING_RATIO).max(STEP_MARKER_PADDING_MIN);
     (max_dim / 2.0 + padding).max(STEP_MARKER_MIN_RADIUS)
 }
@@ -40,10 +39,10 @@ pub(crate) fn step_marker_bounds_with(
     let outline = step_marker_outline_thickness(size);
     let total = radius + (outline / 2.0);
     ensure_positive_rect_f64(
-        x as f64 - total,
-        y as f64 - total,
-        x as f64 + total,
-        y as f64 + total,
+        f64::from(x) - total,
+        f64::from(y) - total,
+        f64::from(x) + total,
+        f64::from(y) + total,
     )
 }
 

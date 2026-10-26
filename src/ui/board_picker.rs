@@ -66,9 +66,8 @@ pub(crate) fn render_board_picker_with_halo(
             .iter()
             .flat_map(|board| board.pages.pages().iter().map(Frame::content_revision)),
     );
-    let layout = match input_state.board_picker_layout() {
-        Some(layout) => layout,
-        None => return,
+    let Some(layout) = input_state.board_picker_layout() else {
+        return;
     };
 
     let _ = ctx.save();
@@ -80,7 +79,7 @@ pub(crate) fn render_board_picker_with_halo(
         OVERLAY_DIM_MEDIUM
     };
     ctx.set_source_rgba(0.0, 0.0, 0.0, dim_alpha);
-    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(screen_width), f64::from(screen_height));
     let _ = ctx.fill();
 
     // Panel

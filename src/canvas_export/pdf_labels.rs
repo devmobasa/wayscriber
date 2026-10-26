@@ -399,7 +399,7 @@ mod tests {
                     100 * density,
                 )
                 .unwrap();
-                surface.set_device_scale(density as f64, density as f64);
+                surface.set_device_scale(f64::from(density), f64::from(density));
                 {
                     let ctx = cairo::Context::new(&surface).unwrap();
                     render_pdf_label(engine, &ctx, &config, &metadata, 240.0, 100.0);

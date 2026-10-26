@@ -85,7 +85,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
             )
         }
         Err(e) => {
-            warn!("Failed to load config: {}. Using defaults.", e);
+            warn!("Failed to load config: {e}. Using defaults.");
             (
                 Config::default(),
                 ConfigSource::Default,
@@ -407,9 +407,10 @@ fn keybinding_notification_body(entries: &[String], closing: &str) -> String {
 }
 
 fn config_path_display() -> String {
-    Config::config_path()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
+    Config::config_path().map_or_else(
+        |_| "~/.config/wayscriber/config.toml".to_string(),
+        |path| path.display().to_string(),
+    )
 }
 
 fn log_config(config: &Config) {

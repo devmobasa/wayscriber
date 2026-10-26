@@ -181,10 +181,12 @@ pub fn slice_parent(idx: u8) -> Option<RadialParent> {
 }
 
 /// Sub-ring children for a segment index (empty for non-parent slices).
+#[must_use]
 pub fn sub_ring_children(parent_idx: u8) -> &'static [Action] {
-    slice_parent(parent_idx)
-        .map(RadialParent::children)
-        .unwrap_or(&[])
+    match slice_parent(parent_idx) {
+        Some(parent) => parent.children(),
+        None => &[],
+    }
 }
 
 /// Number of sub-ring children for a segment index, or 0 if none.

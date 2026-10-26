@@ -17,21 +17,18 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     // read by that control too. Hit-testing the release point instead would
     // let a saturation drag released over the hue bar, the alpha bar, or a
     // recent swatch apply there as a fresh click.
-    let fx = x as f64;
-    let fy = y as f64;
+    let fx = f64::from(x);
+    let fy = f64::from(y);
     if let Some(target) = state.color_picker_popup_take_drag_target() {
         state.color_picker_popup_apply_drag(target, fx, fy);
         state.color_picker_popup_set_hex_editing(false);
         return true;
     }
 
-    let layout = match state.color_picker_popup_layout() {
-        Some(layout) => layout,
-        None => {
-            // No layout, close popup
-            state.close_color_picker_popup(true);
-            return true;
-        }
+    let Some(layout) = state.color_picker_popup_layout() else {
+        // No layout, close popup
+        state.close_color_picker_popup(true);
+        return true;
     };
 
     // Popup actions use a same-button press/release contract. A press that
@@ -196,17 +193,13 @@ pub(super) fn handle_board_picker_release(
             return true;
         }
         let now = Instant::now();
-        let is_double = state
-            .board_picker
-            .last_click
-            .map(|last| {
-                last.row == index
-                    && now.duration_since(last.at).as_millis()
-                        <= BOARD_PICKER_DOUBLE_CLICK_MS as u128
-                    && (x - last.x).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
-                    && (y - last.y).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
-            })
-            .unwrap_or(false);
+        let is_double = state.board_picker.last_click.is_some_and(|last| {
+            last.row == index
+                && now.duration_since(last.at).as_millis()
+                    <= u128::from(BOARD_PICKER_DOUBLE_CLICK_MS)
+                && (x - last.x).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
+                && (y - last.y).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
+        });
         if is_double {
             state.board_picker.last_click = None;
             state.board_picker_activate_row_with_measurer(resources.measurer, index);

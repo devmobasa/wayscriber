@@ -83,10 +83,10 @@ pub(super) fn keybinding_capture_geometry(
     screen_width: u32,
     screen_height: u32,
 ) -> (f64, f64, f64, f64) {
-    let width = 520.0_f64.min(screen_width as f64 - 24.0);
+    let width = 520.0_f64.min(f64::from(screen_width) - 24.0);
     let height = 170.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * COMMAND_PALETTE_TOP_RATIO;
+    let x = (f64::from(screen_width) - width) / 2.0;
+    let y = f64::from(screen_height) * COMMAND_PALETTE_TOP_RATIO;
     (x, y, width, height)
 }
 
@@ -103,8 +103,8 @@ pub(super) fn render_keybinding_capture(
     draw_command_palette_frame(
         theme,
         ctx,
-        screen_width as f64,
-        screen_height as f64,
+        f64::from(screen_width),
+        f64::from(screen_height),
         x,
         y,
         width,

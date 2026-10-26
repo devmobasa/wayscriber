@@ -278,19 +278,16 @@ impl RuntimeUiStateController {
         }
         covered.sort_unstable();
         covered.dedup();
-        let request = match self.pipeline.dispatch_recovery_replace(
+        let Ok(request) = self.pipeline.dispatch_recovery_replace(
             canonical,
             through,
             covered,
             self.authority_epoch,
-        ) {
-            Ok(request) => request,
-            Err(_) => {
-                return self.finish_still_unhealthy(
-                    RuntimeStateIoError::new("canonical recovery command was not dispatched"),
-                    Some(observation),
-                );
-            }
+        ) else {
+            return self.finish_still_unhealthy(
+                RuntimeStateIoError::new("canonical recovery command was not dispatched"),
+                Some(observation),
+            );
         };
         let purpose = RecoveryCanonicalWritePurpose {
             retry_desired_through: retry,

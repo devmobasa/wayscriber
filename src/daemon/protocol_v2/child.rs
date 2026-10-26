@@ -336,13 +336,14 @@ impl OverlayChildOwner {
     /// its identity is still held, then clears its proofs and releases it.
     fn retire(&mut self, status: i32) -> OverlayExit {
         let session = match (self.generation(), self.owned.as_ref()) {
-            (Some(generation), Some(owned)) => match owned.process_start_ticks {
-                Some(ticks) => take_final_session_report(generation, owned.display_pid, ticks),
-                None => {
+            (Some(generation), Some(owned)) => {
+                if let Some(ticks) = owned.process_start_ticks {
+                    take_final_session_report(generation, owned.display_pid, ticks)
+                } else {
                     discard_session_report(generation);
                     None
                 }
-            },
+            }
             _ => None,
         };
         if let Some(generation) = self.generation.take() {
@@ -557,7 +558,7 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
             loop {
                 // SAFETY: pollfd points to one initialized entry and the
                 // descriptor remains owned by this thread.
-                let result = unsafe { libc::poll(&mut pollfd, 1, -1) };
+                let result = unsafe { libc::poll(&raw mut pollfd, 1, -1) };
                 if result > 0 {
                     // SAFETY: loss of the owning daemon is an irrevocable
                     // fail-stop condition for its internal overlay child.

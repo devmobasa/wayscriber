@@ -312,8 +312,7 @@ pub(super) fn launched_resume_policy() -> Option<bool> {
                 "0" | "false" | "no" | "off" | "disable" | "disabled" => Some(false),
                 _ => {
                     warn!(
-                        "Ignoring invalid {} value '{}'; expected on/off/true/false",
-                        RESUME_SESSION_ENV, raw
+                        "Ignoring invalid {RESUME_SESSION_ENV} value '{raw}'; expected on/off/true/false"
                     );
                     None
                 }

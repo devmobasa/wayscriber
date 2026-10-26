@@ -68,8 +68,7 @@ impl ToolbarSurface {
     pub fn is_layer(&self, layer: &LayerSurface) -> bool {
         self.layer_surface
             .as_ref()
-            .map(|ls| ls.wl_surface().id() == layer.wl_surface().id())
-            .unwrap_or(false)
+            .is_some_and(|ls| ls.wl_surface().id() == layer.wl_surface().id())
     }
 
     pub(in crate::backend::wayland) fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
@@ -79,8 +78,7 @@ impl ToolbarSurface {
     pub fn is_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.wl_surface
             .as_ref()
-            .map(|s| s.id() == surface.id())
-            .unwrap_or(false)
+            .is_some_and(|s| s.id() == surface.id())
     }
 
     /// Get cursor hint for the current hover position.

@@ -199,14 +199,14 @@ fn install_handler(signal: libc::c_int) -> io::Result<libc::sigaction> {
     action.sa_flags = signal_action_flags();
 
     // SAFETY: `action.sa_mask` points to a valid sigset_t field.
-    if unsafe { libc::sigemptyset(&mut action.sa_mask) } != 0 {
+    if unsafe { libc::sigemptyset(&raw mut action.sa_mask) } != 0 {
         return Err(io::Error::last_os_error());
     }
 
     // SAFETY: Zeroed sigaction is filled by libc when installation succeeds.
     let mut previous = unsafe { mem::zeroed::<libc::sigaction>() };
     // SAFETY: Installs a process-wide handler for the requested signal.
-    if unsafe { libc::sigaction(signal, &action, &mut previous) } != 0 {
+    if unsafe { libc::sigaction(signal, &raw const action, &raw mut previous) } != 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(previous)
@@ -255,7 +255,7 @@ extern "C" fn signal_handler(signal: libc::c_int) {
             let _ = unsafe {
                 libc::write(
                     fd,
-                    (&wakeup as *const u8).cast::<libc::c_void>(),
+                    (&raw const wakeup).cast::<libc::c_void>(),
                     mem::size_of::<u8>(),
                 )
             };
@@ -384,7 +384,7 @@ fn write_pipe_hint(fd: RawFd) -> io::Result<()> {
         let result = unsafe {
             libc::write(
                 fd,
-                (&wakeup as *const u8).cast::<libc::c_void>(),
+                (&raw const wakeup).cast::<libc::c_void>(),
                 mem::size_of::<u8>(),
             )
         };

@@ -29,8 +29,7 @@ impl ToolbarSurfaceManager {
         if self.is_top_visible() {
             if self.top.layer_surface.is_none() {
                 info!(
-                    "Ensuring top toolbar surface exists at logical size {:?}, scale {}",
-                    top_size, scale
+                    "Ensuring top toolbar surface exists at logical size {top_size:?}, scale {scale}"
                 );
                 self.top.set_logical_size(top_size);
             } else if self.top.logical_size != top_size {

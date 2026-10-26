@@ -153,8 +153,7 @@ impl SequenceTrie {
             return SequenceMatch::None;
         };
         node.action
-            .map(SequenceMatch::Dispatched)
-            .unwrap_or(SequenceMatch::None)
+            .map_or(SequenceMatch::None, SequenceMatch::Dispatched)
     }
 }
 

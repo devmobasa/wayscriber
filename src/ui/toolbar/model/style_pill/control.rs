@@ -60,10 +60,12 @@ impl StylePillControl {
     pub(crate) fn role(self) -> StylePillRole {
         match self {
             Self::ColorChip | Self::QuickSwatch(_) => StylePillRole::Swatch,
-            Self::Slider(StylePillSlider::Thickness)
-            | Self::Slider(StylePillSlider::Opacity)
-            | Self::Slider(StylePillSlider::SpotlightMagnification)
-            | Self::Slider(StylePillSlider::FontSize) => StylePillRole::Slider,
+            Self::Slider(
+                StylePillSlider::Thickness
+                | StylePillSlider::Opacity
+                | StylePillSlider::SpotlightMagnification
+                | StylePillSlider::FontSize,
+            ) => StylePillRole::Slider,
             Self::ThicknessValue | Self::FontSizeValue => StylePillRole::Value,
             Self::FillToggle | Self::AutoNumberToggle | Self::FontWeightToggle => {
                 StylePillRole::Toggle
@@ -238,8 +240,7 @@ impl StylePillControl {
     pub(crate) fn carries_inline_readout(self) -> bool {
         matches!(
             self,
-            Self::Slider(StylePillSlider::Opacity)
-                | Self::Slider(StylePillSlider::SpotlightMagnification)
+            Self::Slider(StylePillSlider::Opacity | StylePillSlider::SpotlightMagnification)
         )
     }
 

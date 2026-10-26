@@ -238,10 +238,10 @@ impl Shape {
                     // scale the arc itself, or the bulge (the only part of a
                     // flat curved arrow with any height) ignores the drag.
                     bend: util::scaled_arrow_bend(
-                        (*x1 as f64, *y1 as f64),
-                        (*x2 as f64, *y2 as f64),
-                        (nx1 as f64, ny1 as f64),
-                        (nx2 as f64, ny2 as f64),
+                        (f64::from(*x1), f64::from(*y1)),
+                        (f64::from(*x2), f64::from(*y2)),
+                        (f64::from(nx1), f64::from(ny1)),
+                        (f64::from(nx2), f64::from(ny2)),
                         *bend,
                         scale_x,
                         scale_y,
@@ -417,12 +417,19 @@ fn scale_point_i32(
     scale_x: f64,
     scale_y: f64,
 ) -> (i32, i32) {
-    let (sx, sy) = scale_point(x as f64, y as f64, anchor_x, anchor_y, scale_x, scale_y);
+    let (sx, sy) = scale_point(
+        f64::from(x),
+        f64::from(y),
+        anchor_x,
+        anchor_y,
+        scale_x,
+        scale_y,
+    );
     (sx.round() as i32, sy.round() as i32)
 }
 
 fn scale_size(size: i32, factor: f64) -> i32 {
-    (size as f64 * factor).round() as i32
+    (f64::from(size) * factor).round() as i32
 }
 
 fn scale_points(

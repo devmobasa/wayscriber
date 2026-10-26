@@ -230,8 +230,7 @@ impl SessionOptions {
 pub(crate) fn session_file_parent_dir(path: &Path) -> PathBuf {
     path.parent()
         .filter(|parent| !parent.as_os_str().is_empty())
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."))
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 pub(crate) fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {

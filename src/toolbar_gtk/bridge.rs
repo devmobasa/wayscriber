@@ -182,30 +182,29 @@ impl FeedbackPublisher {
                         break;
                     }
                 }
-                match replacement {
-                    Some(index) => state.queue[index] = feedback,
-                    None => {
-                        // A boundary may have consumed a slot by reclaiming a
-                        // move from an older segment. Reclaim another move and
-                        // append this one after the boundary instead of moving
-                        // it across ordered feedback or failing the bridge.
-                        let reclaim = state
-                            .queue
-                            .iter()
-                            .position(|queued| queued.move_kind() == Some(kind))
-                            .or_else(|| {
-                                state
-                                    .queue
-                                    .iter()
-                                    .position(|queued| queued.move_kind().is_some())
-                            });
-                        if let Some(index) = reclaim {
-                            state.queue.remove(index);
-                            state.queue.push_back(feedback);
-                        } else {
-                            state.accepting = false;
-                            overflowed = true;
-                        }
+                if let Some(index) = replacement {
+                    state.queue[index] = feedback;
+                } else {
+                    // A boundary may have consumed a slot by reclaiming a
+                    // move from an older segment. Reclaim another move and
+                    // append this one after the boundary instead of moving
+                    // it across ordered feedback or failing the bridge.
+                    let reclaim = state
+                        .queue
+                        .iter()
+                        .position(|queued| queued.move_kind() == Some(kind))
+                        .or_else(|| {
+                            state
+                                .queue
+                                .iter()
+                                .position(|queued| queued.move_kind().is_some())
+                        });
+                    if let Some(index) = reclaim {
+                        state.queue.remove(index);
+                        state.queue.push_back(feedback);
+                    } else {
+                        state.accepting = false;
+                        overflowed = true;
                     }
                 }
             } else {
@@ -516,8 +515,7 @@ impl Drop for GtkToolbarBridge {
             }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
-                    "GTK toolbar thread did not stop within {:?}; detaching it and leaving it running until process exit",
-                    GTK_THREAD_SHUTDOWN_TIMEOUT
+                    "GTK toolbar thread did not stop within {GTK_THREAD_SHUTDOWN_TIMEOUT:?}; detaching it and leaving it running until process exit"
                 );
             }
         }
@@ -578,7 +576,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, 0) };
+        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
         assert!(ready >= 0);
         ready > 0 && pollfd.revents & libc::POLLIN != 0
     }
@@ -825,7 +823,7 @@ mod tests {
                 revents: 0,
             };
             // SAFETY: pollfd and the source descriptor remain valid for the bounded wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
             assert_eq!(ready, 1);
             assert_ne!(pollfd.revents & libc::POLLIN, 0);
         });

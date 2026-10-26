@@ -8,7 +8,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
     let decoder = png::Decoder::new(Cursor::new(data));
     let mut reader = decoder
         .read_info()
-        .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
+        .map_err(|e| CaptureError::ImageError(format!("Decode error: {e}")))?;
 
     let output_size = reader
         .output_buffer_size()
@@ -16,7 +16,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
     let mut buf = vec![0; output_size];
     let info = reader
         .next_frame(&mut buf)
-        .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
+        .map_err(|e| CaptureError::ImageError(format!("Decode error: {e}")))?;
 
     let mut argb = Vec::with_capacity((info.width * info.height * 4) as usize);
     let iter: Box<dyn Iterator<Item = (u8, u8, u8, u8)>> = match info.color_type {
@@ -34,17 +34,16 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
         )),
         other => {
             return Err(CaptureError::ImageError(format!(
-                "Unsupported PNG color type: {:?}",
-                other
+                "Unsupported PNG color type: {other:?}"
             )));
         }
     };
 
     for (r, g, b, a) in iter {
-        let a_f = a as f32 / 255.0;
-        let pr = (r as f32 * a_f).round() as u8;
-        let pg = (g as f32 * a_f).round() as u8;
-        let pb = (b as f32 * a_f).round() as u8;
+        let a_f = f32::from(a) / 255.0;
+        let pr = (f32::from(r) * a_f).round() as u8;
+        let pg = (f32::from(g) * a_f).round() as u8;
+        let pb = (f32::from(b) * a_f).round() as u8;
         // Cairo ARgb32 uses native-endian BGRA layout
         argb.push(pb);
         argb.push(pg);

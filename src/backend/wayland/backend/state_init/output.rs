@@ -18,24 +18,21 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
         .ok()
         .or_else(|| config.ui.preferred_output.clone());
     if let Some(ref output) = preferred_output_identity {
-        info!(
-            "Preferring xdg fullscreen on output '{}' (env or config override)",
-            output
-        );
+        info!("Preferring xdg fullscreen on output '{output}' (env or config override)");
     }
 
     let mut xdg_fullscreen = env::var(XDG_FULLSCREEN_ENV)
         .ok()
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(config.ui.xdg_fullscreen);
+        .map_or(config.ui.xdg_fullscreen, |v| {
+            v == "1" || v.eq_ignore_ascii_case("true")
+        });
     let desktop_env = env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default();
     let session_env = env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default();
     let desktop_session = env::var(DESKTOP_SESSION_ENV).unwrap_or_default();
     let sway_sock = env::var(SWAYSOCK_ENV).unwrap_or_default();
     let niri_socket = env::var(NIRI_SOCKET_ENV).unwrap_or_default();
     let force_fullscreen = env::var(XDG_FULLSCREEN_FORCE_ENV)
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+        .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     if xdg_fullscreen && desktop_env.to_uppercase().contains("GNOME") && !force_fullscreen {
         warn!(
             "GNOME fullscreen xdg fallback is opaque; falling back to maximized. Set {XDG_FULLSCREEN_FORCE_ENV}=1 to force fullscreen anyway."

@@ -57,7 +57,7 @@ impl Dispatch<ZwpTabletSeatV2, ()> for WaylandState {
             EVT_TOOL_ADDED_OPCODE => qhandle.make_data::<ZwpTabletToolV2, _>(()),
             EVT_PAD_ADDED_OPCODE => qhandle.make_data::<ZwpTabletPadV2, _>(()),
             _ => {
-                warn!("Ignoring unknown tablet seat child opcode {}", opcode);
+                warn!("Ignoring unknown tablet seat child opcode {opcode}");
                 Arc::new(IgnoredObjectData)
             }
         }

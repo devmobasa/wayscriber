@@ -105,7 +105,7 @@ pub(crate) fn render_canvas_surface(
             &measurer,
             &mut RenderCtx::new(&ctx, &mut caches),
             &page,
-            scale as f64,
+            f64::from(scale),
         )?;
     }
 

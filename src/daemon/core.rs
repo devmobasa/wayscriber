@@ -223,13 +223,10 @@ impl Daemon {
 
     fn clear_stale_runtime_files() {
         if let Err(err) = daemon::clear_daemon_pid_file() {
-            warn!("Failed to clear stale daemon pid file on startup: {}", err);
+            warn!("Failed to clear stale daemon pid file on startup: {err}");
         }
         if let Err(err) = daemon::clear_daemon_toggle_request_file() {
-            warn!(
-                "Failed to clear stale daemon toggle request on startup: {}",
-                err
-            );
+            warn!("Failed to clear stale daemon toggle request on startup: {err}");
         }
         if let Err(err) = super::protocol_v2::clear_stale_session_reports() {
             warn!("Failed to clear stale overlay session reports on startup: {err:#}");
@@ -261,7 +258,7 @@ impl Daemon {
         ) {
             Ok(tray_runtime) => self.tray_runtime = Some(tray_runtime),
             Err(err) => {
-                warn!("System tray unavailable: {}", err);
+                warn!("System tray unavailable: {err}");
                 warn!(
                     "Continuing without system tray; use --no-tray or {NO_TRAY_ENV}=1 to silence this warning"
                 );
@@ -821,7 +818,7 @@ impl Daemon {
             match self.process_single_toggle(Some(legacy_request), None, false) {
                 Ok(_) => claimed.finalize(FinalEffect::Completed, None)?,
                 Err(error) => {
-                    claimed.finalize(FinalEffect::Indeterminate, Some(&format!("{error:#}")))?
+                    claimed.finalize(FinalEffect::Indeterminate, Some(&format!("{error:#}")))?;
                 }
             }
         }
@@ -835,7 +832,7 @@ impl Daemon {
         info!("Daemon shutting down");
         // Ensure overlay is stopped before exit
         if let Err(err) = self.hide_overlay() {
-            warn!("Failed to hide overlay during shutdown: {}", err);
+            warn!("Failed to hide overlay during shutdown: {err}");
         }
         self.should_quit.store(true, Ordering::Release);
         if let Some(listener) = self.global_shortcuts_listener.as_mut() {
@@ -848,14 +845,14 @@ impl Daemon {
         if let Some(listener) = self.global_shortcuts_listener.take() {
             match listener.join() {
                 Ok(()) => info!("Global shortcuts listener thread joined"),
-                Err(err) => warn!("Global shortcuts listener thread panicked: {:?}", err),
+                Err(err) => warn!("Global shortcuts listener thread panicked: {err:?}"),
             }
         }
         if let Err(err) = daemon::clear_daemon_toggle_request_file() {
-            warn!("Failed to clear daemon toggle request file: {}", err);
+            warn!("Failed to clear daemon toggle request file: {err}");
         }
         if let Err(err) = daemon::clear_daemon_pid_file() {
-            warn!("Failed to clear daemon pid file: {}", err);
+            warn!("Failed to clear daemon pid file: {err}");
         }
         self.stop_signal_listener()
     }

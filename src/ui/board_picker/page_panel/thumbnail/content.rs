@@ -74,9 +74,9 @@ pub(super) fn render_page_content(
     let inset = 2.0;
     let content_w = (width - inset * 2.0).max(1.0);
     let content_h = (height - inset * 2.0).max(1.0);
-    let scale = (content_w / screen_width as f64).min(content_h / screen_height as f64);
-    let offset_x = (content_w - screen_width as f64 * scale) * 0.5;
-    let offset_y = (content_h - screen_height as f64 * scale) * 0.5;
+    let scale = (content_w / f64::from(screen_width)).min(content_h / f64::from(screen_height));
+    let offset_x = (content_w - f64::from(screen_width) * scale) * 0.5;
+    let offset_y = (content_h - f64::from(screen_height) * scale) * 0.5;
 
     let _ = ctx.save();
     ctx.translate(x + inset + offset_x, y + inset + offset_y);
@@ -458,7 +458,7 @@ mod tests {
             let mut surface =
                 cairo::ImageSurface::create(cairo::Format::ARgb32, 124 * density, 64 * density)
                     .unwrap();
-            surface.set_device_scale(density as f64, density as f64);
+            surface.set_device_scale(f64::from(density), f64::from(density));
             {
                 let ctx = cairo::Context::new(&surface).unwrap();
                 render_page_content(

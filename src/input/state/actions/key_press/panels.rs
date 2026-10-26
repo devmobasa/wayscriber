@@ -149,10 +149,10 @@ impl InputState {
         if self.board_picker_is_quick() {
             match key {
                 Key::Delete | Key::F2 => return true,
-                Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => return true,
-                Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => return true,
-                Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => return true,
-                Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => return true,
+                Key::Char('n' | 'N') if self.modifiers.ctrl => return true,
+                Key::Char('r' | 'R') if self.modifiers.ctrl => return true,
+                Key::Char('c' | 'C') if self.modifiers.ctrl => return true,
+                Key::Char('p' | 'P') if self.modifiers.ctrl => return true,
                 _ => {}
             }
         }
@@ -220,19 +220,19 @@ impl InputState {
                 }
                 true
             }
-            Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
+            Key::Char('n' | 'N') if self.modifiers.ctrl => {
                 self.board_picker_create_new_with_measurer(measurer);
                 true
             }
-            Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => {
+            Key::Char('r' | 'R') if self.modifiers.ctrl => {
                 self.board_picker_rename_selected_with_measurer(measurer);
                 true
             }
-            Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => {
+            Key::Char('c' | 'C') if self.modifiers.ctrl => {
                 self.board_picker_edit_color_selected_with_measurer(measurer);
                 true
             }
-            Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => {
+            Key::Char('p' | 'P') if self.modifiers.ctrl => {
                 self.board_picker_toggle_pin_selected();
                 true
             }
@@ -293,8 +293,7 @@ impl InputState {
                     let remaining = self
                         .board_picker_page_panel_board_index()
                         .and_then(|bi| self.boards.board_states().get(bi))
-                        .map(|b| b.pages.page_count())
-                        .unwrap_or(0);
+                        .map_or(0, |b| b.pages.page_count());
                     if remaining == 0 {
                         self.board_picker_set_focus(BoardPickerFocus::BoardList);
                     } else {
@@ -312,15 +311,15 @@ impl InputState {
                 }
                 true
             }
-            Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
+            Key::Char('n' | 'N') if self.modifiers.ctrl => {
                 self.board_picker_add_page_with_measurer(measurer);
                 true
             }
-            Key::Char('g') | Key::Char('G') if self.modifiers.ctrl => {
+            Key::Char('g' | 'G') if self.modifiers.ctrl => {
                 self.board_picker_begin_page_jump();
                 true
             }
-            Key::Char('f') | Key::Char('F') if self.modifiers.ctrl => {
+            Key::Char('f' | 'F') if self.modifiers.ctrl => {
                 self.board_picker_begin_page_search();
                 true
             }
@@ -347,8 +346,7 @@ impl InputState {
         let page_count = self
             .board_picker_page_panel_board_index()
             .and_then(|bi| self.boards.board_states().get(bi))
-            .map(|b| b.pages.page_count())
-            .unwrap_or(0);
+            .map_or(0, |b| b.pages.page_count());
         let current = self
             .board_picker_page_focus_page_index()
             .unwrap_or_else(|| {
@@ -362,7 +360,7 @@ impl InputState {
 
     fn navigate_board_picker_page_panel(&mut self, key: Key, page_count: usize, current: usize) {
         let layout = self.board_picker.layout;
-        let page_cols = layout.map(|l| l.page_cols.max(1)).unwrap_or(1);
+        let page_cols = layout.map_or(1, |l| l.page_cols.max(1));
 
         match key {
             Key::Left if current == 0 => {
@@ -389,15 +387,11 @@ impl InputState {
                 self.board_picker_set_page_focus_page_index(page_count.saturating_sub(1));
             }
             Key::PageUp if page_count > 0 => {
-                let step = layout
-                    .map(|l| l.page_visible_slots.max(page_cols))
-                    .unwrap_or(page_cols);
+                let step = layout.map_or(page_cols, |l| l.page_visible_slots.max(page_cols));
                 self.board_picker_set_page_focus_page_index(current.saturating_sub(step));
             }
             Key::PageDown if page_count > 0 => {
-                let step = layout
-                    .map(|l| l.page_visible_slots.max(page_cols))
-                    .unwrap_or(page_cols);
+                let step = layout.map_or(page_cols, |l| l.page_visible_slots.max(page_cols));
                 let next = current
                     .saturating_add(step)
                     .min(page_count.saturating_sub(1));
@@ -434,12 +428,8 @@ impl InputState {
             Key::Return | Key::Space => self.activate_properties_panel_entry_with(measurer),
             Key::Left => self.adjust_properties_panel_entry_with(measurer, -adjust_step),
             Key::Right => self.adjust_properties_panel_entry_with(measurer, adjust_step),
-            Key::Char('+') | Key::Char('=') => {
-                self.adjust_properties_panel_entry_with(measurer, adjust_step)
-            }
-            Key::Char('-') | Key::Char('_') => {
-                self.adjust_properties_panel_entry_with(measurer, -adjust_step)
-            }
+            Key::Char('+' | '=') => self.adjust_properties_panel_entry_with(measurer, adjust_step),
+            Key::Char('-' | '_') => self.adjust_properties_panel_entry_with(measurer, -adjust_step),
             _ => false,
         }
     }

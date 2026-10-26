@@ -28,7 +28,7 @@ pub(super) fn choose_supported_mime(offered: &[String]) -> Option<String> {
 pub(super) fn decode_clipboard_image(mime_type: &str, bytes: Vec<u8>) -> ClipboardPasteResult {
     let encoded_bytes = bytes.len();
     let Some(format) = format_from_mime_or_bytes(mime_type, &bytes) else {
-        return ClipboardPasteResult::DecodeFailed(format!("unsupported MIME type {}", mime_type));
+        return ClipboardPasteResult::DecodeFailed(format!("unsupported MIME type {mime_type}"));
     };
     let dimensions = match image_dimensions(format, &bytes) {
         Ok(dimensions) => dimensions,

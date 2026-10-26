@@ -277,21 +277,22 @@ mod painter_tests {
             let action = meta.action;
             let icon = config::action_meta(action)
                 .and_then(|meta| meta.icon)
-                .map(action_icon_painter)
-                .unwrap_or_else(|| panic!("missing icon for {:?}", action));
+                .map_or_else(
+                    || panic!("missing icon for {action:?}"),
+                    action_icon_painter,
+                );
             let expected = match action {
                 Action::EnterTextMode => top_toolbar_icon_painter(TopToolbarIcon::Text),
                 Action::EnterStickyNoteMode => top_toolbar_icon_painter(TopToolbarIcon::StickyNote),
                 _ => {
                     let tool = Tool::from_select_action(action)
-                        .unwrap_or_else(|| panic!("{:?} should select a tool", action));
+                        .unwrap_or_else(|| panic!("{action:?} should select a tool"));
                     top_toolbar_icon_painter(TopToolbarIcon::Tool(semantic_icon_for_tool(tool)))
                 }
             };
             assert!(
                 ptr::fn_addr_eq(icon, expected),
-                "icon painter for {:?} drifted from the shared semantic painter",
-                action
+                "icon painter for {action:?} drifted from the shared semantic painter"
             );
         }
     }

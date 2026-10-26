@@ -92,8 +92,7 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
     let quoted_exec = quote_systemd_exec(binary_path);
     let binary_dir = binary_path
         .parent()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "/usr/bin".to_string());
+        .map_or_else(|| "/usr/bin".to_string(), |path| path.display().to_string());
     // Prepended so an install outside the system directories still finds its
     // own helpers first, and skipped when it is already one of them rather
     // than emitting the directory twice.
@@ -107,8 +106,7 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
     };
     let escaped_path_env = escape_systemd_env_value(&service_path);
     format!(
-        "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"${WAYLAND_DISPLAY_ENV}\" ] && [ -S \"${XDG_RUNTIME_DIR_ENV}/${WAYLAND_DISPLAY_ENV}\" ]'\nExecStart={} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"{PATH_ENV}={}\"\n\n[Install]\nWantedBy=graphical-session.target\n",
-        quoted_exec, escaped_path_env
+        "[Unit]\nDescription=Wayscriber - Screen annotation tool for Wayland\nDocumentation=https://wayscriber.com\nPartOf=graphical-session.target\nAfter=graphical-session.target\n\n[Service]\nType=simple\nExecStartPre=/bin/sh -c '[ -n \"${WAYLAND_DISPLAY_ENV}\" ] && [ -S \"${XDG_RUNTIME_DIR_ENV}/${WAYLAND_DISPLAY_ENV}\" ]'\nExecStart={quoted_exec} --daemon\nRestart=on-failure\nRestartSec=5\nRestartPreventExitStatus=75\nSuccessExitStatus=75\nEnvironment=\"{PATH_ENV}={escaped_path_env}\"\n\n[Install]\nWantedBy=graphical-session.target\n"
     )
 }
 

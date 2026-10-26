@@ -318,7 +318,7 @@ fn status_bar_content_flags_have_documented_defaults_and_round_trip() {
         "the output item waits for a second output by default"
     );
 
-    let source = r#"
+    let source = r"
 [ui]
 status_bar_interactive = false
 active_output_badge = false
@@ -332,7 +332,7 @@ show_status_context_indicators = false
 show_toolbar_hint = false
 show_status_help = false
 show_status_about = false
-"#;
+";
     let config: Config = toml::from_str(source).expect("status-bar content flags should parse");
     assert!(!config.ui.status_bar_interactive);
     for item in StatusBarItem::ALL {
@@ -352,11 +352,11 @@ show_status_about = false
 
 #[test]
 fn explicit_opt_ins_for_the_about_chip_and_single_output_badge_round_trip() {
-    let source = r#"
+    let source = r"
 [ui]
 show_status_about = true
 active_output_badge_always = true
-"#;
+";
     let config: Config = toml::from_str(source).expect("opt-in flags should parse");
     assert!(config.ui.status_bar_item_visible(StatusBarItem::About));
     assert!(config.ui.active_output_badge_always);
@@ -529,8 +529,7 @@ fn explicit_empty_cycle_records_legacy_f2_intent_without_a_startup_notice() {
         fs::write(
             primary_dir.join("config.toml"),
             format!(
-                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ncycle_toolbar_display = []\n",
-                CURRENT_CONFIG_REVISION
+                "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ncycle_toolbar_display = []\n"
             ),
         )
         .unwrap();

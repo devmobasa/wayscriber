@@ -308,16 +308,16 @@ pub fn resolve_pdf_page_layout(
     }
 
     let viewport_source = CanvasExportRect {
-        x: origin_x as f64,
-        y: origin_y as f64,
-        width: viewport_width as f64,
-        height: viewport_height as f64,
+        x: f64::from(origin_x),
+        y: f64::from(origin_y),
+        width: f64::from(viewport_width),
+        height: f64::from(viewport_height),
     };
 
     let source_rect = match config.fit {
-        PdfFitMode::FitContentToPage => content_bounds
-            .map(|bounds| pad_source_rect(bounds, config.content_source_padding))
-            .unwrap_or(viewport_source),
+        PdfFitMode::FitContentToPage => content_bounds.map_or(viewport_source, |bounds| {
+            pad_source_rect(bounds, config.content_source_padding)
+        }),
         PdfFitMode::FitViewportToPage | PdfFitMode::Viewport => viewport_source,
     };
     let (page_width, page_height) =
@@ -372,7 +372,7 @@ fn resolve_page_size(
     config: &PdfExportConfig,
 ) -> (f64, f64) {
     let (base_width, base_height) = match config.page_size {
-        PdfPageSize::Viewport => (viewport_width as f64, viewport_height as f64),
+        PdfPageSize::Viewport => (f64::from(viewport_width), f64::from(viewport_height)),
         PdfPageSize::A4 => (A4_WIDTH, A4_HEIGHT),
         PdfPageSize::Letter => (LETTER_WIDTH, LETTER_HEIGHT),
         PdfPageSize::Custom => (config.custom_width, config.custom_height),

@@ -382,7 +382,7 @@ mod tests {
 
         // Walk the middle of the color ring; the base centers the menu at
         // (EXTENT, EXTENT) in its own surface.
-        let radius = (layout.color_inner + layout.color_outer) / 2.0;
+        let radius = f64::midpoint(layout.color_inner, layout.color_outer);
         let samples = 64;
         let mut surface = surface;
         let stride = surface.stride() as usize;

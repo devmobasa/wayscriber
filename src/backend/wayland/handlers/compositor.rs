@@ -48,7 +48,7 @@ impl CompositorHandler for WaylandState {
         }
 
         let scale = new_factor.max(1);
-        debug!("Scale factor changed to {}", scale);
+        debug!("Scale factor changed to {scale}");
         self.surface.set_scale(scale);
         self.refresh_freeze_zoom_geometry();
         self.buffer_damage

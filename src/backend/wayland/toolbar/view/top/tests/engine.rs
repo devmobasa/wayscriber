@@ -20,17 +20,19 @@ fn retained_planner_preserves_wrapped_notices_surface_size_and_input_regions() {
             recovery_artifacts: Vec::new(),
         });
         let size = top_size(&engine, &snapshot);
-        let tree = build_top_view(&engine, &snapshot, size.0 as f64, size.1 as f64);
+        let tree = build_top_view(&engine, &snapshot, f64::from(size.0), f64::from(size.1));
         let fresh = UiTextEngine::default();
         assert_eq!(size, top_size(&fresh, &snapshot));
         assert!(
-            tree.nodes() == build_top_view(&fresh, &snapshot, size.0 as f64, size.1 as f64).nodes(),
+            tree.nodes()
+                == build_top_view(&fresh, &snapshot, f64::from(size.0), f64::from(size.1)).nodes(),
             "retained planner nodes for {path}"
         );
-        let rects = top_input_rects(&engine, &snapshot, size.0 as f64, size.1 as f64).unwrap();
+        let rects =
+            top_input_rects(&engine, &snapshot, f64::from(size.0), f64::from(size.1)).unwrap();
         assert_eq!(
             Some(rects.clone()),
-            top_input_rects(&fresh, &snapshot, size.0 as f64, size.1 as f64)
+            top_input_rects(&fresh, &snapshot, f64::from(size.0), f64::from(size.1))
         );
         assert_eq!(
             top_popover_scroll_bounds(&engine, &snapshot),
@@ -97,8 +99,8 @@ fn retained_planner_matches_fresh_under_width_pressure_and_scroll_bounds() {
             Some((natural, viewport)),
             top_popover_scroll_bounds(&fresh, &snapshot)
         );
-        let actual = build_top_view(&engine, &snapshot, size.0 as f64, size.1 as f64);
-        let expected = build_top_view(&fresh, &snapshot, size.0 as f64, size.1 as f64);
+        let actual = build_top_view(&engine, &snapshot, f64::from(size.0), f64::from(size.1));
+        let expected = build_top_view(&fresh, &snapshot, f64::from(size.0), f64::from(size.1));
         assert!(actual.nodes() == expected.nodes(), "width pressure {width}");
         assert!(!actual.to_hit_regions().is_empty());
     }

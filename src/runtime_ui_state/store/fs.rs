@@ -72,8 +72,7 @@ impl PinnedParent {
 
     fn current_path(&self) -> io::Result<PathBuf> {
         if fs::metadata(&self.inner.observed_path)
-            .ok()
-            .is_some_and(|metadata| file_identity(&metadata) == self.inner.identity)
+            .is_ok_and(|metadata| file_identity(&metadata) == self.inner.identity)
         {
             return Ok(self.inner.observed_path.clone());
         }
@@ -81,8 +80,7 @@ impl PinnedParent {
         let proc_path = PathBuf::from(format!("/proc/self/fd/{}", self.fd()));
         let current = fs::read_link(proc_path)?;
         if !fs::metadata(&current)
-            .ok()
-            .is_some_and(|metadata| file_identity(&metadata) == self.inner.identity)
+            .is_ok_and(|metadata| file_identity(&metadata) == self.inner.identity)
         {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,

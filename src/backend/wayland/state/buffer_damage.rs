@@ -5,7 +5,7 @@
 //! last displayed - not just regions from the current frame.
 //!
 //! This module tracks damage per buffer slot, identified by the canvas memory address.
-//! SlotPool reuses the same memory regions for released buffers, so the pointer
+//! `SlotPool` reuses the same memory regions for released buffers, so the pointer
 //! serves as a stable slot identifier across buffer reuse.
 //!
 //! A pool generation counter handles pool recreation (due to resize, scale change,
@@ -105,7 +105,7 @@ pub(in crate::backend::wayland) struct BufferDamageReport {
 /// Tracks dirty regions for each buffer slot independently.
 ///
 /// Buffers are identified by their canvas memory address, which is stable
-/// across SlotPool buffer reuse (the same memory slot gets the same pointer).
+/// across `SlotPool` buffer reuse (the same memory slot gets the same pointer).
 /// Pool identity (generation + size) detects when the pool is recreated or
 /// grows, which invalidates all previous canvas pointers.
 ///
@@ -141,7 +141,7 @@ impl BufferDamageTracker {
 
     /// Checks pool identity and resets tracking if pool was recreated or grew.
     ///
-    /// When the SlotPool is recreated (generation changes) or grows (size increases),
+    /// When the `SlotPool` is recreated (generation changes) or grows (size increases),
     /// all previous canvas pointers become invalid due to memory remapping.
     fn check_pool_identity(&mut self, generation: u64, pool_size: usize) {
         let pool_changed = generation != self.pool_generation;
@@ -217,12 +217,12 @@ impl BufferDamageTracker {
     /// Takes damage regions for the buffer identified by its canvas pointer.
     ///
     /// The canvas pointer (memory address of the first byte) serves as a stable
-    /// slot identifier - SlotPool reuses the same memory for released buffers.
+    /// slot identifier - `SlotPool` reuses the same memory for released buffers.
     ///
     /// Pool identity (generation + size) is checked first - if the pool was
     /// recreated or grew, all tracking is reset since previous pointers are invalid.
     ///
-    /// If this is a new slot (or global_full_damage is set), returns full damage.
+    /// If this is a new slot (or `global_full_damage` is set), returns full damage.
     /// Otherwise returns and clears the slot's accumulated damage.
     pub fn take_buffer_damage_report(
         &mut self,

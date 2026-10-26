@@ -74,8 +74,7 @@ pub(super) fn session_info_summary(inspection: &SessionInspection) -> String {
 
     let size = inspection
         .size_bytes
-        .map(format_byte_count)
-        .unwrap_or_else(|| tr("unknown size").to_string());
+        .map_or_else(|| tr("unknown size").to_string(), format_byte_count);
     let shapes = inspection
         .frame_counts
         .map(|counts| {
@@ -119,10 +118,7 @@ fn recent_session_snapshots(current_path: Option<&Path>) -> Vec<SessionRecentSna
         .into_iter()
         .filter_map(|entry| {
             let path = PathBuf::from(entry.path);
-            if current_path
-                .map(|current| catalog::session_paths_match(current, &path))
-                .unwrap_or(false)
-            {
+            if current_path.is_some_and(|current| catalog::session_paths_match(current, &path)) {
                 return None;
             }
             Some(SessionRecentSnapshot {
@@ -374,10 +370,9 @@ impl WaylandState {
         }
         match (completion.mode, completion.result) {
             (SessionFileDialogMode::Open, Ok(Some(path))) => {
-                self.handle_toolbar_open_session_path(&path)
+                self.handle_toolbar_open_session_path(&path);
             }
-            (SessionFileDialogMode::Open, Ok(None)) | (SessionFileDialogMode::SaveAs, Ok(None)) => {
-            }
+            (SessionFileDialogMode::Open | SessionFileDialogMode::SaveAs, Ok(None)) => {}
             (SessionFileDialogMode::Open, Err(error)) => {
                 self.set_session_toolbar_error(format!("{}: {error}", tr("Open session failed")));
             }
@@ -499,7 +494,7 @@ impl WaylandState {
                 self.set_session_toolbar_info(clear_tools_message(report.outcome));
             }
             SessionCommandReport::Inspection(inspection) => {
-                self.set_session_toolbar_info(session_info_summary(&inspection))
+                self.set_session_toolbar_info(session_info_summary(&inspection));
             }
             SessionCommandReport::Forgotten(path, forgotten) => {
                 let status = if forgotten {
@@ -510,7 +505,7 @@ impl WaylandState {
                 self.set_session_toolbar_error(trf(
                     "Session file missing; {}: {}",
                     &[&status, &session_display_name(&path)],
-                ))
+                ));
             }
         }
     }
@@ -669,8 +664,10 @@ enum DialogFramePhase {
 fn dialog_frame_accepted(phase: DialogFramePhase, outcome: RenderOutcome) -> bool {
     match (phase, outcome) {
         (DialogFramePhase::Entry, RenderOutcome::Committed { .. })
-        | (DialogFramePhase::Restoration, RenderOutcome::Committed { .. })
-        | (DialogFramePhase::Restoration, RenderOutcome::BuffersInFlight) => true,
+        | (
+            DialogFramePhase::Restoration,
+            RenderOutcome::Committed { .. } | RenderOutcome::BuffersInFlight,
+        ) => true,
         (DialogFramePhase::Entry, RenderOutcome::BuffersInFlight) => false,
     }
 }

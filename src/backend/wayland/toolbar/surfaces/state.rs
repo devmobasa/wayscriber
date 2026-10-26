@@ -130,8 +130,8 @@ impl ToolbarSurface {
         let rects = top::top_input_rects(
             engine,
             snapshot,
-            self.width as f64 / ui_scale,
-            self.height as f64 / ui_scale,
+            f64::from(self.width) / ui_scale,
+            f64::from(self.height) / ui_scale,
         )
         .map(|rects| {
             rects

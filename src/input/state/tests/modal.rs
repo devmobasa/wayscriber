@@ -65,22 +65,22 @@ fn openers_leave_no_excluded_surface_behind() {
 
     let openers: &[Opener] = &[
         ("palette", ModalSurface::CommandPalette, |state| {
-            state.toggle_command_palette()
+            state.toggle_command_palette();
         }),
         ("help", ModalSurface::HelpOverlay, |state| {
-            state.toggle_help_overlay()
+            state.toggle_help_overlay();
         }),
         ("radial", ModalSurface::RadialMenu, |state| {
-            state.toggle_radial_menu(100.0, 100.0)
+            state.toggle_radial_menu(100.0, 100.0);
         }),
         ("color picker", ModalSurface::ColorPicker, |state| {
-            state.open_color_picker_popup()
+            state.open_color_picker_popup();
         }),
         ("context menu", ModalSurface::ContextMenu, |state| {
-            state.open_page_context_menu((10, 10), 0, 0)
+            state.open_page_context_menu((10, 10), 0, 0);
         }),
         ("board picker", ModalSurface::BoardPicker, |state| {
-            state.open_board_picker_with_measurer(&TextMeasurer::default())
+            state.open_board_picker_with_measurer(&TextMeasurer::default());
         }),
     ];
 

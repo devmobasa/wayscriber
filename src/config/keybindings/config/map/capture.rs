@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_capture_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.capture.capture_full_screen, Action::CaptureFullScreen)?;
         inserter.insert_all(

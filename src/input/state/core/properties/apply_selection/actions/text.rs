@@ -12,7 +12,7 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let delta = SELECTION_FONT_SIZE_STEP * direction as f64;
+        let delta = SELECTION_FONT_SIZE_STEP * f64::from(direction);
         let result = self.apply_selection_change_with(
             measurer,
             |shape| matches!(shape, Shape::Text { .. }),

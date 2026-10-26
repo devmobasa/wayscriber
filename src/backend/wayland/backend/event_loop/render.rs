@@ -11,7 +11,7 @@ fn min_frame_time_from_fps(max_fps: u32) -> Option<Duration> {
     if max_fps == 0 {
         None
     } else {
-        Some(Duration::from_micros(1_000_000 / max_fps as u64))
+        Some(Duration::from_micros(1_000_000 / u64::from(max_fps)))
     }
 }
 
@@ -134,7 +134,7 @@ pub(super) fn maybe_render(
                 let render_end = Instant::now();
                 let render_duration = render_end.saturating_duration_since(render_start);
                 if render_duration > Duration::from_millis(5) {
-                    debug!("Render took {:?}", render_duration);
+                    debug!("Render took {render_duration:?}");
                 }
 
                 // Reset failure counter and record render time.

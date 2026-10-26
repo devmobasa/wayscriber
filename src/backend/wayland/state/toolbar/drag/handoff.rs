@@ -56,8 +56,7 @@ impl WaylandState {
         let frozen_top_base_x = self.inline_top_base_x();
         drag_log(|| {
             format!(
-                "begin GTK {:?} drag preview (park transparent input surface, freeze top base at {frozen_top_base_x:.3})",
-                kind,
+                "begin GTK {kind:?} drag preview (park transparent input surface, freeze top base at {frozen_top_base_x:.3})",
             )
         });
         self.toolbar_drag.begin_gtk_preview(kind, frozen_top_base_x);

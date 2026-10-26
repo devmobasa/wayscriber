@@ -104,12 +104,12 @@ fn level_edges(mut vertices: [Point; 3]) -> [Point; 3] {
     let vertical = flattest(|delta| delta.0);
 
     if let Some((a, b)) = horizontal {
-        let y = (vertices[a].1 + vertices[b].1) / 2.0;
+        let y = f64::midpoint(vertices[a].1, vertices[b].1);
         vertices[a].1 = y;
         vertices[b].1 = y;
     }
     if let Some((a, b)) = vertical {
-        let x = (vertices[a].0 + vertices[b].0) / 2.0;
+        let x = f64::midpoint(vertices[a].0, vertices[b].0);
         vertices[a].0 = x;
         vertices[b].0 = x;
     }

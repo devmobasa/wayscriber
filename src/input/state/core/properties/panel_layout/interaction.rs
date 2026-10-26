@@ -10,7 +10,7 @@ impl InputState {
     pub fn properties_panel_hit_at(&self, x: i32, y: i32) -> Option<PropertiesPanelHit> {
         let layout = self.properties.layout.as_ref()?;
         let panel = self.properties.panel.as_ref()?;
-        layout.hit_at(panel, x as f64, y as f64)
+        layout.hit_at(panel, f64::from(x), f64::from(y))
     }
 
     /// The part under `(x, y)` that responds to the pointer. A locked row is
@@ -43,7 +43,7 @@ impl InputState {
         self.properties
             .layout
             .as_ref()
-            .is_some_and(|layout| layout.contains(x as f64, y as f64))
+            .is_some_and(|layout| layout.contains(f64::from(x), f64::from(y)))
     }
 
     pub(super) fn update_properties_panel_hover_from_pointer_internal(

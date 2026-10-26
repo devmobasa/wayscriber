@@ -103,8 +103,8 @@ impl InputState {
                 return false;
             }
             match action {
-                Some(Action::BoardDelete) | Some(Action::PageDelete) => true,
-                Some(Action::BoardRestoreDeleted) | Some(Action::PageRestoreDeleted) => {
+                Some(Action::BoardDelete | Action::PageDelete) => true,
+                Some(Action::BoardRestoreDeleted | Action::PageRestoreDeleted) => {
                     include_restore_actions
                 }
                 _ => false,
@@ -126,11 +126,10 @@ impl InputState {
         measurer: &TextMeasurer,
         now: Instant,
     ) {
-        let request = self
-            .board_transitions
-            .confirm_board_delete(now)
-            .map(|pending| BoardDeleteRequest::Confirm(pending.confirmation().clone()))
-            .unwrap_or(BoardDeleteRequest::Request(BoardDeleteTarget::Active));
+        let request = self.board_transitions.confirm_board_delete(now).map_or(
+            BoardDeleteRequest::Request(BoardDeleteTarget::Active),
+            |pending| BoardDeleteRequest::Confirm(pending.confirmation().clone()),
+        );
 
         let active_id_before = self.boards.active_board_id().to_string();
         let current_spec = self.boards.active_board().spec.clone();
@@ -199,10 +198,10 @@ impl InputState {
                         .action(tr("Undo"), Action::BoardRestoreDeleted),
                 );
 
-                if self.boards.active_board_id() != active_id_before {
-                    self.finish_board_transition_from(&current_spec, &active_id_before, false);
-                } else {
+                if self.boards.active_board_id() == active_id_before {
                     self.mark_board_surface_changed();
+                } else {
+                    self.finish_board_transition_from(&current_spec, &active_id_before, false);
                 }
             }
             BoardDeleteOutcome::Rejected(rejection) => {

@@ -273,11 +273,10 @@ fn normalized_hex(
             RenderProfileMappingSide::To => "to",
         }
     );
-    match parse_hex_rgb(value) {
-        Some(color) => Some(format_hex_rgb(color)),
-        None => {
-            errors.push(FormError::new(field, tr("Expected #RRGGBB hex color")));
-            None
-        }
+    if let Some(color) = parse_hex_rgb(value) {
+        Some(format_hex_rgb(color))
+    } else {
+        errors.push(FormError::new(field, tr("Expected #RRGGBB hex color")));
+        None
     }
 }

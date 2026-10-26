@@ -40,8 +40,8 @@ pub struct PresetSlotDraft {
 
 impl PresetSlotDraft {
     pub(super) fn from_config(preset: Option<&ToolPresetConfig>, defaults: &Config) -> Self {
-        match preset {
-            Some(preset) => Self {
+        if let Some(preset) = preset {
+            Self {
                 enabled: true,
                 name: preset.name.clone().unwrap_or_default(),
                 tool: ToolOption::from_tool(preset.tool),
@@ -63,12 +63,11 @@ impl PresetSlotDraft {
                 show_status_bar: OverrideOption::from_option(preset.show_status_bar),
                 drag_tools: preset.drag_tools.clone(),
                 tool_settings: preset.tool_settings.clone(),
-            },
-            None => {
-                let mut slot = Self::default_from_config(defaults);
-                slot.enabled = false;
-                slot
             }
+        } else {
+            let mut slot = Self::default_from_config(defaults);
+            slot.enabled = false;
+            slot
         }
     }
 

@@ -25,7 +25,7 @@ enum SelectionState {
     None,
     Active {
         shape_ids: Vec<ShapeId>,
-        /// Cached HashSet for O(1) membership tests during rendering.
+        /// Cached `HashSet` for O(1) membership tests during rendering.
         shape_ids_set: HashSet<ShapeId>,
     },
 }
@@ -130,7 +130,7 @@ impl SelectionInteraction {
             return false;
         };
         has_minimum_points
-            && now.duration_since(last.at).as_millis() <= max_elapsed_ms as u128
+            && now.duration_since(last.at).as_millis() <= u128::from(max_elapsed_ms)
             && (x - last.x).abs() <= max_distance
             && (y - last.y).abs() <= max_distance
     }
@@ -156,8 +156,8 @@ impl InputState {
         self.selection_interaction.selected_shape_ids()
     }
 
-    /// Returns a reference to the cached HashSet of selected shape IDs.
-    /// Use this for O(1) membership tests instead of creating a new HashSet.
+    /// Returns a reference to the cached `HashSet` of selected shape IDs.
+    /// Use this for O(1) membership tests instead of creating a new `HashSet`.
     pub fn selected_shape_ids_set(&self) -> Option<&HashSet<ShapeId>> {
         self.selection_interaction.selected_shape_ids_set()
     }

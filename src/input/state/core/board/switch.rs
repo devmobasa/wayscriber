@@ -246,7 +246,7 @@ impl InputState {
 
             self.finish_active_board_transition();
 
-            log::info!("Duplicated board '{}' to '{}'", current_id, new_id);
+            log::info!("Duplicated board '{current_id}' to '{new_id}'");
         } else {
             self.push_toast(
                 ToastPriority::Info,

@@ -132,9 +132,9 @@ impl TopBar {
         area.set_draw_func(move |area, ctx, width, height| {
             let color = area.color();
             let (ring_color, ring_width) = draw_ring.get();
-            let chip_size = (width.min(height) as f64).max(1.0);
-            let x = (width as f64 - chip_size) / 2.0;
-            let y = (height as f64 - chip_size) / 2.0;
+            let chip_size = f64::from(width.min(height)).max(1.0);
+            let x = (f64::from(width) - chip_size) / 2.0;
+            let y = (f64::from(height) - chip_size) / 2.0;
             toolbar_icons::draw_micro_chip(
                 ctx,
                 x,
@@ -146,10 +146,10 @@ impl TopBar {
                     // Ring width is in spec units; scale with the chip.
                     ring_width: ring_width * (chip_size / MICRO_SIZE),
                     icon_color: (
-                        color.red() as f64,
-                        color.green() as f64,
-                        color.blue() as f64,
-                        color.alpha() as f64,
+                        f64::from(color.red()),
+                        f64::from(color.green()),
+                        f64::from(color.blue()),
+                        f64::from(color.alpha()),
                     ),
                     hovered: draw_hovered.get(),
                 },

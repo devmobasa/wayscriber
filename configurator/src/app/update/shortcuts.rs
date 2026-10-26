@@ -108,12 +108,11 @@ impl ConfiguratorApp {
         let Some(recorder) = self.shortcuts.take_recorder() else {
             return Vec::new();
         };
-        match recorder.finish_sequence() {
-            Some(shortcut) => self.commit_recorded_binding(recorder.field, shortcut),
-            None => {
-                self.shortcuts.set_recorder(Some(recorder));
-                Vec::new()
-            }
+        if let Some(shortcut) = recorder.finish_sequence() {
+            self.commit_recorded_binding(recorder.field, shortcut)
+        } else {
+            self.shortcuts.set_recorder(Some(recorder));
+            Vec::new()
         }
     }
 
@@ -413,21 +412,18 @@ impl ConfiguratorApp {
     }
 
     fn arm_next_shortcut_conflict(&mut self) {
-        match next_review_conflict(&self.draft.keybindings) {
-            Some((field, binding, claimants)) => {
-                self.select_keybinding_field(field);
-                self.shortcuts
-                    .set_conflict(Some(PendingShortcutConflict::Recorded {
-                        target: field,
-                        binding,
-                        claimants,
-                    }));
-                self.status = StatusMessage::info(tr("Review the next conflicting shortcut."));
-            }
-            None => {
-                self.shortcuts.review = false;
-                self.status = StatusMessage::success(tr("No remaining shortcut conflicts."));
-            }
+        if let Some((field, binding, claimants)) = next_review_conflict(&self.draft.keybindings) {
+            self.select_keybinding_field(field);
+            self.shortcuts
+                .set_conflict(Some(PendingShortcutConflict::Recorded {
+                    target: field,
+                    binding,
+                    claimants,
+                }));
+            self.status = StatusMessage::info(tr("Review the next conflicting shortcut."));
+        } else {
+            self.shortcuts.review = false;
+            self.status = StatusMessage::success(tr("No remaining shortcut conflicts."));
         }
     }
 

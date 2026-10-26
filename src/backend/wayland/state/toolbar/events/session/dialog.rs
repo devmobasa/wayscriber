@@ -202,8 +202,7 @@ fn run_kdialog_session_file_dialog(
             arguments.push(
                 current_path
                     .and_then(Path::parent)
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(default_session_dir)
+                    .map_or_else(default_session_dir, Path::to_path_buf)
                     .into_os_string(),
             );
         }
@@ -306,8 +305,8 @@ pub(in crate::backend::wayland::state::toolbar::events) fn ensure_save_as_extens
     if path
         .extension()
         .and_then(|extension| extension.to_str())
-        .filter(|extension| !extension.is_empty())
-        .is_some()
+        .as_ref()
+        .is_some_and(|extension| !extension.is_empty())
     {
         return path;
     }

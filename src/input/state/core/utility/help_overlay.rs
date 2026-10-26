@@ -116,7 +116,7 @@ impl InputState {
     /// Resolve a left-click at `(x, y)` (screen space) against the real rendered
     /// help layout: a clickable row/footer action, inside chrome, or a dismiss.
     pub fn help_overlay_click_at(&self, x: i32, y: i32) -> HelpOverlayClick {
-        match self.help_overlay.region_at(x as f64, y as f64) {
+        match self.help_overlay.region_at(f64::from(x), f64::from(y)) {
             Some(HelpOverlayRegion::Row(action)) => HelpOverlayClick::Run(action),
             Some(HelpOverlayRegion::ToggleUnbound) => HelpOverlayClick::ToggleUnbound,
             Some(_) => HelpOverlayClick::Inside,
@@ -174,7 +174,7 @@ impl InputState {
             return None;
         }
 
-        match self.help_overlay.region_at(x as f64, y as f64)? {
+        match self.help_overlay.region_at(f64::from(x), f64::from(y))? {
             HelpOverlayRegion::Search => Some(HelpOverlayCursorHint::Text),
             HelpOverlayRegion::Row(_) | HelpOverlayRegion::ToggleUnbound => {
                 Some(HelpOverlayCursorHint::Pointer)

@@ -770,7 +770,7 @@ fn validate_reason_fields(control: &CommandControl) -> Result<()> {
         CommandDecision::Rejected { reason } => validate_reason(reason)?,
         CommandDecision::Committed { effect_status, .. } => match effect_status {
             EffectStatus::FailedNoEffect(reason) | EffectStatus::Indeterminate(reason) => {
-                validate_reason(reason)?
+                validate_reason(reason)?;
             }
             EffectStatus::Authorized | EffectStatus::Completed => {}
         },

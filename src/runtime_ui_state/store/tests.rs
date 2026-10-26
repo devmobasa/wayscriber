@@ -575,12 +575,12 @@ fn stale_board_ids_are_pruned_by_startup_cleanup() {
     let path = temp.path().join("runtime-ui.toml");
     fs::write(
         &path,
-        br#"version = 1
+        br"version = 1
 
 [boards.pinned.stale-board]
 seed = false
 value = true
-"#,
+",
     )
     .unwrap();
     let store = RuntimeUiStateStore::new(&path);

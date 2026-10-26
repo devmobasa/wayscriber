@@ -78,13 +78,13 @@ pub(crate) fn measure_shape_badge(
     let text = readout.text();
     let extents = engine.measure(shape_measure_badge_text_style(), &text, None)?;
     let width = (extents.width() + PADDING_X * 2.0)
-        .min((screen_width as f64 - SCREEN_MARGIN * 2.0).max(0.0));
-    let height = BADGE_HEIGHT.min((screen_height as f64 - SCREEN_MARGIN * 2.0).max(0.0));
+        .min((f64::from(screen_width) - SCREEN_MARGIN * 2.0).max(0.0));
+    let height = BADGE_HEIGHT.min((f64::from(screen_height) - SCREEN_MARGIN * 2.0).max(0.0));
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
-    let x = trailing_axis(pointer.0, width, screen_width as f64);
-    let y = trailing_axis(pointer.1, height, screen_height as f64);
+    let x = trailing_axis(pointer.0, width, f64::from(screen_width));
+    let y = trailing_axis(pointer.1, height, f64::from(screen_height));
     let baseline = (
         x + (width - extents.width()) / 2.0 - extents.x_bearing(),
         y + (height - extents.height()) / 2.0 - extents.y_bearing(),

@@ -36,8 +36,8 @@ impl ZoomState {
     }
 
     pub fn clamp_offsets(&mut self, screen_width: u32, screen_height: u32) {
-        let width = screen_width as f64;
-        let height = screen_height as f64;
+        let width = f64::from(screen_width);
+        let height = f64::from(screen_height);
         let visible_w = width / self.scale.max(MIN_ZOOM_SCALE);
         let visible_h = height / self.scale.max(MIN_ZOOM_SCALE);
         let max_x = (width - visible_w).max(0.0);

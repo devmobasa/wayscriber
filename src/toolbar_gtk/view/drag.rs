@@ -95,7 +95,7 @@ pub(super) fn drag_frame_position(origin: (f64, f64), delta: (f64, f64)) -> (f64
 /// that margin.
 pub(super) fn rounded_margin_and_offset(base: f64, offset: f64) -> (i32, f64) {
     let margin = (base + offset).round() as i32;
-    (margin, margin as f64 - base)
+    (margin, f64::from(margin) - base)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,15 +191,15 @@ pub(super) fn clamp_drag_offsets(
         let geometry = monitor.geometry();
         let (x, _, _) = wayland::clamp_floating_axis_offset(
             x,
-            geometry.width() as f64,
-            window.width() as f64,
+            f64::from(geometry.width()),
+            f64::from(window.width()),
             base_x,
             end_x,
         );
         let (y, _, _) = wayland::clamp_floating_axis_offset(
             y,
-            geometry.height() as f64,
-            window.height() as f64,
+            f64::from(geometry.height()),
+            f64::from(window.height()),
             base_y,
             end_y,
         );

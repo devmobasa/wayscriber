@@ -41,16 +41,13 @@ impl WaylandState {
                 reason,
                 home,
             } => {
-                match home {
-                    Some((options, outcome)) => {
-                        self.commit_output_session(options.clone(), outcome, context)?;
-                        self.input_state
-                            .set_session_preflight_options(Some(options));
-                    }
-                    None => {
-                        self.session.commit_without_persistence();
-                        self.input_state.set_session_preflight_options(None);
-                    }
+                if let Some((options, outcome)) = home {
+                    self.commit_output_session(options.clone(), outcome, context)?;
+                    self.input_state
+                        .set_session_preflight_options(Some(options));
+                } else {
+                    self.session.commit_without_persistence();
+                    self.input_state.set_session_preflight_options(None);
                 }
                 self.notify_remembered_session_abandoned(&remembered, &reason);
             }

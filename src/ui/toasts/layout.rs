@@ -26,8 +26,8 @@ pub(super) fn toast_box_geometry(
     let extents = engine.measure(toast_text_style(font_size), label, None)?;
     let width = extents.width() + TOAST_PADDING_X * 2.0;
     let height = extents.height() + TOAST_PADDING_Y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let center_y = screen_height as f64 * y_ratio;
+    let x = (f64::from(screen_width) - width) / 2.0;
+    let center_y = f64::from(screen_height) * y_ratio;
     let y = center_y - height / 2.0;
     Some((x, y, width, height))
 }
@@ -87,7 +87,7 @@ pub(super) fn ui_toast_layout(
     } else {
         0.0
     };
-    let max_box_width = (screen_width as f64 - TOAST_SCREEN_MARGIN * 2.0).max(1.0);
+    let max_box_width = (f64::from(screen_width) - TOAST_SCREEN_MARGIN * 2.0).max(1.0);
     let max_message_width =
         (max_box_width - TOAST_PADDING_X * 2.0 - action_width - message_action_gap).max(0.0);
     let message = ellipsize_to_width(engine, &toast.message, max_message_width)?;
@@ -100,8 +100,8 @@ pub(super) fn ui_toast_layout(
         .fold(message_extents.height(), f64::max);
     let width = (content_width + TOAST_PADDING_X * 2.0).min(max_box_width);
     let height = content_height + TOAST_PADDING_Y * 2.0;
-    let x = (screen_width as f64 - width) / 2.0;
-    let y = screen_height as f64 * UI_TOAST_Y_RATIO - height / 2.0;
+    let x = (f64::from(screen_width) - width) / 2.0;
+    let y = f64::from(screen_height) * UI_TOAST_Y_RATIO - height / 2.0;
 
     let mut action_x = x + TOAST_PADDING_X + message_extents.width() + message_action_gap;
     let mut action_bounds = [None, None];

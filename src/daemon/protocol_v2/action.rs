@@ -306,7 +306,7 @@ fn validate_record(record: &ActionRecord) -> Result<()> {
     match &record.state {
         JournalState::Claimed { claim_generation } => validate_id(claim_generation)?,
         JournalState::Abandoned { reason } | JournalState::Indeterminate { reason } => {
-            validate_reason(reason)?
+            validate_reason(reason)?;
         }
         JournalState::Prepared | JournalState::Eligible | JournalState::Applied => {}
     }

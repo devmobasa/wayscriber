@@ -30,27 +30,21 @@ impl Config {
 
         if self.session.autosave_idle_ms < MIN_AUTOSAVE_IDLE_MS {
             log::warn!(
-                "session.autosave_idle_ms must be at least {} ms; using {} instead",
-                MIN_AUTOSAVE_IDLE_MS,
-                MIN_AUTOSAVE_IDLE_MS
+                "session.autosave_idle_ms must be at least {MIN_AUTOSAVE_IDLE_MS} ms; using {MIN_AUTOSAVE_IDLE_MS} instead"
             );
             self.session.autosave_idle_ms = MIN_AUTOSAVE_IDLE_MS;
         }
 
         if self.session.autosave_interval_ms < MIN_AUTOSAVE_INTERVAL_MS {
             log::warn!(
-                "session.autosave_interval_ms must be at least {} ms; using {} instead",
-                MIN_AUTOSAVE_INTERVAL_MS,
-                MIN_AUTOSAVE_INTERVAL_MS
+                "session.autosave_interval_ms must be at least {MIN_AUTOSAVE_INTERVAL_MS} ms; using {MIN_AUTOSAVE_INTERVAL_MS} instead"
             );
             self.session.autosave_interval_ms = MIN_AUTOSAVE_INTERVAL_MS;
         }
 
         if self.session.autosave_failure_backoff_ms < MIN_AUTOSAVE_FAILURE_BACKOFF_MS {
             log::warn!(
-                "session.autosave_failure_backoff_ms must be at least {} ms; using {} instead",
-                MIN_AUTOSAVE_FAILURE_BACKOFF_MS,
-                MIN_AUTOSAVE_FAILURE_BACKOFF_MS
+                "session.autosave_failure_backoff_ms must be at least {MIN_AUTOSAVE_FAILURE_BACKOFF_MS} ms; using {MIN_AUTOSAVE_FAILURE_BACKOFF_MS} instead"
             );
             self.session.autosave_failure_backoff_ms = MIN_AUTOSAVE_FAILURE_BACKOFF_MS;
         }

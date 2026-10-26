@@ -82,7 +82,7 @@ impl InputState {
             StatusBarItem::Tool => self.ui_visibility.show_status_tool = visible,
             StatusBarItem::Size => self.ui_visibility.show_status_size = visible,
             StatusBarItem::ContextIndicators => {
-                self.ui_visibility.show_status_context_indicators = visible
+                self.ui_visibility.show_status_context_indicators = visible;
             }
             StatusBarItem::ToolbarHint => self.ui_visibility.show_toolbar_hint = visible,
             StatusBarItem::Help => self.ui_visibility.show_status_help = visible,
@@ -251,7 +251,7 @@ impl InputState {
                 self.status_hud
                     .layout
                     .as_ref()
-                    .and_then(|layout| layout.segment_at(x as f64, y as f64))
+                    .and_then(|layout| layout.segment_at(f64::from(x), f64::from(y)))
             } else {
                 None
             };
@@ -298,7 +298,7 @@ impl InputState {
                 .status_hud
                 .layout
                 .as_ref()
-                .is_some_and(|layout| layout.pill_contains(x as f64, y as f64))
+                .is_some_and(|layout| layout.pill_contains(f64::from(x), f64::from(y)))
     }
 
     /// Marks a HUD press consumed by the internal routing chain (tablet and
@@ -345,7 +345,7 @@ impl InputState {
             .status_hud
             .layout
             .as_ref()
-            .and_then(|layout| layout.segment_at(x as f64, y as f64))
+            .and_then(|layout| layout.segment_at(f64::from(x), f64::from(y)))
         else {
             // Inside the pill but between segments: consume without action.
             return (true, None);
@@ -370,7 +370,7 @@ impl InputState {
                 (true, None)
             }
             StatusHudSegmentKind::Tool | StatusHudSegmentKind::Size => {
-                self.toggle_radial_menu(x as f64, y as f64);
+                self.toggle_radial_menu(f64::from(x), f64::from(y));
                 (true, None)
             }
             StatusHudSegmentKind::Help => (true, Some(Action::ToggleHelp)),

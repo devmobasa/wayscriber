@@ -44,7 +44,10 @@ impl InputState {
         x: i32,
         y: i32,
     ) -> (f64, f64) {
-        (x as f64 - layout.origin_x, y as f64 - layout.origin_y)
+        (
+            f64::from(x) - layout.origin_x,
+            f64::from(y) - layout.origin_y,
+        )
     }
 
     // Coordinates are in picker-local space (origin at layout.origin_x/origin_y).
@@ -89,8 +92,8 @@ impl InputState {
 
     pub(crate) fn board_picker_index_at(&self, x: i32, y: i32) -> Option<usize> {
         let layout = self.board_picker.layout.as_ref()?;
-        let local_x = x as f64 - layout.origin_x;
-        let local_y = y as f64 - layout.origin_y;
+        let local_x = f64::from(x) - layout.origin_x;
+        let local_y = f64::from(y) - layout.origin_y;
         let row_top = layout.padding_y + layout.header_height;
         let row_bottom = row_top + layout.row_height * layout.row_count as f64;
         if local_x < 0.0 || local_y < 0.0 || local_x > layout.list_width {
@@ -115,7 +118,7 @@ impl InputState {
                 w: layout.width,
                 h: layout.height,
             };
-            rect.contains(x as f64, y as f64)
+            rect.contains(f64::from(x), f64::from(y))
         } else {
             false
         }
@@ -151,8 +154,8 @@ impl InputState {
         }
         let origin_x = layout.origin_x + layout.padding_x;
         let origin_y = layout.palette_top;
-        let local_x = x as f64 - origin_x;
-        let local_y = y as f64 - origin_y;
+        let local_x = f64::from(x) - origin_x;
+        let local_y = f64::from(y) - origin_y;
         if local_x < 0.0 || local_y < 0.0 {
             return None;
         }
@@ -176,8 +179,8 @@ impl InputState {
     pub(crate) fn board_picker_page_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| FloatRect {
                     x: thumb_x,
@@ -192,8 +195,8 @@ impl InputState {
     pub(crate) fn board_picker_page_name_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| FloatRect {
                     x: thumb_x,
@@ -221,7 +224,7 @@ impl InputState {
             w: context.layout.page_add_button_width,
             h: context.layout.page_add_button_height,
         };
-        if sticky_rect.contains(x as f64, y as f64) {
+        if sticky_rect.contains(f64::from(x), f64::from(y)) {
             return true;
         }
 
@@ -241,7 +244,7 @@ impl InputState {
             w: context.layout.page_thumb_width,
             h: context.layout.page_thumb_height,
         };
-        thumb_rect.contains(x as f64, y as f64)
+        thumb_rect.contains(f64::from(x), f64::from(y))
     }
 
     fn board_picker_end_of_pages_visible(
@@ -269,14 +272,14 @@ impl InputState {
             w: context.layout.page_add_button_width,
             h: context.layout.footer_font_size + 8.0,
         };
-        hint_rect.contains(x as f64, y as f64)
+        hint_rect.contains(f64::from(x), f64::from(y))
     }
 
     pub(crate) fn board_picker_page_delete_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| FloatRect {
                     x: thumb_x + context.layout.page_thumb_width
@@ -302,14 +305,14 @@ impl InputState {
             w: context.layout.page_panel_width,
             h: context.layout.page_panel_height,
         }
-        .contains(x as f64, y as f64)
+        .contains(f64::from(x), f64::from(y))
     }
 
     pub(crate) fn board_picker_page_duplicate_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| FloatRect {
                     x: thumb_x + context.layout.page_thumb_width * 0.5
@@ -327,8 +330,8 @@ impl InputState {
     pub(crate) fn board_picker_page_rename_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| FloatRect {
                     x: thumb_x + PAGE_DELETE_ICON_MARGIN,
@@ -345,8 +348,8 @@ impl InputState {
     pub(crate) fn board_picker_page_handle_index_at(&self, x: i32, y: i32) -> Option<usize> {
         self.with_visible_page_context(|context| {
             self.board_picker_find_page_thumb_index(
-                x as f64,
-                y as f64,
+                f64::from(x),
+                f64::from(y),
                 context,
                 |thumb_x, thumb_y| {
                     let handle_size = (context.layout.page_thumb_height * 0.22).clamp(8.0, 12.0);

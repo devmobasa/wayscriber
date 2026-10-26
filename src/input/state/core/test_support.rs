@@ -10,7 +10,7 @@ use crate::input::boards::PendingBoardRuntimeUiAction;
 
 impl InputState {
     /// Test convenience for inspecting shortcut edits. Production drains the
-    /// ordered InputEffect stream and forwards edits to the config worker.
+    /// ordered `InputEffect` stream and forwards edits to the config worker.
     pub(crate) fn take_pending_keybinding_edits(&mut self) -> Vec<KeybindingEditRequest> {
         self.input_effects
             .drain_all(InputEffectKind::KeybindingEdit)
@@ -22,7 +22,7 @@ impl InputState {
             .collect()
     }
 
-    /// Test convenience for inspecting board actions in the InputEffect stream.
+    /// Test convenience for inspecting board actions in the `InputEffect` stream.
     pub(crate) fn take_pending_board_runtime_ui_actions(
         &mut self,
     ) -> Vec<PendingBoardRuntimeUiAction> {

@@ -85,7 +85,7 @@ impl Frame {
         frame
     }
 
-    /// Copy exactly the newest undo/redo entries retained by clamp_history_depth,
+    /// Copy exactly the newest undo/redo entries retained by `clamp_history_depth`,
     /// without first allocating copies of discarded actions or their payloads.
     #[must_use]
     pub fn clone_with_history_limit(&self, limit: usize) -> Self {

@@ -126,7 +126,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: source retains the descriptor throughout this bounded wait.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
         assert_eq!(ready, 1);
         assert_ne!(pollfd.revents & libc::POLLIN, 0);
         source.drain().unwrap();

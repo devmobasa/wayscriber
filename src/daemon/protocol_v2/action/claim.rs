@@ -35,19 +35,13 @@ impl ActionJournal {
         for entry in raw_entries {
             let path = entry.path();
             let identity_on_disk = inode_identity(&path)?;
-            let name = match entry.file_name().into_string() {
-                Ok(name) => name,
-                Err(_) => {
-                    quarantine_action(&self.root, &path, identity_on_disk)?;
-                    continue;
-                }
+            let Ok(name) = entry.file_name().into_string() else {
+                quarantine_action(&self.root, &path, identity_on_disk)?;
+                continue;
             };
-            let (order, identity) = match parse_action_name(&name) {
-                Ok(parsed) => parsed,
-                Err(_) => {
-                    quarantine_action(&self.root, &path, identity_on_disk)?;
-                    continue;
-                }
+            let Ok((order, identity)) = parse_action_name(&name) else {
+                quarantine_action(&self.root, &path, identity_on_disk)?;
+                continue;
             };
             if duplicate_orders.contains(&order) {
                 quarantine_action(&self.root, &path, identity_on_disk)?;
@@ -63,12 +57,11 @@ impl ActionJournal {
             }
         }
         for (order, (identity, path, identity_on_disk)) in entries {
-            let mut record: ActionRecord = match read_record(&path) {
-                Ok(record) => record,
-                Err(_) => {
-                    quarantine_action(&self.root, &path, identity_on_disk)?;
-                    continue;
-                }
+            let mut record: ActionRecord = if let Ok(record) = read_record(&path) {
+                record
+            } else {
+                quarantine_action(&self.root, &path, identity_on_disk)?;
+                continue;
             };
             if validate_record(&record).is_err() {
                 quarantine_action(&self.root, &path, identity_on_disk)?;

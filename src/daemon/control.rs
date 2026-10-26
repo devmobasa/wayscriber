@@ -175,7 +175,7 @@ fn current_unix_millis() -> Result<u64> {
     Ok(duration
         .as_secs()
         .saturating_mul(1000)
-        .saturating_add(duration.subsec_millis() as u64))
+        .saturating_add(u64::from(duration.subsec_millis())))
 }
 
 pub(crate) fn generate_daemon_instance_token() -> String {

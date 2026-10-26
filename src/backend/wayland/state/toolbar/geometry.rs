@@ -70,8 +70,8 @@ pub(super) fn clamp_toolbar_offsets(
     offsets: ToolbarOffsets,
     input: ToolbarClampInput,
 ) -> (ToolbarOffsets, ToolbarClampBounds) {
-    let top_w = input.top_size.0 as f64;
-    let top_h = input.top_size.1 as f64;
+    let top_w = f64::from(input.top_size.0);
+    let top_h = f64::from(input.top_size.1);
 
     let (top_x, min_top_x, max_top_x) = clamp_floating_axis_offset(
         offsets.top_x,
@@ -165,7 +165,7 @@ mod tests {
         let mut snapshot =
             ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
         snapshot.top_viewport_max = Some(budget);
-        let planned = layout::top_size(&UiTextEngine::default(), &snapshot).0 as f64;
+        let planned = f64::from(layout::top_size(&UiTextEngine::default(), &snapshot).0);
         assert!(planned <= budget, "planned={planned}, budget={budget}");
     }
 

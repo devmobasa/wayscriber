@@ -39,14 +39,12 @@ impl Config {
         let resolved_items = self.ui.toolbar.items.resolved();
         for unknown in resolved_items.unknown_hidden {
             log::warn!(
-                "Unknown toolbar item id {:?} in ui.toolbar.items.hidden; preserving it for forward compatibility",
-                unknown
+                "Unknown toolbar item id {unknown:?} in ui.toolbar.items.hidden; preserving it for forward compatibility"
             );
         }
         for unknown in resolved_items.unknown_shown {
             log::warn!(
-                "Unknown toolbar item id {:?} in ui.toolbar.items.shown; preserving it for forward compatibility",
-                unknown
+                "Unknown toolbar item id {unknown:?} in ui.toolbar.items.shown; preserving it for forward compatibility"
             );
         }
 

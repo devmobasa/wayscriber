@@ -191,7 +191,7 @@ mod tests {
             "[keybindings]\nclear_canvas = []\nredo = []\ntoggle_floating_badge = []\n",
         ));
         draft.set(KeybindingField::ClearCanvas, "X".to_string());
-        draft.set(KeybindingField::Redo, "".to_string());
+        draft.set(KeybindingField::Redo, String::new());
         draft.set(KeybindingField::ToggleFloatingBadge, "F8".to_string());
 
         reset_field(&mut draft, &defaults, KeybindingField::ClearCanvas);
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn mouse_and_stylus_strings_append_as_chips() {
         let (mut draft, _defaults) = draft();
-        draft.set(KeybindingField::Undo, "".to_string());
+        draft.set(KeybindingField::Undo, String::new());
         let binding = Shortcut::parse("Ctrl+MouseBack").expect("parses");
         append_binding(&mut draft, KeybindingField::Undo, &binding).expect("append");
         assert_eq!(
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn sequences_append_in_storage_form() {
         let (mut draft, _defaults) = draft();
-        draft.set(KeybindingField::Undo, "".to_string());
+        draft.set(KeybindingField::Undo, String::new());
         let binding = Shortcut::parse("Ctrl+K > Ctrl+C").expect("parses");
         append_binding(&mut draft, KeybindingField::Undo, &binding).expect("append");
         assert_eq!(

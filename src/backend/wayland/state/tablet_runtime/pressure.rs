@@ -67,7 +67,7 @@ impl TabletState {
         let first_sample = self.pressure_thickness.is_none();
         if !try_apply_pressure_to_state_with(
             measurer,
-            pressure as f64 / 65535.0,
+            f64::from(pressure) / 65535.0,
             input,
             self.settings,
         ) {

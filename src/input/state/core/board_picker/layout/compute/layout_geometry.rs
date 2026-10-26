@@ -16,7 +16,7 @@ impl InputState {
         } else {
             list_width
         };
-        let max_width = (screen_width as f64 - 40.0).max(220.0);
+        let max_width = (f64::from(screen_width) - 40.0).max(220.0);
         let mut final_total_width = total_width.min(max_width);
 
         let mut final_list_width = list_width;
@@ -34,8 +34,8 @@ impl InputState {
             final_list_width
         };
 
-        let origin_x = (screen_width as f64 - final_total_width) * 0.5;
-        let origin_y = (screen_height as f64 - panel_height) * 0.5;
+        let origin_x = (f64::from(screen_width) - final_total_width) * 0.5;
+        let origin_y = (f64::from(screen_height) - panel_height) * 0.5;
         let page_panel_x = if page_panel.enabled {
             origin_x + final_list_width + PAGE_PANEL_GAP
         } else {
@@ -49,8 +49,8 @@ impl InputState {
             list_width: final_list_width,
             page_panel_x,
             page_panel_y: origin_y,
-            screen_width: screen_width as f64,
-            screen_height: screen_height as f64,
+            screen_width: f64::from(screen_width),
+            screen_height: f64::from(screen_height),
         }
     }
 }

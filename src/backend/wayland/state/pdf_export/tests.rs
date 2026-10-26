@@ -325,10 +325,10 @@ fn text_content_preflight_preserves_bounds_and_resource_free_snapshots() {
     for (index, frame) in boards[0].pages.pages().iter().enumerate() {
         let bounds = frame.shapes[0].bounding_box_with(&independent).unwrap();
         let expected = CanvasExportRect::new(
-            bounds.x as f64,
-            bounds.y as f64,
-            bounds.width as f64,
-            bounds.height as f64,
+            f64::from(bounds.x),
+            f64::from(bounds.y),
+            f64::from(bounds.width),
+            f64::from(bounds.height),
         )
         .unwrap();
         assert_eq!(initial.pages[index].layout.source_rect, expected);

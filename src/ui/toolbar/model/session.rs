@@ -31,11 +31,10 @@ impl ToolbarSessionModel {
             .active_session_name
             .clone()
             .unwrap_or_else(|| tr("Default session").to_string());
-        let active_path_label = snapshot
-            .active_session_path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| tr("No persisted session target").to_string());
+        let active_path_label = snapshot.active_session_path.as_ref().map_or_else(
+            || tr("No persisted session target").to_string(),
+            |path| path.display().to_string(),
+        );
         let target_active = snapshot.active_session_path.is_some();
         let buttons: Vec<_> = vec![
             ToolbarSessionButton::new(ToolbarEvent::OpenSession, tr("Open"), target_active),

@@ -63,7 +63,7 @@ impl InputState {
             return;
         }
         let rows_top = layout.origin_y + layout.padding_y + layout.header_height;
-        let row = ((y as f64 - rows_top) / layout.row_height).floor() as isize;
+        let row = ((f64::from(y) - rows_top) / layout.row_height).floor() as isize;
         let max_row = board_count.saturating_sub(1) as isize;
         let clamped = row.clamp(0, max_row) as usize;
         let target_row = self.board_picker_clamp_drag_row(clamped, source_board);

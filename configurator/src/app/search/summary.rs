@@ -62,7 +62,7 @@ fn tab_summary(app: &ConfiguratorApp, tab: TabId) -> Option<TabSearchSummary> {
             TabId::Keybindings => keybinding_matches(app, query, &mut summary),
             #[cfg(feature = "tablet-input")]
             TabId::Tablet => {
-                add_area_if(query, &mut summary, tab, SearchArea::Tablet, TABLET_TERMS)
+                add_area_if(query, &mut summary, tab, SearchArea::Tablet, TABLET_TERMS);
             }
         }
     }
@@ -392,11 +392,11 @@ fn session_matches(app: &ConfiguratorApp, query: &SearchQuery, summary: &mut Tab
     );
     for item in &app.session_catalog.items {
         let text = format!(
-            "session saved recent catalog {} {} {} {:?}",
+            "session saved recent catalog {} {} {} {}",
             item.display_name,
             item.path_label,
             item.created_label(),
-            item.path,
+            item.path.display(),
         );
         if query.matches_text(&text) {
             summary.add_area(SearchArea::SessionCatalog);

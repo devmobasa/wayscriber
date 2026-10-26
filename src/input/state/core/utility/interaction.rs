@@ -9,7 +9,7 @@ impl InputState {
             (0.0, 0.0)
         } else {
             let (x, y) = self.boards.active_frame().view_offset();
-            (x as f64, y as f64)
+            (f64::from(x), f64::from(y))
         }
     }
 

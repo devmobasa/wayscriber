@@ -1,4 +1,4 @@
-//! Canvas mutation transactions. InputState applies UI and persistence effects.
+//! Canvas mutation transactions. `InputState` applies UI and persistence effects.
 use std::collections::HashSet;
 
 use crate::draw::frame::{Frame, ShapeSnapshot, UndoAction};

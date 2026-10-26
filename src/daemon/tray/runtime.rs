@@ -46,10 +46,7 @@ fn load_tray_settings_from_config() -> TrayIconStyle {
     match Config::load() {
         Ok(loaded) => loaded.config.tray.icon_style,
         Err(err) => {
-            warn!(
-                "Failed to read config for tray settings; using safe defaults: {}",
-                err
-            );
+            warn!("Failed to read config for tray settings; using safe defaults: {err}");
             TrayIconStyle::Auto
         }
     }
@@ -88,7 +85,7 @@ pub(crate) fn start_system_tray(
             let rt = match Runtime::new() {
                 Ok(runtime) => runtime,
                 Err(e) => {
-                    warn!("Failed to create Tokio runtime for system tray: {}", e);
+                    warn!("Failed to create Tokio runtime for system tray: {e}");
                     worker.report_readiness(Err(anyhow!(
                         "Failed to create Tokio runtime for system tray: {e}"
                     )));
@@ -103,7 +100,7 @@ pub(crate) fn start_system_tray(
                     result = &mut spawn => match result {
                         Ok(handle) => handle,
                         Err(e) => {
-                            warn!("System tray error: {}", e);
+                            warn!("System tray error: {e}");
                             worker.report_readiness(Err(anyhow!("System tray error: {e}")));
                             return;
                         }
@@ -124,7 +121,7 @@ pub(crate) fn start_system_tray(
                     tokio::select! {
                         () = worker.cancelled() => {
                             info!("Tray-local stop requested - shutting down system tray");
-                            let _ = handle.shutdown().await;
+                            handle.shutdown().await;
                             break;
                         }
                         () = time::sleep(time::Duration::from_millis(100)) => {
@@ -138,7 +135,7 @@ pub(crate) fn start_system_tray(
                             }
                             if tray_quit.is_raised() {
                                 info!("Quit signal received - shutting down system tray");
-                                let _ = handle.shutdown().await;
+                                handle.shutdown().await;
                                 break;
                             }
                         }
@@ -185,8 +182,7 @@ impl TrayWorker {
     fn report_readiness(&self, result: Result<()>) {
         if let Err(err) = self.readiness.send(result) {
             debug!(
-                "System tray readiness receiver dropped before signal could be delivered: {}",
-                err
+                "System tray readiness receiver dropped before signal could be delivered: {err}"
             );
         }
     }
@@ -280,8 +276,7 @@ impl TrayRuntime {
             }
             TrayShutdownOutcome::TimedOut => {
                 warn!(
-                    "System tray thread did not stop within {:?} after startup failure; detaching it",
-                    timeout
+                    "System tray thread did not stop within {timeout:?} after startup failure; detaching it"
                 );
             }
         }
@@ -318,10 +313,9 @@ impl TrayRuntime {
         match self.stop_within(TRAY_STOP_TIMEOUT) {
             TrayShutdownOutcome::Joined => info!("System tray thread joined"),
             TrayShutdownOutcome::Panicked => warn!("System tray thread panicked"),
-            TrayShutdownOutcome::TimedOut => warn!(
-                "System tray thread did not stop within {:?}; detaching it",
-                TRAY_STOP_TIMEOUT
-            ),
+            TrayShutdownOutcome::TimedOut => {
+                warn!("System tray thread did not stop within {TRAY_STOP_TIMEOUT:?}; detaching it");
+            }
         }
     }
 }
@@ -342,10 +336,7 @@ async fn log_status_notifier_state() {
     let conn = match Connection::session().await {
         Ok(conn) => conn,
         Err(err) => {
-            warn!(
-                "Failed to connect to session D-Bus for tray diagnostics: {}",
-                err
-            );
+            warn!("Failed to connect to session D-Bus for tray diagnostics: {err}");
             return;
         }
     };
@@ -360,7 +351,7 @@ async fn log_status_notifier_state() {
     {
         Ok(proxy) => proxy,
         Err(err) => {
-            warn!("StatusNotifierWatcher unavailable (no tray host?): {}", err);
+            warn!("StatusNotifierWatcher unavailable (no tray host?): {err}");
             return;
         }
     };
@@ -368,7 +359,7 @@ async fn log_status_notifier_state() {
     let host_registered: bool = match proxy.get_property("IsStatusNotifierHostRegistered").await {
         Ok(value) => value,
         Err(err) => {
-            warn!("Failed to query tray host registration: {}", err);
+            warn!("Failed to query tray host registration: {err}");
             return;
         }
     };
@@ -376,7 +367,7 @@ async fn log_status_notifier_state() {
     let items: Vec<String> = match proxy.get_property("RegisteredStatusNotifierItems").await {
         Ok(value) => value,
         Err(err) => {
-            warn!("Failed to query registered tray items: {}", err);
+            warn!("Failed to query registered tray items: {err}");
             return;
         }
     };

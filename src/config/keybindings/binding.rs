@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::{fmt, iter};
 
@@ -232,19 +233,19 @@ fn within_one_edit(a: &str, b: &str) -> bool {
             return false;
         }
         edited = true;
-        if a.len() == b.len() {
-            // Substitution, or a transposition of this pair.
-            if ai + 1 < a.len() && a[ai] == b[bi + 1] && a[ai + 1] == b[bi] {
-                ai += 2;
-                bi += 2;
-                continue;
+        match a.len().cmp(&b.len()) {
+            Ordering::Equal => {
+                // Substitution, or a transposition of this pair.
+                if ai + 1 < a.len() && a[ai] == b[bi + 1] && a[ai + 1] == b[bi] {
+                    ai += 2;
+                    bi += 2;
+                    continue;
+                }
+                ai += 1;
+                bi += 1;
             }
-            ai += 1;
-            bi += 1;
-        } else if a.len() > b.len() {
-            ai += 1;
-        } else {
-            bi += 1;
+            Ordering::Greater => ai += 1,
+            Ordering::Less => bi += 1,
         }
     }
     true

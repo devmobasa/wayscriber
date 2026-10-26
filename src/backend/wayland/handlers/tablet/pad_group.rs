@@ -21,7 +21,7 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_group_v2::Event;
         match event {
             Event::Buttons { buttons } => {
-                debug!("Tablet pad group buttons: {:?}", buttons);
+                debug!("Tablet pad group buttons: {buttons:?}");
             }
             Event::Ring { ring } => {
                 debug!("Tablet pad ring announced: {:?}", ring.id());
@@ -32,15 +32,14 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
                 state.tablet.pad_strips.push(strip);
             }
             Event::Modes { modes } => {
-                debug!("Tablet pad group modes: {}", modes);
+                debug!("Tablet pad group modes: {modes}");
             }
             Event::Done => {
                 debug!("Tablet pad group description complete");
             }
             Event::ModeSwitch { time, serial, mode } => {
                 debug!(
-                    "Tablet pad group mode switch -> mode {} (serial {}, time {})",
-                    mode, serial, time
+                    "Tablet pad group mode switch -> mode {mode} (serial {serial}, time {time})"
                 );
             }
             _ => {}
@@ -55,7 +54,7 @@ impl Dispatch<ZwpTabletPadGroupV2, ()> for WaylandState {
             EVT_RING_OPCODE => qhandle.make_data::<ZwpTabletPadRingV2, _>(()),
             EVT_STRIP_OPCODE => qhandle.make_data::<ZwpTabletPadStripV2, _>(()),
             _ => {
-                warn!("Ignoring unknown tablet pad group child opcode {}", opcode);
+                warn!("Ignoring unknown tablet pad group child opcode {opcode}");
                 Arc::new(IgnoredObjectData)
             }
         }

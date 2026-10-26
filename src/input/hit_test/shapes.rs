@@ -39,7 +39,7 @@ pub(super) fn freehand_pressure_hit(
     }
 
     for &(x, y, thick) in points {
-        let padded = tolerance.max(thick as f64 / 2.0);
+        let padded = tolerance.max(f64::from(thick) / 2.0);
         if distance_point_to_point((x, y), point) <= padded {
             return true;
         }
@@ -81,7 +81,7 @@ pub(super) fn rect_outline_hit(
     tolerance: f64,
 ) -> bool {
     let tolerance = tolerance.max(thickness / 2.0);
-    let (px, py) = (point.0 as f64, point.1 as f64);
+    let (px, py) = (f64::from(point.0), f64::from(point.1));
     // Normalized like `render_rect` and `rect_fill_hit`: a stored rectangle
     // can carry negative extents, and it paints normalized — hit testing it
     // as a bare point instead made such a shape visible but unselectable.
@@ -150,7 +150,7 @@ pub(super) fn polygon_fill_hit(points: &[(i32, i32)], point: (i32, i32)) -> bool
         return false;
     }
 
-    point_in_polygon((point.0 as f64, point.1 as f64), points)
+    point_in_polygon((f64::from(point.0), f64::from(point.1)), points)
 }
 
 pub(super) fn ellipse_outline_hit(
@@ -162,10 +162,10 @@ pub(super) fn ellipse_outline_hit(
     point: (i32, i32),
     tolerance: f64,
 ) -> bool {
-    let (px, py) = (point.0 as f64, point.1 as f64);
-    let (cx, cy) = (cx as f64, cy as f64);
-    let rx = rx.max(0) as f64;
-    let ry = ry.max(0) as f64;
+    let (px, py) = (f64::from(point.0), f64::from(point.1));
+    let (cx, cy) = (f64::from(cx), f64::from(cy));
+    let rx = f64::from(rx.max(0));
+    let ry = f64::from(ry.max(0));
     if rx.abs() < EPS && ry.abs() < EPS {
         return distance_point_to_point((cx as i32, cy as i32), point)
             <= tolerance.max(thickness / 2.0);
@@ -201,16 +201,16 @@ pub(crate) fn ellipse_fill_hit(cx: i32, cy: i32, rx: i32, ry: i32, point: (i32, 
         return false;
     }
 
-    let dx = point.0 as f64 - cx as f64;
-    let dy = point.1 as f64 - cy as f64;
-    let rx = rx as f64;
-    let ry = ry as f64;
+    let dx = f64::from(point.0) - f64::from(cx);
+    let dy = f64::from(point.1) - f64::from(cy);
+    let rx = f64::from(rx);
+    let ry = f64::from(ry);
     (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0 + EPS
 }
 
 pub(super) fn circle_hit(cx: i32, cy: i32, radius: f64, point: (i32, i32), tolerance: f64) -> bool {
-    let dx = point.0 as f64 - cx as f64;
-    let dy = point.1 as f64 - cy as f64;
+    let dx = f64::from(point.0) - f64::from(cx);
+    let dy = f64::from(point.1) - f64::from(cy);
     let r = radius + tolerance.max(0.5);
     (dx * dx + dy * dy) <= r * r
 }
@@ -229,7 +229,7 @@ pub(super) fn arrowhead_triangle_hit(
     let tip = geometry.tip;
     let (left_x, left_y) = geometry.left;
     let (right_x, right_y) = geometry.right;
-    let p = (point.0 as f64, point.1 as f64);
+    let p = (f64::from(point.0), f64::from(point.1));
     if point_in_triangle(p, tip, (left_x, left_y), (right_x, right_y)) {
         return true;
     }

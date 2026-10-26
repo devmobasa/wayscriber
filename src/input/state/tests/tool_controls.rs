@@ -1679,7 +1679,10 @@ fn color_picker_motion_tracks_action_hover_for_tooltips() {
 
     state.on_mouse_motion_with_canvas(x, y, x, y);
 
-    assert_eq!(state.color_picker_popup_hover(), Some((x as f64, y as f64)));
+    assert_eq!(
+        state.color_picker_popup_hover(),
+        Some((f64::from(x), f64::from(y)))
+    );
     assert!(state.needs_redraw);
 }
 
@@ -1698,7 +1701,7 @@ fn color_picker_motion_within_one_action_does_not_redraw_every_pixel() {
 
     assert_eq!(
         state.color_picker_popup_hover(),
-        Some(((x + 1) as f64, (y + 1) as f64))
+        Some((f64::from(x + 1), f64::from(y + 1)))
     );
     assert!(!state.needs_redraw);
 }

@@ -5,7 +5,7 @@ pub(super) fn distance_point_to_segment<T: Copy + Into<f64>>(
     start: (T, T),
     end: (T, T),
 ) -> f64 {
-    let (px, py) = (point.0 as f64, point.1 as f64);
+    let (px, py) = (f64::from(point.0), f64::from(point.1));
     let (x1, y1) = (start.0.into(), start.1.into());
     let (x2, y2) = (end.0.into(), end.1.into());
     let vx = x2 - x1;
@@ -69,8 +69,8 @@ pub(super) fn point_in_polygon(point: (f64, f64), points: &[(i32, i32)]) -> bool
     let mut inside = false;
     let mut previous = points[points.len() - 1];
     for &current in points {
-        let (x1, y1) = (previous.0 as f64, previous.1 as f64);
-        let (x2, y2) = (current.0 as f64, current.1 as f64);
+        let (x1, y1) = (f64::from(previous.0), f64::from(previous.1));
+        let (x2, y2) = (f64::from(current.0), f64::from(current.1));
         if (y1 > py) != (y2 > py) {
             let intersection_x = (x2 - x1) * (py - y1) / (y2 - y1) + x1;
             if px < intersection_x {

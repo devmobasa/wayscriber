@@ -11,8 +11,7 @@ use std::path::Path;
 pub fn session_display_name(path: &Path) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .unwrap_or_else(|| path.display().to_string())
+        .map_or_else(|| path.display().to_string(), str::to_string)
 }
 
 /// Middle-ellipsize so both the head and the distinguishing tail survive.

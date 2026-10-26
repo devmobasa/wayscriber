@@ -167,8 +167,7 @@ impl Drop for WritingRecord {
 fn timestamp_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0)
+        .map_or(0, |duration| duration.as_millis())
 }
 
 struct LogSink {
@@ -448,7 +447,7 @@ mod tests {
                 .spawn(|| {
                     logger.log(
                         &Record::builder()
-                            .args(format_args!("{}", PanicsWhileFormatting))
+                            .args(format_args!("{PanicsWhileFormatting}"))
                             .level(Level::Warn)
                             .target("wayscriber::daemon")
                             .build(),

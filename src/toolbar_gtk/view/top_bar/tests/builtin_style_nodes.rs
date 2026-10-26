@@ -29,7 +29,7 @@ pub(super) fn assert_builtin_style_pill_node(
             *control,
         ),
         StylePillNodeExpectation::Readout(control) => {
-            assert_builtin_style_pill_readout(name, snapshot, kind, has_interaction, id, *control)
+            assert_builtin_style_pill_readout(name, snapshot, kind, has_interaction, id, *control);
         }
         StylePillNodeExpectation::StepHalf(control, index) => assert_builtin_style_pill_step_half(
             name,
@@ -50,7 +50,7 @@ pub(super) fn assert_builtin_style_pill_node(
             *control,
         ),
         StylePillNodeExpectation::Caption(control) => {
-            assert_builtin_style_pill_caption(name, kind, has_interaction, id, *control)
+            assert_builtin_style_pill_caption(name, kind, has_interaction, id, *control);
         }
         StylePillNodeExpectation::MeterBar(control, index) => assert_builtin_style_pill_meter_bar(
             name,
@@ -108,7 +108,7 @@ pub(super) fn assert_builtin_style_pill_node(
                 id,
                 *control,
                 *index,
-            )
+            );
         }
     }
 }

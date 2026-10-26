@@ -80,7 +80,7 @@ pub(crate) fn draw_opacity_track(
     let knob_r = (h / 2.0).min(7.0);
     let _ = ctx.save();
     checkerboard_behind(ctx, 0.0, |ctx| {
-        draw_rounded_rect(ctx, x, track_y, w, track_h, track_h / 2.0)
+        draw_rounded_rect(ctx, x, track_y, w, track_h, track_h / 2.0);
     });
     let gradient = cairo::LinearGradient::new(x + knob_r, 0.0, x + w - knob_r, 0.0);
     for (position, alpha) in alpha_stops {

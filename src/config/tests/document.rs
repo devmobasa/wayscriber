@@ -739,7 +739,7 @@ fn document_save_leaves_the_key_aliases_it_does_not_write_alone() {
 fn document_save_keeps_unknown_fields_with_stable_id_when_tables_reorder() {
     let temp = TempConfig::new("stable-id");
     temp.write(
-        r##"[[render_profiles.profiles]]
+        r#"[[render_profiles.profiles]]
 id = "a"
 name = "A"
 future_owner = "owner-a"
@@ -748,7 +748,7 @@ future_owner = "owner-a"
 id = "b"
 name = "B"
 future_owner = "owner-b"
-"##,
+"#,
     );
     let document = ConfigDocument::load_from_path(&temp.path).expect("load profiles");
     let mut updated = document.config().clone();
@@ -2500,17 +2500,17 @@ enabled = true
 
 /// The historical `full` alias for the regular mode table must keep its
 /// authored spelling on an unrelated save, and the retired nested field must
-/// classify under the path serde_ignored actually emits.
+/// classify under the path `serde_ignored` actually emits.
 #[test]
 fn retired_full_alias_show_settings_section_is_diagnosed_and_spelling_preserved() {
     let temp = TempConfig::new("retired-full-alias");
     temp.write(
-        r#"# alias fixture
+        r"# alias fixture
 [ui.toolbar.mode_overrides.full]
 # regular-mode alias spelling
 show_settings_section = false
 show_presets = true
-"#,
+",
     );
 
     let document = ConfigDocument::load_from_path(&temp.path).expect("load full alias fixture");

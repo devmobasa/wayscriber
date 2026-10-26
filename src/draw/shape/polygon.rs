@@ -149,8 +149,8 @@ fn rhombus_points(start: (i32, i32), end: (i32, i32)) -> Vec<(i32, i32)> {
 
 fn regular_polygon_points(start: (i32, i32), end: (i32, i32), sides: u8) -> Vec<(i32, i32)> {
     let sides = clamp_regular_sides(sides);
-    let center_x = (start.0 as f64 + end.0 as f64) / 2.0;
-    let center_y = (start.1 as f64 + end.1 as f64) / 2.0;
+    let center_x = f64::midpoint(f64::from(start.0), f64::from(end.0));
+    let center_y = f64::midpoint(f64::from(start.1), f64::from(end.1));
     let radius_x = f64::from(end.0.abs_diff(start.0)) / 2.0;
     let radius_y = f64::from(end.1.abs_diff(start.1)) / 2.0;
     let radius = radius_x.min(radius_y);
@@ -172,7 +172,7 @@ const fn sorted_pair(a: i32, b: i32) -> (i32, i32) {
 }
 
 fn midpoint_i32(a: i32, b: i32) -> i32 {
-    ((i64::from(a) + i64::from(b)) / 2) as i32
+    i64::midpoint(i64::from(a), i64::from(b)) as i32
 }
 
 #[cfg(test)]

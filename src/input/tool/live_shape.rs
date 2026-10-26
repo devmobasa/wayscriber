@@ -183,8 +183,8 @@ impl Bounds {
 
     fn center(self) -> (f64, f64) {
         (
-            (f64::from(self.min_x) + f64::from(self.max_x)) / 2.0,
-            (f64::from(self.min_y) + f64::from(self.max_y)) / 2.0,
+            f64::midpoint(f64::from(self.min_x), f64::from(self.max_x)),
+            f64::midpoint(f64::from(self.min_y), f64::from(self.max_y)),
         )
     }
 }

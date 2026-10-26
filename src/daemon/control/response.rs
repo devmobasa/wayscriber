@@ -93,7 +93,7 @@ fn cancel_daemon_toggle_command(command: &DaemonToggleCommand) {
     let payload = match canceled_daemon_toggle_payload(command) {
         Ok(payload) => payload,
         Err(err) => {
-            warn!("Failed to serialize daemon cancellation command: {}", err);
+            warn!("Failed to serialize daemon cancellation command: {err}");
             clear_daemon_toggle_command_files(command);
             return;
         }

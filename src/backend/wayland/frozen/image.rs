@@ -51,7 +51,7 @@ pub(in crate::backend::wayland) fn validate_shm_buffer_layout(
 }
 
 impl FrozenImage {
-    /// Apply the wl_output transform advertised for the captured output.
+    /// Apply the `wl_output` transform advertised for the captured output.
     ///
     /// WLR screencopy buffers are returned in output framebuffer coordinates.
     /// Frozen/zoom rendering paints them onto a logical surface, so rotated or

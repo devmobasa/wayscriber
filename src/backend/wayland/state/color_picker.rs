@@ -15,7 +15,7 @@ impl WaylandState {
     /// Copies the color captured when the request was made as hex.
     pub(in crate::backend::wayland) fn handle_copy_hex_color(&mut self, color: Color) {
         let hex = color_to_hex(color);
-        log::info!("Hex copy requested: {}", hex);
+        log::info!("Hex copy requested: {hex}");
         self.focus
             .suppress_exit_for(Instant::now(), Duration::from_millis(1500));
 
@@ -114,7 +114,7 @@ impl WaylandState {
                 return;
             }
             Ok(Err(ClipboardTextError::Other(err))) => {
-                log::warn!("wl-paste failed for hex paste: {}", err);
+                log::warn!("wl-paste failed for hex paste: {err}");
                 self.input_state.push_toast(
                     ToastPriority::Info,
                     "color_picker",

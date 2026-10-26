@@ -88,8 +88,7 @@ impl InputState {
                     info!(
                         "Render profile {}",
                         self.active_render_profile()
-                            .map(|profile| profile.name())
-                            .unwrap_or("off")
+                            .map_or("off", |profile| profile.name())
                     );
                 }
                 true
@@ -100,8 +99,7 @@ impl InputState {
                     info!(
                         "Render profile {}",
                         self.active_render_profile()
-                            .map(|profile| profile.name())
-                            .unwrap_or("off")
+                            .map_or("off", |profile| profile.name())
                     );
                 }
                 true
@@ -282,7 +280,7 @@ impl InputState {
         } else {
             let message = tr("Input HUD disabled");
             self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
-            info!("{}", message);
+            info!("{message}");
         }
     }
 
@@ -357,7 +355,7 @@ impl InputState {
             self.close_radial_menu();
         } else if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
             let (x, y) = self.pointer_position();
-            self.open_radial_menu(x as f64, y as f64);
+            self.open_radial_menu(f64::from(x), f64::from(y));
         }
     }
 

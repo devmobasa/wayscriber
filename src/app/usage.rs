@@ -7,7 +7,7 @@ fn default_action_bindings() -> HashMap<Action, Vec<Shortcut>> {
     match KeybindingsConfig::default().build_action_bindings() {
         Ok(bindings) => bindings,
         Err(err) => {
-            log::warn!("Failed to build default keybindings: {}", err);
+            log::warn!("Failed to build default keybindings: {err}");
             HashMap::new()
         }
     }

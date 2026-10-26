@@ -55,11 +55,11 @@ pub struct TabletInputConfig {
     #[serde(default = "default_pressure_thickness_scale_step")]
     pub pressure_thickness_scale_step: f64,
 
-    /// Binding for the primary barrel button (BTN_STYLUS / button 331).
+    /// Binding for the primary barrel button (`BTN_STYLUS` / button 331).
     #[serde(default = "default_stylus_button")]
     pub stylus_button: StylusButtonBinding,
 
-    /// Binding for the secondary barrel button (BTN_STYLUS2 / button 332).
+    /// Binding for the secondary barrel button (`BTN_STYLUS2` / button 332).
     #[serde(default = "default_stylus_button2")]
     pub stylus_button2: StylusButtonBinding,
 }

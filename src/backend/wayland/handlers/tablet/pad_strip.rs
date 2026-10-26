@@ -16,16 +16,16 @@ impl Dispatch<ZwpTabletPadStripV2, ()> for WaylandState {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_strip_v2::Event;
         match event {
             Event::Source { source } => {
-                debug!("Tablet pad strip source: {:?}", source);
+                debug!("Tablet pad strip source: {source:?}");
             }
             Event::Position { position } => {
-                debug!("Tablet pad strip position: {}", position);
+                debug!("Tablet pad strip position: {position}");
             }
             Event::Stop => {
                 debug!("Tablet pad strip interaction stopped");
             }
             Event::Frame { time } => {
-                debug!("Tablet pad strip frame @ {}", time);
+                debug!("Tablet pad strip frame @ {time}");
             }
             _ => {}
         }

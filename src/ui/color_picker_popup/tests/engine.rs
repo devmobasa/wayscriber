@@ -5,7 +5,7 @@ use super::*;
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, 800 * density, 600 * density).unwrap();
-    surface.set_device_scale(density as f64, density as f64);
+    surface.set_device_scale(f64::from(density), f64::from(density));
     let ctx = cairo::Context::new(&surface).unwrap();
     paint(&ctx);
     drop(ctx);
@@ -41,10 +41,10 @@ fn retained_color_popup_engine_shares_tooltip_damage_and_paint_across_targets() 
                 assert!(bounds.1 + bounds.3 >= tip.1 + tip.3 + tooltip::TOOLTIP_PAINT_OUTSET);
             }
             let actual = pixels(density, |ctx| {
-                render_color_picker_popup_with_engine(&engine, ctx, &input, 800, 600)
+                render_color_picker_popup_with_engine(&engine, ctx, &input, 800, 600);
             });
             let expected = pixels(density, |ctx| {
-                render_color_picker_popup(ctx, &input, 800, 600)
+                render_color_picker_popup(ctx, &input, 800, 600);
             });
             assert!(
                 actual == expected,

@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_core_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.core.exit, Action::Exit)?;
         inserter.insert_all(&self.core.enter_text_mode, Action::EnterTextMode)?;

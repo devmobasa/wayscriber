@@ -31,8 +31,8 @@ impl InputState {
             // Track the outermost band so the whole menu (size ring included)
             // still fits the screen edges.
             let margin = SIZE_OUTER + 4.0;
-            let cx = clamp_center_coordinate(*center_x, width as f64, margin);
-            let cy = clamp_center_coordinate(*center_y, height as f64, margin);
+            let cx = clamp_center_coordinate(*center_x, f64::from(width), margin);
+            let cy = clamp_center_coordinate(*center_y, f64::from(height), margin);
 
             self.radial_menu.layout = Some(RadialMenuLayout {
                 center_x: cx,

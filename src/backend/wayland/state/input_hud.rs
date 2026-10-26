@@ -411,10 +411,10 @@ impl WaylandState {
                     .input_state
                     .note_input_hud_system_key(label, bare_modifier),
                 SystemInputEvent::Mouse { label } => {
-                    self.input_state.note_input_hud_system_mouse(label)
+                    self.input_state.note_input_hud_system_mouse(label);
                 }
                 SystemInputEvent::Scroll { label } => {
-                    self.input_state.note_input_hud_system_scroll(label)
+                    self.input_state.note_input_hud_system_scroll(label);
                 }
                 SystemInputEvent::Failed(reason) => {
                     failure = Some(reason);

@@ -196,7 +196,7 @@ pub(super) fn mouse_tool_preview_damage_rect(
     width: u32,
     height: u32,
 ) -> Option<Rect> {
-    let bounds = tool_preview_bubble(thickness, pos.0, pos.1, width as f64, height as f64);
+    let bounds = tool_preview_bubble(thickness, pos.0, pos.1, f64::from(width), f64::from(height));
     effect_rect(bounds, width, height)
 }
 
@@ -283,7 +283,10 @@ mod tests {
             overlay::CURSOR_PREVIEW_DOT_MAX,
             "very thick strokes cap so the bubble stays compact"
         );
-        let mid = (overlay::CURSOR_PREVIEW_DOT_MIN + overlay::CURSOR_PREVIEW_DOT_MAX) / 2.0;
+        let mid = f64::midpoint(
+            overlay::CURSOR_PREVIEW_DOT_MIN,
+            overlay::CURSOR_PREVIEW_DOT_MAX,
+        );
         assert_eq!(
             tool_preview_dot_diameter(mid),
             mid,
@@ -315,7 +318,7 @@ mod tests {
         assert!(by + bubble_h <= 600.0, "clamped within bottom edge");
     }
 
-    /// Little-endian ARgb32 stores premultiplied BGRA in memory.
+    /// Little-endian `ARgb32` stores premultiplied BGRA in memory.
     fn has_strong_green_pixel(pixels: &[u8]) -> bool {
         pixels.as_chunks::<4>().0.iter().any(|px| {
             let (b, g, r, a) = (px[0], px[1], px[2], px[3]);

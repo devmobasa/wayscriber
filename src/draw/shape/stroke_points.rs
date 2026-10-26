@@ -82,10 +82,10 @@ mod tests {
             let expected = [(18.375, 8.25), (23.625, 9.0625)];
             match &transformed {
                 Shape::Freehand { points, .. } | Shape::MarkerStroke { points, .. } => {
-                    assert_eq!(points, &expected)
+                    assert_eq!(points, &expected);
                 }
                 Shape::FreehandPressure { points, .. } => {
-                    assert_eq!(points, &[(18.375, 8.25, 2.0), (23.625, 9.0625, 4.0)])
+                    assert_eq!(points, &[(18.375, 8.25, 2.0), (23.625, 9.0625, 4.0)]);
                 }
                 _ => unreachable!(),
             }

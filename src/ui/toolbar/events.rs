@@ -305,7 +305,7 @@ pub enum ToolbarEvent {
     /// Toggle page counter in the status bar
     ToggleStatusPageBadge(bool),
     /// Toggle the board/page badge when the status bar is visible
-    /// (renamed from TogglePageBadgeWithStatusBar for clarity)
+    /// (renamed from `TogglePageBadgeWithStatusBar` for clarity)
     ToggleFloatingBadgeAlways(bool),
     /// Set toolbar layout mode
     SetToolbarLayoutMode(ToolbarLayoutMode),

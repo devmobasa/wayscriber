@@ -266,12 +266,12 @@ fn keyboard_context_menu_focuses_edit_for_selected_text() {
     state.set_selection(vec![shape_id]);
     state.toggle_context_menu_via_keyboard();
 
-    let focus_index = match &state.context_menu.state {
-        ContextMenuState::Open {
-            keyboard_focus: Some(index),
-            ..
-        } => index,
-        _ => panic!("Context menu should be open with focus"),
+    let ContextMenuState::Open {
+        keyboard_focus: Some(focus_index),
+        ..
+    } = &state.context_menu.state
+    else {
+        panic!("Context menu should be open with focus");
     };
     let entries = state.context_menu_entries();
     assert_eq!(entries[*focus_index].command, Some(MenuCommand::EditText));

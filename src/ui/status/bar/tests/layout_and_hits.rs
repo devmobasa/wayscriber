@@ -71,8 +71,8 @@ fn pill_origin_stays_on_screen_for_all_corners() {
             pill_width,
             pill_height,
         );
-        assert!(bx >= inset, "bx {} below inset for {:?}", bx, position);
-        assert!(by >= inset, "by {} below inset for {:?}", by, position);
+        assert!(bx >= inset, "bx {bx} below inset for {position:?}");
+        assert!(by >= inset, "by {by} below inset for {position:?}");
         assert!(by <= screen_height - inset - pill_height);
     }
 

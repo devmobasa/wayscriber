@@ -338,81 +338,81 @@ pub(super) fn encode(wire: &RuntimeUiWireState) -> Result<Value, RuntimeUiWireEr
         )?;
         match target {
             InteractionSeedTarget::TopPinned => {
-                insert_recognized(&mut toolbar, "top_pinned", entry)
+                insert_recognized(&mut toolbar, "top_pinned", entry);
             }
             InteractionSeedTarget::TopMinimized => {
-                insert_recognized(&mut toolbar, "top_minimized", entry)
+                insert_recognized(&mut toolbar, "top_minimized", entry);
             }
             InteractionSeedTarget::ItemVisibility(item) => {
-                insert_recognized(&mut visibility, item.as_str(), entry)
+                insert_recognized(&mut visibility, item.as_str(), entry);
             }
             InteractionSeedTarget::ItemOrder(group) => {
-                insert_recognized(&mut order, order_group_wire_id(*group), entry)
+                insert_recognized(&mut order, order_group_wire_id(*group), entry);
             }
             InteractionSeedTarget::BoardPin(id) => insert_recognized(&mut boards_pinned, id, entry),
             InteractionSeedTarget::TopPosition => {
-                insert_recognized(&mut toolbar, "top_position", entry)
+                insert_recognized(&mut toolbar, "top_position", entry);
             }
             InteractionSeedTarget::ToolbarLayoutMode => {
-                insert_recognized(&mut toolbar, "layout_mode", entry)
+                insert_recognized(&mut toolbar, "layout_mode", entry);
             }
             InteractionSeedTarget::TopDisplayMode => {
-                insert_recognized(&mut toolbar, "top_display_mode", entry)
+                insert_recognized(&mut toolbar, "top_display_mode", entry);
             }
             InteractionSeedTarget::StatusBarInteractive => {
-                insert_recognized(&mut toolbar, "status_bar_interactive", entry)
+                insert_recognized(&mut toolbar, "status_bar_interactive", entry);
             }
             InteractionSeedTarget::StatusBarItem(item) => {
-                insert_recognized(&mut status_bar_items, item.config_id(), entry)
+                insert_recognized(&mut status_bar_items, item.config_id(), entry);
             }
             InteractionSeedTarget::SectionVisibility(flag) => {
-                insert_recognized(&mut sections, flag.item_id().as_str(), entry)
+                insert_recognized(&mut sections, flag.item_id().as_str(), entry);
             }
             InteractionSeedTarget::StatusBar => {
-                insert_recognized(&mut toolbar, "status_bar", entry)
+                insert_recognized(&mut toolbar, "status_bar", entry);
             }
             InteractionSeedTarget::StatusBoardBadge => {
-                insert_recognized(&mut toolbar, "status_board_badge", entry)
+                insert_recognized(&mut toolbar, "status_board_badge", entry);
             }
             InteractionSeedTarget::StatusPageBadge => {
-                insert_recognized(&mut toolbar, "status_page_badge", entry)
+                insert_recognized(&mut toolbar, "status_page_badge", entry);
             }
             InteractionSeedTarget::FloatingBadgeAlways => {
-                insert_recognized(&mut toolbar, "floating_badge_always", entry)
+                insert_recognized(&mut toolbar, "floating_badge_always", entry);
             }
             InteractionSeedTarget::ToolbarIcons => {
-                insert_recognized(&mut toolbar, "use_icons", entry)
+                insert_recognized(&mut toolbar, "use_icons", entry);
             }
             InteractionSeedTarget::ToolbarMoreColors => {
-                insert_recognized(&mut toolbar, "show_more_colors", entry)
+                insert_recognized(&mut toolbar, "show_more_colors", entry);
             }
             InteractionSeedTarget::ToolbarContextAwareUi => {
-                insert_recognized(&mut toolbar, "context_aware_ui", entry)
+                insert_recognized(&mut toolbar, "context_aware_ui", entry);
             }
             InteractionSeedTarget::ToolbarPresetToasts => {
-                insert_recognized(&mut toolbar, "show_preset_toasts", entry)
+                insert_recognized(&mut toolbar, "show_preset_toasts", entry);
             }
             InteractionSeedTarget::ToolbarIdleFade => {
-                insert_recognized(&mut toolbar, "idle_fade", entry)
+                insert_recognized(&mut toolbar, "idle_fade", entry);
             }
             InteractionSeedTarget::ToolbarToolPreview => {
-                insert_recognized(&mut toolbar, "show_tool_preview", entry)
+                insert_recognized(&mut toolbar, "show_tool_preview", entry);
             }
             InteractionSeedTarget::ToolbarDelaySliders => {
-                insert_recognized(&mut toolbar, "show_delay_sliders", entry)
+                insert_recognized(&mut toolbar, "show_delay_sliders", entry);
             }
             InteractionSeedTarget::HistoryCustomSection => {
-                insert_recognized(&mut toolbar, "history_custom_section", entry)
+                insert_recognized(&mut toolbar, "history_custom_section", entry);
             }
             InteractionSeedTarget::InputHud => insert_recognized(&mut toolbar, "input_hud", entry),
             InteractionSeedTarget::ClickHighlight => {
-                insert_recognized(&mut toolbar, "click_highlight", entry)
+                insert_recognized(&mut toolbar, "click_highlight", entry);
             }
             InteractionSeedTarget::ClickHighlightToolRing => {
-                insert_recognized(&mut toolbar, "click_highlight_tool_ring", entry)
+                insert_recognized(&mut toolbar, "click_highlight_tool_ring", entry);
             }
             InteractionSeedTarget::FloatingBadge => {
-                insert_recognized(&mut toolbar, "floating_badge", entry)
+                insert_recognized(&mut toolbar, "floating_badge", entry);
             }
             InteractionSeedTarget::ZoomChip => insert_recognized(&mut toolbar, "zoom_chip", entry),
         }

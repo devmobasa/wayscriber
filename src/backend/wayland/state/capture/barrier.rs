@@ -439,13 +439,13 @@ impl WaylandState {
                     self.cancel_overlay_capture_preflight(reason, None);
                     return;
                 };
-                if !self.suppression.capture_suppressed() {
+                if self.suppression.capture_suppressed() {
+                    self.begin_pending_capture(request);
+                } else {
                     log::warn!(
                         "Capture preflight completed without capture suppression; cancelling"
                     );
                     self.cancel_overlay_capture_preflight(reason, None);
-                } else {
-                    self.begin_pending_capture(request);
                 }
             }
             OverlaySuppression::None | OverlaySuppression::ExternalDialog => {

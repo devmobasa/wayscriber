@@ -26,7 +26,7 @@ pub enum ToolOptionsKind {
     Shape,
     /// Arrow tool: thickness + labels toggle + counter
     Arrow,
-    /// StepMarker tool: size + counter
+    /// `StepMarker` tool: size + counter
     StepMarker,
     /// Spotlight tool: magnification only
     Spotlight,

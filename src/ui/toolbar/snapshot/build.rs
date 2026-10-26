@@ -35,13 +35,9 @@ impl ToolbarSnapshot {
             && state.text_editing.mode() == TextInputMode::StickyNote;
         let override_tool = state.tool_override();
         let thickness_targets_eraser = active_tool.uses_eraser_size()
-            || override_tool
-                .map(|tool| tool.uses_eraser_size())
-                .unwrap_or(false);
+            || override_tool.is_some_and(|tool| tool.uses_eraser_size());
         let thickness_targets_marker = active_tool.uses_marker_opacity()
-            || override_tool
-                .map(|tool| tool.uses_marker_opacity())
-                .unwrap_or(false);
+            || override_tool.is_some_and(|tool| tool.uses_marker_opacity());
         let eraser_kind = state.style.eraser_kind;
         let eraser_mode = state.style.eraser_mode;
         let thickness_value = if thickness_targets_eraser {

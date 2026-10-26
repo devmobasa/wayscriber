@@ -8,7 +8,7 @@ impl WaylandState {
             (0.0, 0.0)
         } else {
             let (x, y) = self.input_state.boards.active_frame().view_offset();
-            (x as f64, y as f64)
+            (f64::from(x), f64::from(y))
         }
     }
 

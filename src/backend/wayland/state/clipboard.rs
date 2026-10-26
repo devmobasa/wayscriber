@@ -259,7 +259,7 @@ impl WaylandState {
                 self.start_system_clipboard_read(request);
             }
             PasteAction::StaleCompletion { request_id } => {
-                log::debug!("Ignoring stale clipboard paste completion {}", request_id);
+                log::debug!("Ignoring stale clipboard paste completion {request_id}");
             }
             PasteAction::ApplyPrivateSelection { request, shapes } => {
                 let pasted = self.input_state.paste_clipboard_shapes_from_request_with(
@@ -631,7 +631,7 @@ fn apply_transfer_effects(input_state: &mut InputState, effects: Vec<TransferEff
     for effect in effects {
         match effect {
             TransferEffect::SupersedeLocalGeneration { generation } => {
-                input_state.mark_selection_clipboard_superseded_for_generation(Some(generation))
+                input_state.mark_selection_clipboard_superseded_for_generation(Some(generation));
             }
         }
     }

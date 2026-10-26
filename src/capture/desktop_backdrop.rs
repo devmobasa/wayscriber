@@ -223,7 +223,7 @@ fn desktop_backdrop_result(
         width: width_i32,
         height: height_i32,
         stride,
-        logical_to_image_scale_x: width as f64 / logical_width as f64,
-        logical_to_image_scale_y: height as f64 / logical_height as f64,
+        logical_to_image_scale_x: f64::from(width) / f64::from(logical_width),
+        logical_to_image_scale_y: f64::from(height) / f64::from(logical_height),
     })
 }

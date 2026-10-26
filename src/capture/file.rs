@@ -50,7 +50,7 @@ impl Default for FileSaveConfig {
 pub fn generate_filename(template: &str, format: &str) -> String {
     let now = now_local();
     let filename = format_with_template(now, template);
-    format!("{}.{}", filename, format)
+    format!("{filename}.{format}")
 }
 
 fn sanitize_save_extension(format: &str) -> Option<String> {
@@ -219,7 +219,7 @@ pub fn save_screenshot(
 
     // Verify the write
     let written_size = fs::metadata(&file_path)?.len();
-    log::debug!("File written: {} bytes", written_size);
+    log::debug!("File written: {written_size} bytes");
 
     log::info!("Screenshot saved successfully: {}", file_path.display());
 

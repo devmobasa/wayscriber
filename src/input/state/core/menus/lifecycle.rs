@@ -106,10 +106,9 @@ impl InputState {
                     .boards
                     .active_frame()
                     .shape(selection[0])
-                    .map(|shape| {
+                    .is_some_and(|shape| {
                         matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
-                    })
-                    .unwrap_or(false);
+                    });
             let anchor = self.keyboard_shape_menu_anchor(measurer, &selection);
             self.update_pointer_position_synthetic(anchor.0, anchor.1);
             self.open_context_menu(anchor, selection, ContextMenuKind::Shape, None);
@@ -128,7 +127,7 @@ impl InputState {
         let padding = 16;
         let x = padding;
         let y = match &self.context_menu.layout {
-            Some(layout) => (layout.origin_y + layout.height + padding as f64) as i32,
+            Some(layout) => (layout.origin_y + layout.height + f64::from(padding)) as i32,
             None => padding,
         };
         (x, y)

@@ -364,8 +364,7 @@ impl RuntimeUiStateController {
         let attempt = self
             .active_recovery
             .as_ref()
-            .map(|attempt| attempt.id)
-            .unwrap_or(RecoveryAttemptId(0));
+            .map_or(RecoveryAttemptId(0), |attempt| attempt.id);
         let recovery = self.rotate_and_checkout_handle();
         if let Some(barrier) = &mut self.active_barrier {
             barrier.phase = ControllerBarrierPhase::PersistenceUnhealthy {

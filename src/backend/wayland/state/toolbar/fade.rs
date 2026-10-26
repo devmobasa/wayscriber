@@ -132,7 +132,7 @@ impl WaylandState {
             return None;
         }
         let (x, y) = self.pointer.position();
-        Some((x as f64, y as f64))
+        Some((f64::from(x), f64::from(y)))
     }
 
     /// The top strip's bounds in canvas coordinates. Layer-shell and GTK
@@ -148,8 +148,8 @@ impl WaylandState {
         Some((
             self.inline_top_base_x() + offset.0,
             self.inline_top_base_y() + offset.1,
-            width as f64,
-            height as f64,
+            f64::from(width),
+            f64::from(height),
         ))
     }
 }

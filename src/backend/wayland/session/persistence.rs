@@ -511,7 +511,7 @@ mod tests {
         loop {
             // SAFETY: pollfd and the runtime-owned descriptor remain valid for
             // this bounded test wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
             if ready > 0 {
                 assert_ne!(pollfd.revents & libc::POLLIN, 0);
                 return;

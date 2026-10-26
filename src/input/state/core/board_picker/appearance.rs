@@ -485,7 +485,7 @@ impl InputState {
 
         let picker_right = layout.origin_x + layout.width;
         let center_x = if layout.page_panel_enabled {
-            (layout.page_panel_x + picker_right) / 2.0
+            f64::midpoint(layout.page_panel_x, picker_right)
         } else {
             layout.origin_x + layout.width / 2.0
         };

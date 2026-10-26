@@ -176,7 +176,7 @@ pub(super) fn handle_pending_actions(
             InputEffect::KeybindingEdit(request) => state.handle_keybinding_edit(request),
             InputEffect::Backend(action) => apply_backend_effect(state, action),
             InputEffect::ClipboardFallbackSave(request) => {
-                state.start_clipboard_fallback_save(request)
+                state.start_clipboard_fallback_save(request);
             }
             InputEffect::FrozenPass { user_requested } => {
                 handle_frozen_toggle(state, user_requested);
@@ -253,9 +253,7 @@ fn frozen_toggle_pass_decision(
     frozen_active: bool,
     frozen_enabled: bool,
 ) -> FrozenTogglePassDecision {
-    let user_action = if !user_toggle {
-        FrozenUserToggleAction::None
-    } else {
+    let user_action = if user_toggle {
         match slot {
             Some(record)
                 if record.stage == AcquisitionStage::Queued
@@ -268,6 +266,8 @@ fn frozen_toggle_pass_decision(
             None if !frozen_enabled => FrozenUserToggleAction::ReportUnavailable,
             None => FrozenUserToggleAction::RequestUserFreeze,
         }
+    } else {
+        FrozenUserToggleAction::None
     };
     FrozenTogglePassDecision {
         user_action,
@@ -367,8 +367,10 @@ fn handle_capture_worker_failure(
         state.capture.finish_capture_lifecycle();
         let message = operation
             .filter(|operation| *operation == ImageOperationKind::Screenshot)
-            .map(|_| friendly_capture_error(CaptureFailureKind::Other))
-            .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
+            .map_or_else(
+                || "Capture services stopped unexpectedly.".to_string(),
+                |_| friendly_capture_error(CaptureFailureKind::Other),
+            );
         warn!("Board region capture worker failed: {error}");
         state
             .input_state
@@ -702,8 +704,7 @@ fn handle_capture_manager_failure(
     notification::send_notification_async(
         &state.tokio_handle,
         operation
-            .map(ImageOperationKind::failure_title)
-            .unwrap_or(tr("Capture failed"))
+            .map_or(tr("Capture failed"), ImageOperationKind::failure_title)
             .to_string(),
         message,
         Some("dialog-error".to_string()),

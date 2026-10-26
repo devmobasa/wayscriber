@@ -26,9 +26,8 @@ impl AboutWindowState {
             self.pool = Some(pool);
         }
 
-        let pool = match self.pool.as_mut() {
-            Some(pool) => pool,
-            None => return Ok(()),
+        let Some(pool) = self.pool.as_mut() else {
+            return Ok(());
         };
         let (buffer, canvas) = pool
             .create_buffer(
@@ -58,7 +57,7 @@ impl AboutWindowState {
         let _ = ctx.paint();
         ctx.set_operator(cairo::Operator::Over);
         if self.scale > 1 {
-            ctx.scale(self.scale as f64, self.scale as f64);
+            ctx.scale(f64::from(self.scale), f64::from(self.scale));
         }
 
         draw::draw_about(

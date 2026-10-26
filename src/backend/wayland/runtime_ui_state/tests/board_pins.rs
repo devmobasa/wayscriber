@@ -125,12 +125,12 @@ fn session_only_board_pin_survives_startup_until_session_identity_is_known() {
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
-        br#"version = 1
+        br"version = 1
 
 [boards.pinned.session-board]
 seed = false
 value = true
-"#,
+",
     )
     .unwrap();
     let config = Config::default();
@@ -166,12 +166,12 @@ fn absent_provisional_board_pin_is_pruned_after_session_reconciliation() {
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
-        br#"version = 1
+        br"version = 1
 
 [boards.pinned.stale-session-board]
 seed = false
 value = true
-"#,
+",
     )
     .unwrap();
     let config = Config::default();
@@ -202,12 +202,12 @@ fn newly_created_board_does_not_adopt_a_provisional_session_pin() {
     let runtime_path = temp.path().join("runtime-ui.toml");
     fs::write(
         &runtime_path,
-        br#"version = 1
+        br"version = 1
 
 [boards.pinned.board-6]
 seed = false
 value = true
-"#,
+",
     )
     .unwrap();
     let config = Config::default();

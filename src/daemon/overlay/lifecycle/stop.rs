@@ -41,10 +41,7 @@ impl OverlayLifecycle {
         if let Some(pid) = self.child.display_pid() {
             let stop_started = Instant::now();
             let timeout = Duration::from_secs(2);
-            info!(
-                "Stopping overlay process (pid {}, graceful_timeout={:?})",
-                pid, timeout
-            );
+            info!("Stopping overlay process (pid {pid}, graceful_timeout={timeout:?})");
             if let Err(err) = self.child.begin_stop() {
                 warn!("Failed to signal overlay process: {err:#}");
             }

@@ -26,7 +26,7 @@ fn snapshot_for(style: ArrowStyle, open: bool) -> ToolbarSnapshot {
 fn tree_for(snapshot: &ToolbarSnapshot) -> WidgetTree {
     let engine = UiTextEngine::default();
     let (w, h) = top_size(&engine, snapshot);
-    build_top_view(&engine, snapshot, w as f64, h as f64)
+    build_top_view(&engine, snapshot, f64::from(w), f64::from(h))
 }
 
 fn menu_ids(tree: &WidgetTree) -> Vec<String> {
@@ -163,13 +163,16 @@ fn the_open_menu_grows_height_and_input_but_not_width() {
     assert!(top_extra_height(&engine, &open) > top_extra_height(&engine, &closed));
 
     let (w, h) = top_size(&engine, &open);
-    let tree = build_top_view(&engine, &open, w as f64, h as f64);
+    let tree = build_top_view(&engine, &open, f64::from(w), f64::from(h));
     let panel = tree
         .node_by_id(&"top.arrow-style.panel".into())
         .expect("panel")
         .rect;
-    assert!(panel.1 + panel.3 <= h as f64, "the menu fits the surface");
-    let rects = top_input_rects(&engine, &open, w as f64, h as f64).expect("rects");
+    assert!(
+        panel.1 + panel.3 <= f64::from(h),
+        "the menu fits the surface"
+    );
+    let rects = top_input_rects(&engine, &open, f64::from(w), f64::from(h)).expect("rects");
     assert!(
         rects.iter().any(|rect| contains(*rect, panel)),
         "the whole menu accepts input: {panel:?} in {rects:?}"

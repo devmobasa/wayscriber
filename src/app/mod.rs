@@ -314,9 +314,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         if maybe_detach_active(&cli)? {
             return Ok(());
         }
-        let _overlay_lock = match acquire_overlay_lock()? {
-            Some(lock) => lock,
-            None => return Ok(()),
+        let Some(_overlay_lock) = acquire_overlay_lock()? else {
+            return Ok(());
         };
         protocol_v2::publish_ready_from_environment()
             .context("failed to publish daemon overlay readiness")?;

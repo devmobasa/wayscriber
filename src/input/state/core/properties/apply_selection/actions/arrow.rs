@@ -175,7 +175,7 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let delta = SELECTION_ARROW_LENGTH_STEP * direction as f64;
+        let delta = SELECTION_ARROW_LENGTH_STEP * f64::from(direction);
         let result = self.apply_selection_change_with(
             measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),
@@ -201,7 +201,7 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let delta = SELECTION_ARROW_ANGLE_STEP * direction as f64;
+        let delta = SELECTION_ARROW_ANGLE_STEP * f64::from(direction);
         let result = self.apply_selection_change_with(
             measurer,
             |shape| matches!(shape, Shape::Arrow { .. }),

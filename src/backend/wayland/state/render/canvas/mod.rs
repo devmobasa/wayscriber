@@ -160,7 +160,7 @@ impl WaylandState {
         // Scale subsequent drawing to logical coordinates
         let _ = ctx.save();
         if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
+            ctx.scale(f64::from(scale), f64::from(scale));
         }
 
         if canvas_transform_active {
@@ -207,7 +207,7 @@ impl WaylandState {
         // completing it warns through its own action instead.
         let spotlight_cursor = render_transients.then(|| {
             let (screen_x, screen_y) = self.pointer.position();
-            self.canvas_world_coords(screen_x as f64, screen_y as f64)
+            self.canvas_world_coords(f64::from(screen_x), f64::from(screen_y))
         });
         let SpotlightFrameRegions {
             regions: spotlight_regions,
@@ -295,13 +295,12 @@ impl WaylandState {
         self.render_selection_overlays(ctx);
 
         let (mx, my) = self.canvas_world_coords(
-            self.pointer.position().0 as f64,
-            self.pointer.position().1 as f64,
+            f64::from(self.pointer.position().0),
+            f64::from(self.pointer.position().1),
         );
         let (hover_mx, hover_my) = self
             .stylus_hover_cursor_position()
-            .map(|(x, y)| self.canvas_world_coords(x, y))
-            .unwrap_or((mx, my));
+            .map_or((mx, my), |(x, y)| self.canvas_world_coords(x, y));
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 
@@ -404,7 +403,7 @@ fn render_committed_canvas_shapes(
             shape,
             &replay_ctx,
             text_halo_enabled,
-        )
+        );
     };
     let Some(bounds) = union_damage_bounds(damage_world) else {
         for shape in shapes {

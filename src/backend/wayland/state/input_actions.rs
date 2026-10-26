@@ -32,19 +32,19 @@ impl InputHudSnapshot {
 impl WaylandState {
     pub(in crate::backend::wayland) fn apply_input_key(&mut self, key: Key) {
         self.apply_input_update(|input_state, resources| {
-            input_state.on_key_press_with_resources(resources, key)
+            input_state.on_key_press_with_resources(resources, key);
         });
     }
 
     pub(in crate::backend::wayland) fn apply_input_key_repeat(&mut self, key: Key) {
         self.apply_input_update(|input_state, resources| {
-            input_state.on_key_repeat_with_resources(resources, key)
+            input_state.on_key_repeat_with_resources(resources, key);
         });
     }
 
     pub(in crate::backend::wayland) fn dispatch_input_action(&mut self, action: Action) {
         self.apply_input_update(|input_state, resources| {
-            input_state.handle_action_with_resources(resources, action)
+            input_state.handle_action_with_resources(resources, action);
         });
     }
 
@@ -56,7 +56,7 @@ impl WaylandState {
         anchor: ZoomAnchor,
     ) {
         self.apply_input_update(|input_state, resources| {
-            input_state.handle_action_anchored(resources, action, anchor)
+            input_state.handle_action_anchored(resources, action, anchor);
         });
     }
 

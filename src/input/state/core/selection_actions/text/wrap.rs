@@ -5,7 +5,7 @@ const TEXT_WRAP_MIN_WIDTH: i32 = 40;
 
 impl InputState {
     pub(crate) fn clamp_text_wrap_width(&self, base_x: i32, cursor_x: i32, size: f64) -> i32 {
-        let min_width = (size * 2.0).round().max(TEXT_WRAP_MIN_WIDTH as f64) as i32;
+        let min_width = (size * 2.0).round().max(f64::from(TEXT_WRAP_MIN_WIDTH)) as i32;
         let raw = cursor_x - base_x;
         let mut width = raw.max(1);
         let screen_width = self.view.screen_width().min(i32::MAX as u32) as i32;

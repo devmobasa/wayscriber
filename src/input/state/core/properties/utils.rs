@@ -59,9 +59,10 @@ pub(super) fn palette_position(
 
 /// The palette's name for `color`, or "Custom" for a color it does not hold.
 pub(super) fn color_label(palette: &[QuickColorPaletteEntry], color: Color) -> String {
-    color_palette_index(palette, color)
-        .map(|index| palette[index].label.clone())
-        .unwrap_or_else(|| "Custom".to_string())
+    color_palette_index(palette, color).map_or_else(
+        || "Custom".to_string(),
+        |index| palette[index].label.clone(),
+    )
 }
 
 pub(super) fn color_eq(a: &Color, b: &Color) -> bool {

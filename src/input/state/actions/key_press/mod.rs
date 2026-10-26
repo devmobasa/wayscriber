@@ -40,7 +40,7 @@ impl InputState {
     /// Handles all keyboard input including:
     /// - Drawing color selection (configurable keybindings)
     /// - Tool actions (text mode, clear, undo - configurable)
-    /// - Text input (when in TextInput state)
+    /// - Text input (when in `TextInput` state)
     /// - Exit commands (configurable)
     /// - Thickness adjustment (configurable)
     /// - Help toggle (configurable)

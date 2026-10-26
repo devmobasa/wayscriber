@@ -207,7 +207,7 @@ pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: Duration) -> bo
     let mut status = 0;
     loop {
         // SAFETY: child_pid names the raw-clone broker child owned by its guard.
-        let result = unsafe { libc::waitpid(child_pid, &mut status, libc::WNOHANG) };
+        let result = unsafe { libc::waitpid(child_pid, &raw mut status, libc::WNOHANG) };
         if result == child_pid {
             return true;
         }
@@ -232,7 +232,7 @@ pub(super) fn wait_for_broker_process(child_pid: libc::pid_t) {
     let mut status = 0;
     loop {
         // SAFETY: child_pid names the raw-clone broker child owned by its guard.
-        let result = unsafe { libc::waitpid(child_pid, &mut status, 0) };
+        let result = unsafe { libc::waitpid(child_pid, &raw mut status, 0) };
         if result == child_pid {
             break;
         }

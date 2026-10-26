@@ -56,7 +56,7 @@ pub(super) fn measure_status_bar(
     dot_diameter: f64,
     screen_width: u32,
 ) -> Option<StatusBarMeasurement> {
-    let max_width = screen_width as f64 * STATUS_BAR_MAX_WIDTH_FRACTION - style.padding * 2.0;
+    let max_width = f64::from(screen_width) * STATUS_BAR_MAX_WIDTH_FRACTION - style.padding * 2.0;
     let text_style = status_text_style(style.font_size);
     let sep_advance = engine
         .measure(text_style, SEGMENT_SEPARATOR, None)?

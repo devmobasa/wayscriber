@@ -1,6 +1,6 @@
 //! Runs one GTK test behind a private headless Weston with one frame event withheld.
 //!
-//! All protocol messages and SCM_RIGHTS descriptors pass through unchanged, except
+//! All protocol messages and `SCM_RIGHTS` descriptors pass through unchanged, except
 //! the selected popup callback and its `delete_id` event. The protocol tables
 //! compiled into `wayland-client` and `wayland-protocols` provide opcodes and
 //! new-object types; this fixture neither renders nor invents feedback.

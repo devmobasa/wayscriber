@@ -73,7 +73,7 @@ pub(crate) fn pan_badge_label(panned: bool) -> &'static str {
 
 /// Render a small badge indicating frozen mode (visible even when status bar is hidden).
 pub fn render_frozen_badge(ctx: &cairo::Context, screen_width: u32, _screen_height: u32) {
-    render_frozen_badge_with_engine(&UiTextEngine::default(), ctx, screen_width, _screen_height)
+    render_frozen_badge_with_engine(&UiTextEngine::default(), ctx, screen_width, _screen_height);
 }
 
 pub(crate) fn render_frozen_badge_with_engine(
@@ -85,7 +85,7 @@ pub(crate) fn render_frozen_badge_with_engine(
     draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
         frozen_badge_label(),
@@ -132,7 +132,7 @@ pub(crate) fn render_zoom_badge_with_engine(
     let height = draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
         &label,
@@ -182,7 +182,7 @@ pub(crate) fn render_pan_badge_with_engine(
     let height = draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
         &label,
@@ -206,7 +206,7 @@ pub fn render_editing_badge(
         screen_width,
         _screen_height,
         offset_y,
-    )
+    );
 }
 
 pub(crate) fn render_editing_badge_with_engine(
@@ -219,7 +219,7 @@ pub(crate) fn render_editing_badge_with_engine(
     draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
         editing_badge_label(),
@@ -251,7 +251,7 @@ pub fn render_page_badge(
         board_name,
         page_index,
         page_count,
-    )
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

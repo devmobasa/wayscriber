@@ -77,15 +77,12 @@ impl InputState {
             return false;
         }
 
-        let index = match self.current_properties_focus_or_hover() {
-            Some(index) => index,
-            None => {
-                return if forward {
-                    self.select_properties_edge_entry(true)
-                } else {
-                    self.select_properties_edge_entry(false)
-                };
-            }
+        let Some(index) = self.current_properties_focus_or_hover() else {
+            return if forward {
+                self.select_properties_edge_entry(true)
+            } else {
+                self.select_properties_edge_entry(false)
+            };
         };
 
         let mut next = if forward {

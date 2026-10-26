@@ -1,7 +1,7 @@
 //! Layer-surface management for the Wayland backend.
 //!
-//! This module owns the wl_surface/layer surface handle and the shm slot
-//! pool. WaylandState asks SurfaceState for buffers and size information
+//! This module owns the `wl_surface`, its layer-surface handle, and the shm slot
+//! pool. `WaylandState` asks `SurfaceState` for buffers and size information
 //! instead of juggling the raw objects directly.
 
 use anyhow::{Context, Result};
@@ -152,17 +152,16 @@ impl SurfaceState {
         self.frame_callbacks.clear();
     }
 
-    /// Returns the active wl_surface, if initialized.
+    /// Returns the active `wl_surface`, if initialized.
     pub fn wl_surface(&self) -> Option<&wl_surface::WlSurface> {
         self.wl_surface.as_ref()
     }
 
-    /// Returns true if the provided wl_surface belongs to this overlay surface state.
+    /// Returns true if the provided `wl_surface` belongs to this overlay surface state.
     pub fn is_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.wl_surface
             .as_ref()
-            .map(|current| current.id() == surface.id())
-            .unwrap_or(false)
+            .is_some_and(|current| current.id() == surface.id())
     }
 
     /// Returns the mutable layer surface, if initialized.

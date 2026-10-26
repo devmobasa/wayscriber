@@ -15,7 +15,7 @@ pub fn top_size(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> (u32, u32)
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover on the top strip as
-/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// (`natural_height`, `viewport_height`), both in pre-scale spec units; `None`
 /// while no menu popover is open.
 pub fn top_popover_scroll_bounds(
     engine: &UiTextEngine,
@@ -32,7 +32,7 @@ fn scale_size(size: (u32, u32), scale: f64) -> (u32, u32) {
         1.0
     };
     (
-        (size.0 as f64 * scale).ceil() as u32,
-        (size.1 as f64 * scale).ceil() as u32,
+        (f64::from(size.0) * scale).ceil() as u32,
+        (f64::from(size.1) * scale).ceil() as u32,
     )
 }

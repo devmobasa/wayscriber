@@ -448,7 +448,7 @@ fn ready_activation_rejection_releases_the_modal_owned_freeze_once() {
                     RegionPurposeTag::CaptureDeliver,
                     1,
                     ScreenCaptureSource::Frozen,
-                )
+                );
             }
             ScreenAcquisitionOwner::UserFreeze => unreachable!(),
         }

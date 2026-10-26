@@ -51,7 +51,7 @@ impl QuickColorsDraft {
                 .to_known_color_spec_with_field(&color_field_name(index))
             {
                 Ok(color) => next_entries.push(QuickColorConfig {
-                    label: label.to_string(),
+                    label: label.clone(),
                     color,
                 }),
                 Err(error) => errors.push(error),
@@ -64,9 +64,7 @@ impl QuickColorsDraft {
                 return;
             }
 
-            let persist_len = if next_entries.len() != effective_entries.len() {
-                next_entries.len()
-            } else {
+            let persist_len = if next_entries.len() == effective_entries.len() {
                 let source_len = config
                     .configured_entry_count()
                     .unwrap_or(config.entries.len());
@@ -76,6 +74,8 @@ impl QuickColorsDraft {
                     .rposition(|(next, previous)| next != previous)
                     .map_or(0, |index| index + 1);
                 source_len.max(changed_len).min(next_entries.len())
+            } else {
+                next_entries.len()
             };
             next_entries.truncate(persist_len);
             config.set_entries(next_entries);
@@ -134,8 +134,7 @@ fn resolved_label(label: &str, index: usize) -> String {
     let trimmed = label.trim();
     if trimmed.is_empty() {
         QuickColorSlot::from_index(index)
-            .map(QuickColorSlot::label)
-            .unwrap_or("Quick color")
+            .map_or("Quick color", QuickColorSlot::label)
             .to_string()
     } else {
         trimmed.to_string()

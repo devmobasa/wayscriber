@@ -50,13 +50,13 @@ impl InputState {
             let aspect = if screen_height == 0 {
                 1.0
             } else {
-                screen_width as f64 / screen_height as f64
+                f64::from(screen_width) / f64::from(screen_height)
             };
             let base_thumb_width =
                 (PAGE_THUMB_HEIGHT * aspect).clamp(PAGE_THUMB_MIN_WIDTH, PAGE_THUMB_MAX_WIDTH);
 
             let available_right =
-                (screen_width as f64 - (PAGE_PANEL_GAP + 32.0)).max(base_thumb_width + 32.0);
+                (f64::from(screen_width) - (PAGE_PANEL_GAP + 32.0)).max(base_thumb_width + 32.0);
             let mut candidate_cols = PAGE_PANEL_MAX_COLS.max(1);
             loop {
                 let candidate_width = PAGE_PANEL_PADDING_X * 2.0

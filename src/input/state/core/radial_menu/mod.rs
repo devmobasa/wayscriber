@@ -60,7 +60,7 @@ pub enum RadialMenuState {
 /// Identifies a segment in the radial menu for hit-testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RadialSegmentId {
-    /// Primary compass-ring segment (index 0..TOOL_SEGMENT_COUNT, N = 0,
+    /// Primary compass-ring segment (index `0..TOOL_SEGMENT_COUNT`, N = 0,
     /// clockwise).
     Tool(u8),
     /// Sub-ring child segment (parent index, child index).

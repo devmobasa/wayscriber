@@ -186,24 +186,21 @@ fn conflict_banner(
 
     let revealer_for_bind = revealer.clone();
     bindings.push(Box::new(move |app, _summary| {
-        match &app.shortcuts.conflict() {
-            Some(conflict) => {
-                set_label(&label, &conflict.prompt());
-                replace.set_label(conflict.replace_label());
-                set_accessible_label(&replace, conflict.replace_label());
-                let target = conflict.jump_field();
-                jump_field.set(target);
-                set_sensitive(&jump, target.is_some());
-                if !revealer_for_bind.reveals_child() {
-                    revealer_for_bind.set_reveal_child(true);
-                }
-                set_visible(&revealer_for_bind, true);
+        if let Some(conflict) = &app.shortcuts.conflict() {
+            set_label(&label, &conflict.prompt());
+            replace.set_label(conflict.replace_label());
+            set_accessible_label(&replace, conflict.replace_label());
+            let target = conflict.jump_field();
+            jump_field.set(target);
+            set_sensitive(&jump, target.is_some());
+            if !revealer_for_bind.reveals_child() {
+                revealer_for_bind.set_reveal_child(true);
             }
-            None => {
-                jump_field.set(None);
-                if revealer_for_bind.reveals_child() {
-                    revealer_for_bind.set_reveal_child(false);
-                }
+            set_visible(&revealer_for_bind, true);
+        } else {
+            jump_field.set(None);
+            if revealer_for_bind.reveals_child() {
+                revealer_for_bind.set_reveal_child(false);
             }
         }
     }));

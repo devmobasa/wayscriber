@@ -263,8 +263,7 @@ fn fitting_history_payload(
             let max_depth = max_depth.min(history_depth);
             if max_depth < 2 {
                 debug!(
-                    "Autosave history fallback capped at depth {}; skipping deeper history-depth scan",
-                    max_depth
+                    "Autosave history fallback capped at depth {max_depth}; skipping deeper history-depth scan"
                 );
                 return Ok(None);
             }
@@ -430,8 +429,9 @@ pub(super) fn is_near_limit(written_size: u64, max_file_size_bytes: u64) -> bool
     if written_size == 0 {
         return false;
     }
-    let threshold = ((max_file_size_bytes as u128) * (NEAR_LIMIT_PERCENT as u128)).div_ceil(100);
-    (written_size as u128) >= threshold
+    let threshold =
+        (u128::from(max_file_size_bytes) * u128::from(NEAR_LIMIT_PERCENT)).div_ceil(100);
+    u128::from(written_size) >= threshold
 }
 
 fn max_history_depth(snapshot: &SessionSnapshot) -> usize {

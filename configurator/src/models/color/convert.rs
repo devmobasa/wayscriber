@@ -7,7 +7,7 @@ fn clamp01(value: f64) -> f64 {
 }
 
 fn parse_component(value: &str, fallback: f64) -> f64 {
-    value.trim().parse::<f64>().map(clamp01).unwrap_or(fallback)
+    value.trim().parse::<f64>().map_or(fallback, clamp01)
 }
 
 pub fn parse_triplet_values(values: &[String; 3]) -> [f64; 3] {

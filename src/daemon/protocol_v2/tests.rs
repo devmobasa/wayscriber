@@ -77,7 +77,7 @@ fn boottime_deadline_source_arms_absolutely_and_drains_once() {
         revents: 0,
     };
     // SAFETY: poll_fd remains valid for this bounded poll.
-    let ready = unsafe { libc::poll(&mut poll_fd, 1, 500) };
+    let ready = unsafe { libc::poll(&raw mut poll_fd, 1, 500) };
     assert_eq!(ready, 1);
     assert_ne!(poll_fd.revents & libc::POLLIN, 0);
     assert!(source.drain().unwrap());
@@ -134,7 +134,7 @@ fn self_pidfd_is_not_readable_while_process_is_alive() {
         revents: 0,
     };
     // SAFETY: poll_fd remains valid for the zero-timeout observation.
-    let ready = unsafe { libc::poll(&mut poll_fd, 1, 0) };
+    let ready = unsafe { libc::poll(&raw mut poll_fd, 1, 0) };
     assert_eq!(ready, 0);
 }
 
@@ -195,7 +195,7 @@ fn command_queue_watch_reports_atomic_publication_and_rejects_replacement() {
         revents: 0,
     };
     // SAFETY: watcher owns the descriptor throughout the bounded poll.
-    assert_eq!(unsafe { libc::poll(&mut poll_fd, 1, 500) }, 1);
+    assert_eq!(unsafe { libc::poll(&raw mut poll_fd, 1, 500) }, 1);
     assert!(watcher.drain().unwrap().scan_pending);
 
     fs::rename(&queue, temp.path().join("old-queue")).unwrap();

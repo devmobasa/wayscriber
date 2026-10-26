@@ -20,7 +20,7 @@ impl Dispatch<ZwlrScreencopyManagerV1, ()> for WaylandState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
     ) {
-        debug!("Screencopy manager event ignored: {:?}", event);
+        debug!("Screencopy manager event ignored: {event:?}");
     }
 }
 

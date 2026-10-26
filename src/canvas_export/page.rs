@@ -123,16 +123,16 @@ pub fn draw_canvas_page_with_measurer(
     let ctx = render.cairo;
     let backdrop = ExportBackdrop::try_new(&page.backdrop)?;
     let source = CanvasExportRect {
-        x: page.origin_x as f64,
-        y: page.origin_y as f64,
-        width: page.viewport_width as f64,
-        height: page.viewport_height as f64,
+        x: f64::from(page.origin_x),
+        y: f64::from(page.origin_y),
+        width: f64::from(page.viewport_width),
+        height: f64::from(page.viewport_height),
     };
     let destination = CanvasExportRect {
         x: 0.0,
         y: 0.0,
-        width: page.viewport_width as f64,
-        height: page.viewport_height as f64,
+        width: f64::from(page.viewport_width),
+        height: f64::from(page.viewport_height),
     };
 
     let _ = ctx.save();
@@ -201,10 +201,10 @@ pub(crate) fn paint_pdf_page_background(
     width: f64,
     height: f64,
 ) {
-    let color = match page.backdrop {
-        CanvasExportBackdropSnapshot::Solid(color)
-        | CanvasExportBackdropSnapshot::BoardPaper { color, .. } => color,
-        _ => return,
+    let (CanvasExportBackdropSnapshot::Solid(color)
+    | CanvasExportBackdropSnapshot::BoardPaper { color, .. }) = page.backdrop
+    else {
+        return;
     };
     let _ = ctx.save();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -275,7 +275,7 @@ impl ExportBackdrop {
                 // The surface is owned by ExportBackdrop and dropped before the snapshot.
                 let surface = unsafe {
                     cairo::ImageSurface::create_for_data_unsafe(
-                        data.as_ptr() as *mut u8,
+                        data.as_ptr().cast_mut(),
                         cairo::Format::ARgb32,
                         *width,
                         *height,
@@ -331,7 +331,7 @@ impl ExportBackdrop {
         // it is used only as a paint/blur/eraser replay source.
         let surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
-                image.data.as_ptr() as *mut u8,
+                image.data.as_ptr().cast_mut(),
                 cairo::Format::ARgb32,
                 width,
                 height,

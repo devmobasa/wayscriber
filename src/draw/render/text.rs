@@ -276,7 +276,8 @@ pub fn render_text_over_with_halo_with_measurer(
     layout.set_text(text);
     if let Some(width) = wrap_width {
         let width = width.max(1);
-        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        let width_pango =
+            (i64::from(width) * i64::from(pango::SCALE)).min(i64::from(i32::MAX)) as i32;
         layout.set_width(width_pango);
         layout.set_wrap(pango::WrapMode::WordChar);
     }
@@ -287,23 +288,23 @@ pub fn render_text_over_with_halo_with_measurer(
         .unwrap_or_else(|| {
             // Fallback: measure directly.
             let (ink_rect, logical_rect) = layout.extents();
-            let scale = pango::SCALE as f64;
+            let scale = f64::from(pango::SCALE);
             TextMeasurement {
-                ink_x: ink_rect.x() as f64 / scale,
-                ink_y: ink_rect.y() as f64 / scale,
-                ink_width: ink_rect.width() as f64 / scale,
-                ink_height: ink_rect.height() as f64 / scale,
-                logical_x: logical_rect.x() as f64 / scale,
-                logical_y: logical_rect.y() as f64 / scale,
-                logical_width: logical_rect.width() as f64 / scale,
-                logical_height: logical_rect.height() as f64 / scale,
-                baseline: layout.baseline() as f64 / scale,
+                ink_x: f64::from(ink_rect.x()) / scale,
+                ink_y: f64::from(ink_rect.y()) / scale,
+                ink_width: f64::from(ink_rect.width()) / scale,
+                ink_height: f64::from(ink_rect.height()) / scale,
+                logical_x: f64::from(logical_rect.x()) / scale,
+                logical_y: f64::from(logical_rect.y()) / scale,
+                logical_width: f64::from(logical_rect.width()) / scale,
+                logical_height: f64::from(logical_rect.height()) / scale,
+                baseline: f64::from(layout.baseline()) / scale,
             }
         });
     let content = measurement.content_extents(wrap_width);
 
     // Adjust y position (Pango measures from top-left, we want baseline)
-    let adjusted_y = y as f64 - measurement.baseline;
+    let adjusted_y = f64::from(y) - measurement.baseline;
 
     // Read the background before anything is painted over it. The halo has to
     // contrast with what the label sits on, and this is the last moment at
@@ -312,7 +313,7 @@ pub fn render_text_over_with_halo_with_measurer(
         let background_luminance = backdrop_probe::painted_luminance(
             ctx,
             (
-                x as f64 + content.x,
+                f64::from(x) + content.x,
                 adjusted_y + content.y,
                 content.width,
                 content.height,
@@ -332,7 +333,7 @@ pub fn render_text_over_with_halo_with_measurer(
         // Union ink and logical extents: ink preserves italic overhangs while
         // logical cells retain leading/trailing whitespace advances.
         ctx.rectangle(
-            x as f64 + content.x - padding,
+            f64::from(x) + content.x - padding,
             adjusted_y + content.y - padding,
             content.width + padding * 2.0,
             content.height + padding * 2.0,
@@ -343,12 +344,12 @@ pub fn render_text_over_with_halo_with_measurer(
 
     // Second pass: draw drop shadow for depth
     let shadow_offset = size * 0.04;
-    ctx.move_to(x as f64 + shadow_offset, adjusted_y + shadow_offset);
+    ctx.move_to(f64::from(x) + shadow_offset, adjusted_y + shadow_offset);
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.4);
     functions::show_layout(ctx, &layout);
 
     // Third pass: render text with contrasting stroke outline
-    ctx.move_to(x as f64, adjusted_y);
+    ctx.move_to(f64::from(x), adjusted_y);
 
     // Create path from layout for stroking
     functions::layout_path(ctx, &layout);
@@ -514,8 +515,8 @@ fn render_sticky_note_layout(
         font_descriptor,
         wrap_width,
     );
-    let base_x = x as f64;
-    let base_y = y as f64 - text_layout.baseline;
+    let base_x = f64::from(x);
+    let base_y = f64::from(y) - text_layout.baseline;
     let note_layout = sticky_note_layout(
         base_x,
         base_y,

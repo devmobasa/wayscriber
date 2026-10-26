@@ -341,14 +341,15 @@ fn render_sticky_add_button(
         label,
     );
     let text_x = layout.page_add_button_x + (layout.page_add_button_width - extents.width()) * 0.5;
-    let text_y =
-        layout.page_add_button_y + (layout.page_add_button_height + extents.height()) * 0.5 - 1.0;
+    let text_y = layout.page_add_button_y
+        + f64::midpoint(layout.page_add_button_height, extents.height())
+        - 1.0;
     engine.draw_baseline(ctx, label_style, label, text_x, text_y, None);
 }
 
 fn point_in_rect(x: i32, y: i32, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
-    let x = x as f64;
-    let y = y as f64;
+    let x = f64::from(x);
+    let y = f64::from(y);
     x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
 }
 

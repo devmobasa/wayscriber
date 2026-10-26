@@ -29,7 +29,7 @@ impl WaylandState {
     ) {
         let _ = ctx.save();
         if scale > 1 {
-            ctx.scale(scale as f64, scale as f64);
+            ctx.scale(f64::from(scale), f64::from(scale));
         }
         self.render_ui_layers(ctx, width, height, render_ui);
         let _ = ctx.restore();
@@ -69,7 +69,7 @@ impl WaylandState {
         if !capture_picker && self.mouse_tool_preview_eligible() {
             let (cursor_x, cursor_y) = self.stylus_hover_cursor_position().unwrap_or_else(|| {
                 let (x, y) = self.pointer.position();
-                (x as f64, y as f64)
+                (f64::from(x), f64::from(y))
             });
             draw_tool_preview(
                 ctx,
@@ -79,8 +79,8 @@ impl WaylandState {
                 self.input_state.thickness_for_active_tool(),
                 cursor_x,
                 cursor_y,
-                width as f64,
-                height as f64,
+                f64::from(width),
+                f64::from(height),
             );
         }
         if !capture_picker {
@@ -303,7 +303,7 @@ impl WaylandState {
         let top_offset = self.toolbar_chrome.top_offset();
         let anchor = (
             self.inline_top_base_x() + top_offset.0,
-            self.inline_top_base_y() + top_offset.1 + top_h as f64 + 8.0,
+            self.inline_top_base_y() + top_offset.1 + f64::from(top_h) + 8.0,
         );
         ui::render_precision_entry_popup_with_engine(
             self.render.ui_text(),
@@ -357,9 +357,7 @@ impl WaylandState {
         );
         self.input_state.set_toast_geometry(
             toast_geometry.map(|geometry| geometry.0),
-            toast_geometry
-                .map(|geometry| geometry.1)
-                .unwrap_or([None, None]),
+            toast_geometry.map_or([None, None], |geometry| geometry.1),
         );
         ui::render_preset_toast_with_engine(
             self.render.ui_text(),
@@ -690,8 +688,8 @@ impl WaylandState {
         let redraw = mouse_tool_preview_redraw(
             self.mouse_tool_preview_eligible(),
             self.input_state.thickness_for_active_tool(),
-            (prev.0 as f64, prev.1 as f64),
-            (next.0 as f64, next.1 as f64),
+            (f64::from(prev.0), f64::from(prev.1)),
+            (f64::from(next.0), f64::from(next.1)),
             self.surface.width(),
             self.surface.height(),
         );

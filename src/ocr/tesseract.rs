@@ -238,8 +238,7 @@ fn program_in_search_path(program: &str, search_path: &OsStr) -> bool {
             return false;
         }
         fs::metadata(directory.join(program))
-            .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
+            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
     })
 }
 

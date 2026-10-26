@@ -124,10 +124,7 @@ impl WayscriberTray {
         let exe = match env::current_exe() {
             Ok(path) => path,
             Err(err) => {
-                warn!(
-                    "Failed to resolve current executable for About window: {}",
-                    err
-                );
+                warn!("Failed to resolve current executable for About window: {err}");
                 return;
             }
         };
@@ -141,7 +138,7 @@ impl WayscriberTray {
                 info!("Launched About window (pid {})", child.id());
             }
             Err(err) => {
-                warn!("Failed to launch About window: {}", err);
+                warn!("Failed to launch About window: {err}");
             }
         }
     }
@@ -169,10 +166,7 @@ impl WayscriberTray {
         match self.control.action.publish(action) {
             Ok(()) => {}
             Err(super::super::types::OverlayActionPublishError::QueueFull) => {
-                warn!(
-                    "Failed to queue tray action {}: daemon intent queue is full",
-                    action_str
-                );
+                warn!("Failed to queue tray action {action_str}: daemon intent queue is full");
             }
             Err(super::super::types::OverlayActionPublishError::Wake(error)) => {
                 warn!("Queued tray action {action_str}, but failed to wake daemon: {error}");
@@ -186,21 +180,21 @@ impl WayscriberTray {
                 let config_dir = match Config::config_directory_from_source(&loaded.source) {
                     Ok(dir) => dir,
                     Err(err) => {
-                        warn!("Failed to resolve config directory: {}", err);
+                        warn!("Failed to resolve config directory: {err}");
                         return;
                     }
                 };
                 match options_from_config(&loaded.config.session, &config_dir, None) {
                     Ok(opts) => match clear_session(&opts) {
                         Ok(outcome) => {
-                            info!("Cleared session files: {:?}", outcome);
+                            info!("Cleared session files: {outcome:?}");
                         }
-                        Err(err) => warn!("Failed to clear session files: {}", err),
+                        Err(err) => warn!("Failed to clear session files: {err}"),
                     },
-                    Err(err) => warn!("Failed to build session options: {}", err),
+                    Err(err) => warn!("Failed to build session options: {err}"),
                 }
             }
-            Err(err) => warn!("Failed to load config for clearing session: {}", err),
+            Err(err) => warn!("Failed to load config for clearing session: {err}"),
         }
     }
 
@@ -222,7 +216,7 @@ impl WayscriberTray {
         let path = match Config::config_path() {
             Ok(p) => p,
             Err(err) => {
-                warn!("Unable to resolve config path: {}", err);
+                warn!("Unable to resolve config path: {err}");
                 return false;
             }
         };

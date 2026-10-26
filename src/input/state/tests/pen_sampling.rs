@@ -93,7 +93,7 @@ fn slow_and_fast_subpixel_strokes_keep_similar_spatial_smoothing() {
             }
             let max_difference = (0..=720)
                 .map(|i| {
-                    let x = 300.2 + i as f64 / 4.0;
+                    let x = 300.2 + f64::from(i) / 4.0;
                     (interpolated_y(a, x) - interpolated_y(b, x)).abs() * 5.0 / 3.0
                 })
                 .fold(0.0, f64::max);

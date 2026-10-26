@@ -68,7 +68,7 @@ pub fn draw_icon_settings(ctx: &Context, x: f64, y: f64, size: f64) {
     let inner_r = s * 0.25;
     let outer_r = s * 0.38;
     for i in 0..6 {
-        let angle = (i as f64) * PI / 3.0;
+        let angle = f64::from(i) * PI / 3.0;
         let x1 = cx + angle.cos() * inner_r;
         let y1 = cy + angle.sin() * inner_r;
         let x2 = cx + angle.cos() * outer_r;
@@ -201,8 +201,8 @@ pub fn draw_icon_grid(ctx: &Context, x: f64, y: f64, size: f64) {
     let cell = (s - pad * 2.0 - gap) / 2.0;
     for row in 0..2 {
         for col in 0..2 {
-            let cx = x + pad + col as f64 * (cell + gap);
-            let cy = y + pad + row as f64 * (cell + gap);
+            let cx = x + pad + f64::from(col) * (cell + gap);
+            let cy = y + pad + f64::from(row) * (cell + gap);
             ctx.rectangle(cx, cy, cell, cell);
             let _ = ctx.stroke();
         }

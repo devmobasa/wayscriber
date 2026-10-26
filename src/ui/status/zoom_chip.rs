@@ -11,8 +11,8 @@
 //! The zoom-out/in marks are drawn as bold vector +/- strokes (not circled
 //! glyphs), sized to the `NN%` digits and using the same adaptive chip color.
 //! Buttons dispatch through the shared zoom action path:
-//! minus = ZoomOut, plus = ZoomIn, `Reset` = ResetZoom (back to 100%), and — only
-//! while zoom is active — a compact `Lock` toggle = ToggleZoomLock. The `NN%`
+//! minus = `ZoomOut`, plus = `ZoomIn`, `Reset` = `ResetZoom` (back to 100%), and — only
+//! while zoom is active — a compact `Lock` toggle = `ToggleZoomLock`. The `NN%`
 //! readout is a passive display (it consumes clicks but triggers nothing), so
 //! no drag ever starts on the canvas beneath the chip.
 
@@ -78,13 +78,13 @@ fn zoom_lock_label() -> &'static str {
 /// Interactive surface a zoom chip button activates on click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoomChipButtonKind {
-    /// Bold vector minus mark — dispatches ZoomOut.
+    /// Bold vector minus mark — dispatches `ZoomOut`.
     Out,
-    /// Bold vector plus mark — dispatches ZoomIn.
+    /// Bold vector plus mark — dispatches `ZoomIn`.
     In,
-    /// `Reset` — dispatches ResetZoom (back to 100%).
+    /// `Reset` — dispatches `ResetZoom` (back to 100%).
     Reset,
-    /// `Lock` — dispatches ToggleZoomLock (present only while zoomed).
+    /// `Lock` — dispatches `ToggleZoomLock` (present only while zoomed).
     Lock,
 }
 
@@ -249,10 +249,7 @@ fn zoom_glyph_advance(font_size: f64) -> f64 {
 
 /// Whether a piece is a vector +/- mark (drawn as strokes) rather than text.
 fn is_glyph_icon(kind: Option<ZoomChipButtonKind>) -> bool {
-    matches!(
-        kind,
-        Some(ZoomChipButtonKind::Out) | Some(ZoomChipButtonKind::In)
-    )
+    matches!(kind, Some(ZoomChipButtonKind::Out | ZoomChipButtonKind::In))
 }
 
 /// One chip piece before positioning: a glyph/label button or the `NN%`
@@ -370,8 +367,8 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
     let status_bar_avoid_top =
         bottom_right_status_bar_avoid_top(input_state, screen_width, screen_height);
     let (pill_x, pill_y) = chip_origin(
-        screen_width as f64,
-        screen_height as f64,
+        f64::from(screen_width),
+        f64::from(screen_height),
         pill_width,
         pill_height,
         status_bar_avoid_top,
@@ -498,8 +495,8 @@ fn bottom_right_status_bar_avoid_top(
     }
     const EDGE_EPS: f64 = 1.0;
     let inset = ZOOM_CHIP_EDGE_INSET;
-    let sw = screen_width as f64;
-    let sh = screen_height as f64;
+    let sw = f64::from(screen_width);
+    let sh = f64::from(screen_height);
     let right_aligned = ((layout.pill_x + layout.pill_width) - (sw - inset)).abs() <= EDGE_EPS;
     let bottom_anchored = ((layout.pill_y + layout.pill_height) - (sh - inset)).abs() <= EDGE_EPS;
     // `bounds.1` is the top of the union of the pill and any badges stacked
@@ -751,14 +748,16 @@ mod tests {
         let layout = compute_zoom_chip_layout(&state, &style, w, h).expect("layout");
 
         assert!(
-            (layout.pill_x + layout.pill_width - (w as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6
+            (layout.pill_x + layout.pill_width - (f64::from(w) - ZOOM_CHIP_EDGE_INSET)).abs()
+                < 1e-6
         );
         assert!(
-            (layout.pill_y + layout.pill_height - (h as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6
+            (layout.pill_y + layout.pill_height - (f64::from(h) - ZOOM_CHIP_EDGE_INSET)).abs()
+                < 1e-6
         );
         assert!(layout.pill_x >= 0.0 && layout.pill_y >= 0.0);
-        assert!(layout.pill_x + layout.pill_width <= w as f64 + 1e-6);
-        assert!(layout.pill_y + layout.pill_height <= h as f64 + 1e-6);
+        assert!(layout.pill_x + layout.pill_width <= f64::from(w) + 1e-6);
+        assert!(layout.pill_y + layout.pill_height <= f64::from(h) + 1e-6);
     }
 
     /// The percentage tracks the live scale even at rest (100%), and reflects
@@ -1029,7 +1028,7 @@ mod tests {
 
     /// Reconciliation invariant (M8): outside Focus Mode, exactly one zoom-%
     /// indicator shows while zoomed in every
-    /// {show_zoom_actions}×{show_zoom_chip}×{show_status_bar} combination —
+    /// `show_zoom_actions` × `show_zoom_chip` × `show_status_bar` combination —
     /// never zero (the regression), never two. The chip and the status-HUD ZOOM
     /// badge come from their real layouts; the passive top-corner badge follows
     /// the backend render gate (`zoom_active && !show_status_bar &&
@@ -1111,7 +1110,7 @@ mod tests {
 
         // Chip stays right-anchored one inset in from the right edge...
         assert!(
-            (chip.pill_x + chip.pill_width - (w as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
+            (chip.pill_x + chip.pill_width - (f64::from(w) - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
             "chip stays right-anchored"
         );
         // ...and its bottom edge clears the top of the whole status footprint.
@@ -1143,7 +1142,7 @@ mod tests {
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");
         assert!(
-            (chip.pill_y + chip.pill_height - (h as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
+            (chip.pill_y + chip.pill_height - (f64::from(h) - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
             "chip stays flush to the bottom with a bottom-left status bar"
         );
     }

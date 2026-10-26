@@ -9,7 +9,7 @@ use super::constants::{
     RADIUS_PANEL, RADIUS_SM, SHADOW, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
 };
 
-/// Footer hint text: slightly brighter than TEXT_TERTIARY so the key hints
+/// Footer hint text: slightly brighter than `TEXT_TERTIARY` so the key hints
 /// stay legible inside the menu (kept from pre-theme literals).
 const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
 /// Accent bar on the parent row of an open submenu.
@@ -306,9 +306,9 @@ fn draw_divider(ctx: &cairo::Context, layout: &ContextMenuLayout, y: f64) {
 
 /// A soft shadow under a pane: stacked translucent rects widening outward.
 fn draw_shadow(ctx: &cairo::Context, layout: &ContextMenuLayout) {
-    let alpha = SHADOW.3 / SHADOW_LAYERS as f64;
+    let alpha = SHADOW.3 / f64::from(SHADOW_LAYERS);
     for layer in 1..=SHADOW_LAYERS {
-        let spread = SHADOW_SPREAD * layer as f64;
+        let spread = SHADOW_SPREAD * f64::from(layer);
         constants::set_color(ctx, constants::with_alpha(SHADOW, alpha));
         draw_rounded_rect(
             ctx,

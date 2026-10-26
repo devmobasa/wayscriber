@@ -58,11 +58,11 @@ const ACCESSOR_ARGUMENTS: [(&str, &str); 4] = [
     ("src/config/action_meta/mod.rs", "source_label(action)"),
     (
         "src/config/action_meta/mod.rs",
-        "action_meta(action).map(|meta|meta.short_label()).unwrap_or(\"Action\")",
+        "action_meta(action).map_or(\"Action\",|meta|meta.short_label())",
     ),
     (
         "src/config/action_meta/mod.rs",
-        "action_meta(action).map(|meta|meta.description).unwrap_or(\"\")",
+        "action_meta(action).map_or(\"\",|meta|meta.description)",
     ),
     ("src/config/action_meta/mod.rs", "stripped"),
 ];
@@ -153,9 +153,8 @@ fn collect_marks(path: &Path, source: &str, reading: &mut Reading) {
                         .any(|(file, allowed)| path == Path::new(file) && argument == *allowed);
                     if !exempt {
                         reading.failures.push(format!(
-                            "{site}: `{}{argument})` is not a literal the guard can read; \
-                             write the string at the call",
-                            mark
+                            "{site}: `{mark}{argument})` is not a literal the guard can read; \
+                             write the string at the call"
                         ));
                     }
                 }

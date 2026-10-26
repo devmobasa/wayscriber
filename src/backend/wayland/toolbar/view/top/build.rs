@@ -1133,16 +1133,14 @@ fn preset_slot_node(
             model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(preset.tool)),
         ))
     });
-    let color = preset
-        .map(|preset| {
-            (
-                preset.color.r,
-                preset.color.g,
-                preset.color.b,
-                preset.color.a,
-            )
-        })
-        .unwrap_or((0.0, 0.0, 0.0, 0.0));
+    let color = preset.map_or((0.0, 0.0, 0.0, 0.0), |preset| {
+        (
+            preset.color.r,
+            preset.color.g,
+            preset.color.b,
+            preset.color.a,
+        )
+    });
     WidgetNode::new(
         control.id().render_id().into_owned(),
         rect,
@@ -1179,13 +1177,13 @@ fn control_button_node_with_tooltip(
     tooltip: String,
 ) -> WidgetNode {
     let enabled = control.enabled(snapshot);
-    let style = if !enabled {
-        ButtonStyle::disabled()
-    } else {
+    let style = if enabled {
         match control.role() {
             model::TopToolbarControlRole::Destructive => ButtonStyle::destructive(),
             _ => ButtonStyle::active(control.active(snapshot)),
         }
+    } else {
+        ButtonStyle::disabled()
     };
     let kind = if use_icons {
         let icon_size = if control == model::TopToolbarControl::ShapePicker {

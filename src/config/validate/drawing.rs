@@ -159,8 +159,7 @@ impl Config {
     fn validate_hit_test_settings(&mut self) {
         if !self.drawing.hit_test_tolerance.is_finite() {
             log::warn!(
-                "Invalid non-finite hit_test_tolerance; resetting to default {:.1}",
-                DEFAULT_HIT_TEST_TOLERANCE
+                "Invalid non-finite hit_test_tolerance; resetting to default {DEFAULT_HIT_TEST_TOLERANCE:.1}"
             );
             self.drawing.hit_test_tolerance = DEFAULT_HIT_TEST_TOLERANCE;
         } else if !(1.0..=20.0).contains(&self.drawing.hit_test_tolerance) {

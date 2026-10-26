@@ -131,7 +131,7 @@ fn check_root_shape(root: &Path, collect_temps: bool) -> Result<()> {
                 Ok(()) => log::warn!("Removed leftover v2 admission temporary {name}"),
                 Err(error) if error.kind() == ErrorKind::NotFound => {}
                 Err(error) => {
-                    log::warn!("Failed to remove leftover v2 admission temporary {name}: {error}")
+                    log::warn!("Failed to remove leftover v2 admission temporary {name}: {error}");
                 }
             }
         }
@@ -376,24 +376,21 @@ pub(super) fn allocate_order(root: &Path) -> Result<u64> {
         Err(error) if error.kind() == ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
     };
-    let last_order = match previous {
-        Some(previous) => {
-            if previous.protocol_version != DAEMON_COMMAND_PROTOCOL_VERSION
-                || previous.boot_id != boot_id
-                || previous.time_namespace != namespace
-            {
-                bail!("v2 command admission identity changed");
-            }
-            previous.last_order
+    let last_order = if let Some(previous) = previous {
+        if previous.protocol_version != DAEMON_COMMAND_PROTOCOL_VERSION
+            || previous.boot_id != boot_id
+            || previous.time_namespace != namespace
+        {
+            bail!("v2 command admission identity changed");
         }
-        None => {
-            if !read_dir_bounded(&controls_dir(root), 1)?.is_empty()
-                || !read_dir_bounded(&queue_dir(root), 1)?.is_empty()
-            {
-                bail!("missing admission high-water record for nonempty v2 tree");
-            }
-            0
+        previous.last_order
+    } else {
+        if !read_dir_bounded(&controls_dir(root), 1)?.is_empty()
+            || !read_dir_bounded(&queue_dir(root), 1)?.is_empty()
+        {
+            bail!("missing admission high-water record for nonempty v2 tree");
         }
+        0
     };
     let next = now.max(
         last_order

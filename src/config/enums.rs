@@ -152,26 +152,26 @@ impl ColorSpec {
                 Ok(color) => color,
                 Err(ConfigHexColorError::MissingHash) => {
                     util::name_to_color(name).unwrap_or_else(|| {
-                        warn!("Unknown color '{}', using red", name);
+                        warn!("Unknown color '{name}', using red");
                         PALETTE_RED
                     })
                 }
                 Err(err) => {
-                    warn!("Invalid hex color '{}': {:?}; using red", name, err);
+                    warn!("Invalid hex color '{name}': {err:?}; using red");
                     PALETTE_RED
                 }
             },
             ColorSpec::Rgb([r, g, b]) => Color {
-                r: *r as f64 / 255.0,
-                g: *g as f64 / 255.0,
-                b: *b as f64 / 255.0,
+                r: f64::from(*r) / 255.0,
+                g: f64::from(*g) / 255.0,
+                b: f64::from(*b) / 255.0,
                 a: 1.0,
             },
             ColorSpec::Rgba([r, g, b, a]) => Color {
-                r: *r as f64 / 255.0,
-                g: *g as f64 / 255.0,
-                b: *b as f64 / 255.0,
-                a: *a as f64 / 255.0,
+                r: f64::from(*r) / 255.0,
+                g: f64::from(*g) / 255.0,
+                b: f64::from(*b) / 255.0,
+                a: f64::from(*a) / 255.0,
             },
         }
     }

@@ -115,7 +115,7 @@ fn overlapping_rectangles_do_not_become_ellipses() {
         (120.0, 120.0, 180.0),
     ] {
         for step in 0..=12 {
-            let angle = (start + 90.0 * step as f64 / 12.0).to_radians();
+            let angle = (start + 90.0 * f64::from(step) / 12.0).to_radians();
             rounded.push((cx + 20.0 * angle.cos(), cy + 20.0 * angle.sin()));
         }
     }
@@ -181,7 +181,7 @@ fn overlap_rejects_inward_curls() {
     for inward in [0.2, 0.3] {
         let path: Vec<_> = (0..=468)
             .map(|step| {
-                let fraction = step as f64 / 360.0;
+                let fraction = f64::from(step) / 360.0;
                 let angle = consts::TAU * fraction;
                 let radius = 60.0 * (1.0 - inward * ((fraction - 1.1) / 0.2).clamp(0.0, 1.0));
                 (

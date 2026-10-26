@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_color_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.colors.set_color_red, Action::SetColorRed)?;
         inserter.insert_all(&self.colors.set_color_green, Action::SetColorGreen)?;

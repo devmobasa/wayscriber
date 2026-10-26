@@ -40,6 +40,12 @@
 - Never reach inside a poisoned lock. Use `expect` when the critical section cannot panic, or a fallback that leaves the data alone. Tests that serialize on process-wide state use `test_env::lock()` or a `test_env::Lease`.
 - `catch_unwind` is reserved for the reviewed worker-isolation sites that carry an `#[expect]` reason. Tests observe panics through a joined scoped thread.
 - Getters are `foo()`/`foo_mut()`, a fallible constructor is `try_new`, and type lifetimes have descriptive names. Every `unsafe` block has a `// SAFETY:` comment that says why it is sound.
+- Convert numbers losslessly with `From` (`f64::from(width)`) wherever it can be called; `const` initializers keep `as`. Take the middle of two values with `midpoint` (`f64::midpoint(a, b)`), which cannot overflow.
+- Inline named format arguments: `format!("{name}: {err}")`.
+- Use `map_or`, `map_or_else`, `is_some_and`, or `is_ok_and` instead of `map(..).unwrap_or(..)`. Use `let ... else` for a `match` that only unwraps or leaves, and `if let ... else` for a `match` with one pattern and a fallback.
+- In doc comments, put identifiers and protocol names in backticks (`wl_output`). Product names that docs write plainly go in `doc-valid-idents` in `clippy.toml`.
+- Take raw pointers with `&raw const`/`&raw mut`, change pointer constness with `cast_const`/`cast_mut`, and write the anonymous lifetime in paths (`Formatter<'_>`). Give every `#[ignore]` a reason: `#[ignore = "needs a running Wayland compositor"]`.
+- Clippy pedantic lints are enabled one at a time in `Cargo.toml`, never as the whole group, so a toolchain update does not turn on new ones.
 
 ## Coupled Changes
 - Config changes often require `config.example.toml`, `docs/CONFIG.md`, configurator models/views, schema behavior, and tests.

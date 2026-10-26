@@ -83,7 +83,7 @@ impl TabletState {
         self.pending_frame
             .motion
             .or(self.last_pos)
-            .unwrap_or((fallback.0 as f64, fallback.1 as f64))
+            .unwrap_or((f64::from(fallback.0), f64::from(fallback.1)))
     }
 
     pub(in crate::backend::wayland) fn hover_cursor_position(&self) -> Option<(f64, f64)> {

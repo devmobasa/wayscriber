@@ -50,7 +50,7 @@ fn retained_overlay_owner_matches_fresh_across_density_and_visible_state_changes
     for density in [1, 2, 1] {
         state.open_precision_entry(PrecisionEntryTarget::Thickness);
         assert_owner_parity(&engine, density, |engine, ctx| {
-            render_precision_entry_popup_with_engine(engine, ctx, &state, 420, 360, (400.0, 350.0))
+            render_precision_entry_popup_with_engine(engine, ctx, &state, 420, 360, (400.0, 350.0));
         });
         let before = assert_owner_parity(&engine, density, |engine, ctx| {
             render_onboarding_card_with_engine(engine, ctx, 420, 360, &card, None);

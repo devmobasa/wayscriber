@@ -27,15 +27,15 @@ impl TextMeasurer {
         self.with_measurement_context(|ctx| {
             let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
-            let scale = pango::SCALE as f64;
+            let scale = f64::from(pango::SCALE);
             // Convert the baseline-relative y into the layout's top-left frame.
-            let local_y = local_y_from_baseline + layout.baseline() as f64 / scale;
+            let local_y = local_y_from_baseline + f64::from(layout.baseline()) / scale;
             let x_pu = (local_x * scale)
                 .round()
-                .clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+                .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
             let y_pu = (local_y * scale)
                 .round()
-                .clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+                .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
             let (_inside, index, trailing) = layout.xy_to_index(x_pu, y_pu);
 
             // Advance past `trailing` characters so a click on a glyph's right half

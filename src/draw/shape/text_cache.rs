@@ -36,7 +36,7 @@ impl TextMeasurement {
         let min_y = self.ink_y.min(self.logical_y);
         let mut max_x = (self.ink_x + self.ink_width).max(self.logical_x + self.logical_width);
         if let Some(width) = wrap_width {
-            max_x = max_x.max(width.max(1) as f64);
+            max_x = max_x.max(f64::from(width.max(1)));
         }
         let max_y = (self.ink_y + self.ink_height).max(self.logical_y + self.logical_height);
         TextContentExtents {
@@ -164,27 +164,27 @@ pub(crate) struct TextPreviewGeometry {
 }
 
 fn caret_geometry_in(layout: &pango::Layout, text: &str, byte_index: usize) -> CaretGeometry {
-    let scale = pango::SCALE as f64;
+    let scale = f64::from(pango::SCALE);
     let index = snap_char_boundary(text, byte_index);
     let index_i32 = i32::try_from(index).unwrap_or(i32::MAX);
     let (strong, _weak) = layout.cursor_pos(index_i32);
-    let baseline = layout.baseline() as f64 / scale;
+    let baseline = f64::from(layout.baseline()) / scale;
     CaretGeometry {
-        x: strong.x() as f64 / scale,
-        y_from_baseline: strong.y() as f64 / scale - baseline,
-        height: strong.height() as f64 / scale,
+        x: f64::from(strong.x()) / scale,
+        y_from_baseline: f64::from(strong.y()) / scale - baseline,
+        height: f64::from(strong.height()) / scale,
     }
 }
 
 fn logical_bounds_in(layout: &pango::Layout) -> LogicalBounds {
-    let scale = pango::SCALE as f64;
+    let scale = f64::from(pango::SCALE);
     let (_ink, logical) = layout.extents();
-    let baseline = layout.baseline() as f64 / scale;
+    let baseline = f64::from(layout.baseline()) / scale;
     LogicalBounds {
-        x: logical.x() as f64 / scale,
-        y_from_baseline: logical.y() as f64 / scale - baseline,
-        width: logical.width() as f64 / scale,
-        height: logical.height() as f64 / scale,
+        x: f64::from(logical.x()) / scale,
+        y_from_baseline: f64::from(logical.y()) / scale - baseline,
+        width: f64::from(logical.width()) / scale,
+        height: f64::from(logical.height()) / scale,
     }
 }
 

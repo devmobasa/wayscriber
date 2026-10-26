@@ -223,11 +223,8 @@ impl FrozenState {
 
         self.capture_done = false;
 
-        let output = match self.active_output.clone() {
-            Some(out) => out,
-            None => {
-                anyhow::bail!("No active output available for frozen capture");
-            }
+        let Some(output) = self.active_output.clone() else {
+            anyhow::bail!("No active output available for frozen capture");
         };
         let (source_geometry, target_output_id) = require_verified_capture_source(
             self.active_geometry.clone(),
@@ -270,7 +267,7 @@ impl FrozenState {
                 stride,
             } => {
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
-                    warn!("Failed to prepare screencopy buffer: {}", err);
+                    warn!("Failed to prepare screencopy buffer: {err}");
                     return self.fail_wlr_capture();
                 }
             }
@@ -280,7 +277,7 @@ impl FrozenState {
             }
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
-                    warn!("Failed to issue screencopy copy: {}", err);
+                    warn!("Failed to issue screencopy copy: {err}");
                     return self.fail_wlr_capture();
                 }
             }
@@ -293,9 +290,8 @@ impl FrozenState {
                         WEnum::Value(v) => v.bits(),
                         WEnum::Unknown(raw) => raw,
                     };
-                    capture.y_invert = Flags::from_bits(raw_flags)
-                        .map(|f| f.contains(Flags::YInvert))
-                        .unwrap_or(false);
+                    capture.y_invert =
+                        Flags::from_bits(raw_flags).is_some_and(|f| f.contains(Flags::YInvert));
                 }
             }
             FrameEvent::Ready { .. } => match self.on_ready() {
@@ -305,7 +301,7 @@ impl FrozenState {
                     self.finish_stale_direct_capture(input_state);
                 }
                 Err(err) => {
-                    warn!("Frozen capture ready handling failed: {}", err);
+                    warn!("Frozen capture ready handling failed: {err}");
                     // `on_ready` owns and destroys the completed WLR attempt,
                     // including error paths, so only the fallback decision
                     // remains here.
@@ -344,15 +340,17 @@ impl FrozenState {
         height: u32,
         stride: u32,
     ) -> Result<()> {
-        let capture = match self.direct_capture.as_mut() {
-            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
-            _ => anyhow::bail!("No WLR capture session present for buffer event"),
+        let Some(DirectCaptureAttempt::WlrScreencopy {
+            session: capture, ..
+        }) = self.direct_capture.as_mut()
+        else {
+            anyhow::bail!("No WLR capture session present for buffer event");
         };
 
         let format = match format {
             WEnum::Value(fmt) => fmt,
             WEnum::Unknown(raw) => {
-                anyhow::bail!("Unknown wl_shm format {}", raw);
+                anyhow::bail!("Unknown wl_shm format {raw}");
             }
         };
 
@@ -376,9 +374,11 @@ impl FrozenState {
     }
 
     fn on_buffer_done(&mut self) -> Result<()> {
-        let capture = match self.direct_capture.as_mut() {
-            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
-            _ => anyhow::bail!("No WLR capture session present for buffer_done"),
+        let Some(DirectCaptureAttempt::WlrScreencopy {
+            session: capture, ..
+        }) = self.direct_capture.as_mut()
+        else {
+            anyhow::bail!("No WLR capture session present for buffer_done");
         };
         capture.request_copy();
         Ok(())

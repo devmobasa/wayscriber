@@ -14,3 +14,7 @@ disallowed-methods = [
     { path = "std::sync::Mutex::clear_poison", reason = "a poisoned lock may hold broken invariants" },
     { path = "std::sync::RwLock::clear_poison", reason = "a poisoned lock may hold broken invariants" },
 ]
+
+# Product and library names that docs may write without backticks. The `..`
+# keeps Clippy's default list.
+doc-valid-idents = ["GLib", "HarfBuzz", "HiDPI", "JetBrains", "MSBuild", "StatusNotifierItem", "VSync", ".."]

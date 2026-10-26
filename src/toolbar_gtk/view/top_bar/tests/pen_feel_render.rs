@@ -184,7 +184,7 @@ fn pixel(surface: &cairo::ImageSurface, x: usize, y: usize) -> [u8; 4] {
     let mut pixel = [0; 4];
     surface
         .with_data(|bytes| {
-            pixel.copy_from_slice(&bytes[y * stride + x * 4..y * stride + x * 4 + 4])
+            pixel.copy_from_slice(&bytes[y * stride + x * 4..y * stride + x * 4 + 4]);
         })
         .unwrap();
     pixel

@@ -19,7 +19,7 @@ pub(super) fn create_overlay_surface(
     }
     if let Some(layer_shell) = state.protocol.layer_shell() {
         let layer = state.surface.placement().layer();
-        info!("Creating layer shell surface in {:?} layer", layer);
+        info!("Creating layer shell surface in {layer:?} layer");
         let layer_surface = layer_shell.create_layer_surface(
             qh,
             wl_surface,

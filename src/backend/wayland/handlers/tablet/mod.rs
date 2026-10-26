@@ -1,4 +1,4 @@
-//! Wayland tablet/stylus protocol handling (zwp_tablet_v2).
+//! Wayland tablet/stylus protocol handling (`zwp_tablet_v2`).
 
 use std::os::fd::OwnedFd;
 use std::sync::Arc;

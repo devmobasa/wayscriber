@@ -23,9 +23,8 @@ fn setup_failure_restores_partial_installation_and_releases_singleton() {
     let _guard = test_signal_lock();
     let before = current_sigaction(TEST_SIGNAL).unwrap();
 
-    let err = match spawn_listener(&[TEST_SIGNAL, i32::MAX], |_| {}, || {}) {
-        Ok(_) => panic!("invalid signal unexpectedly installed"),
-        Err(err) => err,
+    let Err(err) = spawn_listener(&[TEST_SIGNAL, i32::MAX], |_| {}, || {}) else {
+        panic!("invalid signal unexpectedly installed");
     };
 
     assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
@@ -373,7 +372,7 @@ fn stale_old_generation_handler_cannot_write_to_reused_numeric_descriptor() {
     let count = unsafe {
         libc::read(
             reuse_read.as_raw_fd(),
-            (&mut byte as *mut u8).cast::<libc::c_void>(),
+            (&raw mut byte).cast::<libc::c_void>(),
             1,
         )
     };
@@ -397,7 +396,7 @@ fn wait_for_owner_wake(source: &RuntimeWakeSource) {
         revents: 0,
     };
     // SAFETY: source owns the descriptor throughout this bounded wait.
-    let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+    let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
     assert_eq!(ready, 1, "owner was not woken");
     assert_ne!(pollfd.revents & libc::POLLIN, 0);
     source.drain().unwrap();
@@ -478,7 +477,7 @@ fn current_sigaction(signal: libc::c_int) -> io::Result<libc::sigaction> {
     // SAFETY: Zeroed sigaction is filled by libc when the query succeeds.
     let mut action = unsafe { mem::zeroed::<libc::sigaction>() };
     // SAFETY: Null new action queries the current handler for `signal`.
-    if unsafe { libc::sigaction(signal, ptr::null(), &mut action) } != 0 {
+    if unsafe { libc::sigaction(signal, ptr::null(), &raw mut action) } != 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(action)

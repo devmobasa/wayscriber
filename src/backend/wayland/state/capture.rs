@@ -157,7 +157,7 @@ impl WaylandState {
         self.exit_overlay_suppression(OverlaySuppression::DesktopBackdrop);
     }
 
-    /// Handles capture actions by delegating to the CaptureManager.
+    /// Handles capture actions by delegating to the `CaptureManager`.
     pub(in crate::backend::wayland) fn handle_capture_action(&mut self, action: Action) {
         if action.is_region_capture() {
             if let Some(opening_action) = self.capture.active_region_action() {
@@ -199,8 +199,7 @@ impl WaylandState {
 
         if self.capture.is_in_progress() {
             log::warn!(
-                "Capture action {:?} requested while another capture is running; ignoring",
-                action
+                "Capture action {action:?} requested while another capture is running; ignoring"
             );
             return;
         }
@@ -270,10 +269,7 @@ impl WaylandState {
                 )
             }
             _ => {
-                log::error!(
-                    "Non-capture action passed to handle_capture_action: {:?}",
-                    action
-                );
+                log::error!("Non-capture action passed to handle_capture_action: {action:?}");
                 return;
             }
         };
@@ -298,10 +294,7 @@ impl WaylandState {
         let suppression =
             overlay_suppression_for_screenshot(capture_type, self.config.capture.include_drawings);
         if !self.enter_overlay_suppression(suppression) {
-            log::warn!(
-                "Capture action {:?} requested while overlay is suppressed; ignoring",
-                action
-            );
+            log::warn!("Capture action {action:?} requested while overlay is suppressed; ignoring");
             self.capture.finish_capture_lifecycle();
             self.input_state.push_toast(
                 ToastPriority::Info,
@@ -331,8 +324,7 @@ impl WaylandState {
     pub(in crate::backend::wayland) fn handle_canvas_export_action(&mut self, action: Action) {
         if self.capture.is_in_progress() {
             log::warn!(
-                "Canvas export action {:?} requested while another image operation is running; ignoring",
-                action
+                "Canvas export action {action:?} requested while another image operation is running; ignoring"
             );
             return;
         }
@@ -343,8 +335,7 @@ impl WaylandState {
             Action::ExportCanvasClipboardAndFile => CaptureDestination::ClipboardAndFile,
             _ => {
                 log::error!(
-                    "Non-canvas-export action passed to handle_canvas_export_action: {:?}",
-                    action
+                    "Non-canvas-export action passed to handle_canvas_export_action: {action:?}"
                 );
                 return;
             }

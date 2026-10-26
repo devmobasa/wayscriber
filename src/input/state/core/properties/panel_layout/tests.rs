@@ -267,7 +267,7 @@ fn hovering_a_swatch_shows_its_name_in_a_tooltip_on_screen() {
         tooltip.y >= swatch.bottom(),
         "the tooltip hangs below the swatch"
     );
-    assert!(tooltip.x >= 0.0 && tooltip.right() <= SCREEN.0 as f64);
+    assert!(tooltip.x >= 0.0 && tooltip.right() <= f64::from(SCREEN.0));
 }
 
 #[test]

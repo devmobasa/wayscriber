@@ -51,7 +51,7 @@ fn pressure_points(state: &InputState, id: ShapeId) -> Vec<f32> {
     let frame = state.boards.active_frame();
     match frame.shape(id).map(|drawn| &drawn.shape) {
         Some(Shape::FreehandPressure { points, .. }) => points.iter().map(|(_, _, t)| *t).collect(),
-        other => panic!("expected FreehandPressure shape, got: {:?}", other),
+        other => panic!("expected FreehandPressure shape, got: {other:?}"),
     }
 }
 
@@ -89,7 +89,7 @@ fn text_snapshot(
             *background_enabled,
             *wrap_width,
         ),
-        other => panic!("expected Text shape, got: {:?}", other),
+        other => panic!("expected Text shape, got: {other:?}"),
     }
 }
 

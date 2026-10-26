@@ -247,7 +247,7 @@ impl TopBar {
 
     /// A presets-island slot button: a filled slot draws the saved tool
     /// glyph in the neutral foreground with the preset color as a separate
-    /// corner swatch in a DrawingArea child, so a dark preset color never
+    /// corner swatch in a `DrawingArea` child, so a dark preset color never
     /// renders the glyph invisible against the slot body. An empty slot shows
     /// its 1-based number as a plain label.
     /// Clicking applies a filled slot or saves the current setup into an empty
@@ -292,7 +292,7 @@ impl TopBar {
             area.set_valign(gtk4::Align::Fill);
             area.set_can_target(false);
             area.set_draw_func(move |_, ctx, width, height| {
-                let (fw, fh) = (width as f64, height as f64);
+                let (fw, fh) = (f64::from(width), f64::from(height));
                 let short = fw.min(fh).max(1.0);
                 // Neutral glyph, centered.
                 set_color(ctx, COLOR_TEXT_SECONDARY);

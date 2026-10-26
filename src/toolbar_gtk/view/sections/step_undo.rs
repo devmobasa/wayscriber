@@ -19,13 +19,13 @@ use super::SectionCtx;
 /// step rows, and delay sliders. Callers gate on `show_step_section`;
 /// liveness comes from the popover host's content-key rebuild, so the
 /// updaters go to a scratch list.
-pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk4::Box {
+pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx<'_>) -> gtk4::Box {
     let body = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
     populate(ctx, &body);
     body
 }
 
-fn populate(ctx: &mut SectionCtx, body: &gtk4::Box) {
+fn populate(ctx: &mut SectionCtx<'_>, body: &gtk4::Box) {
     let snapshot = ctx.snapshot;
     // Both flags live in the structure/content key, so a toggle rebuilds the
     // section; the checkbox state never needs an updater.
@@ -54,7 +54,7 @@ fn populate(ctx: &mut SectionCtx, body: &gtk4::Box) {
 }
 
 fn toggle_checkbox(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     label: &str,
     tooltip: &str,
     active: bool,
@@ -72,7 +72,7 @@ fn toggle_checkbox(
 
 /// One Step Undo/Redo row: the multi-step button, the minus / "N steps" /
 /// plus cluster, and the per-direction delay slider underneath.
-fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
+fn custom_row(ctx: &mut SectionCtx<'_>, body: &gtk4::Box, is_undo: bool) {
     let snapshot = ctx.snapshot;
     let row_h = ctx.sz(26.0);
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));
@@ -217,7 +217,7 @@ fn custom_row(ctx: &mut SectionCtx, body: &gtk4::Box, is_undo: bool) {
 
 /// Global Undo/Redo delay sliders: the built-in card puts both labels on
 /// one line and stacks the two full-width sliders beneath.
-fn delay_sliders(ctx: &mut SectionCtx, body: &gtk4::Box) {
+fn delay_sliders(ctx: &mut SectionCtx<'_>, body: &gtk4::Box) {
     let snapshot = ctx.snapshot;
     let labels = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(10.0));
     labels.set_homogeneous(true);
@@ -256,7 +256,7 @@ fn delay_sliders(ctx: &mut SectionCtx, body: &gtk4::Box) {
     }));
 }
 
-fn global_delay_slider(ctx: &SectionCtx, is_undo: bool, delay_ms: u64) -> SliderRow {
+fn global_delay_slider(ctx: &SectionCtx<'_>, is_undo: bool, delay_ms: u64) -> SliderRow {
     let spec = model::ToolbarSliderSpec::DELAY_SECONDS;
     let sender = ctx.feedback.clone();
     let slider = SliderRow::new(
@@ -286,7 +286,7 @@ fn global_delay_slider(ctx: &SectionCtx, is_undo: bool, delay_ms: u64) -> Slider
     slider
 }
 
-fn nudge_button(ctx: &SectionCtx, painter: IconPainter, tooltip: &str) -> gtk4::Button {
+fn nudge_button(ctx: &SectionCtx<'_>, painter: IconPainter, tooltip: &str) -> gtk4::Button {
     icon_button(painter, (ctx.sz(26.0), ctx.sz(26.0)), ctx.sz(14.0), tooltip).button
 }
 

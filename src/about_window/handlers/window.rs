@@ -20,14 +20,12 @@ impl WindowHandler for AboutWindowState {
         let width = configure
             .new_size
             .0
-            .map(|w| w.get())
-            .unwrap_or(preferred_width)
+            .map_or(preferred_width, |w| w.get())
             .max(1);
         let height = configure
             .new_size
             .1
-            .map(|h| h.get())
-            .unwrap_or(preferred_height)
+            .map_or(preferred_height, |h| h.get())
             .max(1);
 
         if self.width != width || self.height != height {

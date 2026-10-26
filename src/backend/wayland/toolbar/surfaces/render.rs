@@ -64,9 +64,8 @@ impl ToolbarSurface {
             }
         }
 
-        let pool = match self.pool.as_mut() {
-            Some(p) => p,
-            None => return Err(anyhow!("shm pool is missing after creation")),
+        let Some(pool) = self.pool.as_mut() else {
+            return Err(anyhow!("shm pool is missing after creation"));
         };
         let (buffer, canvas) = pool
             .create_buffer(
@@ -105,11 +104,13 @@ impl ToolbarSurface {
             } else {
                 1.0
             };
-            let (logical_w, logical_h) =
-                (self.width as f64 / ui_scale, self.height as f64 / ui_scale);
+            let (logical_w, logical_h) = (
+                f64::from(self.width) / ui_scale,
+                f64::from(self.height) / ui_scale,
+            );
             let hover_scaled = hover.map(|(x, y)| (x / ui_scale, y / ui_scale));
             if self.scale > 1 {
-                ctx.scale(self.scale as f64, self.scale as f64);
+                ctx.scale(f64::from(self.scale), f64::from(self.scale));
             }
             if (ui_scale - 1.0).abs() > f64::EPSILON {
                 ctx.scale(ui_scale, ui_scale);

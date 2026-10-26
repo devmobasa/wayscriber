@@ -110,8 +110,8 @@ impl RenderMetrics {
         let extra_line_gap = 30.0 * scale;
         let extra_line_bottom_spacing = 18.0 * scale;
         let columns_bottom_spacing = 28.0 * scale;
-        let max_box_width = screen_width as f64 * HELP_OVERLAY_MAX_WIDTH_RATIO;
-        let max_box_height = screen_height as f64 * 0.92;
+        let max_box_width = f64::from(screen_width) * HELP_OVERLAY_MAX_WIDTH_RATIO;
+        let max_box_height = f64::from(screen_height) * 0.92;
         let note_font_size = (body_font_size - 2.0 * scale).max(min_font_size);
         let nav_font_size = (body_font_size - 1.0 * scale).max(min_font_size);
         let note_to_close_gap = 12.0 * scale;

@@ -27,7 +27,7 @@ pub(super) fn set_socket_timeout(fd: RawFd, timeout: Duration) -> io::Result<()>
                 fd,
                 libc::SOL_SOCKET,
                 option,
-                (&value as *const libc::timeval).cast(),
+                (&raw const value).cast(),
                 mem::size_of::<libc::timeval>() as libc::socklen_t,
             )
         } != 0
@@ -45,7 +45,7 @@ pub(super) fn shutdown_requested(descriptor: RawFd) -> io::Result<bool> {
         revents: 0,
     };
     // SAFETY: pollfd points to one initialized entry.
-    let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
+    let result = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
     if result < 0 {
         return Err(io::Error::last_os_error());
     }
@@ -66,7 +66,7 @@ pub(super) fn take_graceful_shutdown_signal(descriptor: RawFd) -> io::Result<boo
     };
     loop {
         // SAFETY: pollfd points to one initialized entry.
-        let result = unsafe { libc::poll(&mut pollfd, 1, 0) };
+        let result = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
         if result < 0 {
             let error = io::Error::last_os_error();
             if error.kind() == io::ErrorKind::Interrupted {
@@ -104,7 +104,7 @@ fn receive_graceful_shutdown_signal(descriptor: RawFd) -> io::Result<bool> {
         let received = unsafe {
             libc::recv(
                 descriptor,
-                (&mut byte as *mut u8).cast(),
+                (&raw mut byte).cast(),
                 1,
                 libc::MSG_DONTWAIT | libc::MSG_TRUNC,
             )
@@ -281,14 +281,14 @@ pub(super) fn send_packet(fd: RawFd, packet: &[u8], descriptors: &[RawFd]) -> io
         let mut control = vec![0_usize; control_len.div_ceil(mem::size_of::<usize>())];
         // SAFETY: zero is a valid initial state for msghdr.
         let mut message: libc::msghdr = unsafe { mem::zeroed() };
-        message.msg_iov = &mut iovec;
+        message.msg_iov = &raw mut iovec;
         message.msg_iovlen = 1;
         if !descriptors.is_empty() {
             message.msg_control = control.as_mut_ptr().cast();
             message.msg_controllen = control_len;
             // SAFETY: the control buffer has CMSG_SPACE bytes.
             unsafe {
-                let header = libc::CMSG_FIRSTHDR(&message);
+                let header = libc::CMSG_FIRSTHDR(&raw const message);
                 (*header).cmsg_level = libc::SOL_SOCKET;
                 (*header).cmsg_type = libc::SCM_RIGHTS;
                 (*header).cmsg_len =
@@ -301,7 +301,7 @@ pub(super) fn send_packet(fd: RawFd, packet: &[u8], descriptors: &[RawFd]) -> io
             }
         }
         // SAFETY: message references live packet/control buffers.
-        let sent = unsafe { libc::sendmsg(fd, &message, libc::MSG_NOSIGNAL) };
+        let sent = unsafe { libc::sendmsg(fd, &raw const message, libc::MSG_NOSIGNAL) };
         if sent == packet.len() as isize {
             return Ok(());
         }
@@ -331,18 +331,18 @@ pub(super) fn recv_packet(fd: RawFd) -> io::Result<(Vec<u8>, Vec<OwnedFd>)> {
         let mut control = vec![0_usize; control_len.div_ceil(mem::size_of::<usize>())];
         // SAFETY: zero is a valid initial state for msghdr.
         let mut message: libc::msghdr = unsafe { mem::zeroed() };
-        message.msg_iov = &mut iovec;
+        message.msg_iov = &raw mut iovec;
         message.msg_iovlen = 1;
         message.msg_control = control.as_mut_ptr().cast();
         message.msg_controllen = control_len;
         // SAFETY: message references writable packet/control buffers.
-        let read = unsafe { libc::recvmsg(fd, &mut message, libc::MSG_CMSG_CLOEXEC) };
+        let read = unsafe { libc::recvmsg(fd, &raw mut message, libc::MSG_CMSG_CLOEXEC) };
         if read > 0 {
             let read = read as usize;
             let mut descriptors = Vec::new();
             // SAFETY: recvmsg initialized ancillary headers in the buffer.
             unsafe {
-                let mut header = libc::CMSG_FIRSTHDR(&message);
+                let mut header = libc::CMSG_FIRSTHDR(&raw const message);
                 while !header.is_null() {
                     if (*header).cmsg_level != libc::SOL_SOCKET
                         || (*header).cmsg_type != libc::SCM_RIGHTS
@@ -371,7 +371,7 @@ pub(super) fn recv_packet(fd: RawFd) -> io::Result<(Vec<u8>, Vec<OwnedFd>)> {
                     for index in 0..count {
                         descriptors.push(OwnedFd::from_raw_fd(*data.add(index)));
                     }
-                    header = libc::CMSG_NXTHDR(&message, header);
+                    header = libc::CMSG_NXTHDR(&raw const message, header);
                 }
             }
             if read > MAX_PACKET_BYTES

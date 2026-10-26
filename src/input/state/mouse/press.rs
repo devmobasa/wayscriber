@@ -76,10 +76,9 @@ impl InputState {
                     .boards
                     .active_frame()
                     .shape(selection[0])
-                    .map(|shape| {
+                    .is_some_and(|shape| {
                         matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
-                    })
-                    .unwrap_or(false);
+                    });
             self.open_context_menu(
                 (screen_x, screen_y),
                 selection,
@@ -115,7 +114,7 @@ impl InputState {
     ///
     /// # Behavior
     /// - Left click while Idle: Starts drawing with the current tool (based on modifiers)
-    /// - Left click during TextInput: Updates text position
+    /// - Left click during `TextInput`: Updates text position
     /// - Right click: Cancels current action
     #[allow(dead_code)] // Retained for older callers that only have canvas coordinates.
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {
@@ -346,8 +345,8 @@ impl InputState {
                 &preview.text,
                 &font,
                 self.style.text_wrap_width,
-                (canvas_x - *x) as f64,
-                (canvas_y - *y) as f64,
+                f64::from(canvas_x - *x),
+                f64::from(canvas_y - *y),
             ) else {
                 return;
             };
@@ -515,11 +514,10 @@ impl InputState {
                 .boards
                 .active_frame()
                 .shape(hit_id)
-                .map(|shape| {
+                .is_some_and(|shape| {
                     !shape.locked
                         && matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
-                })
-                .unwrap_or(false);
+                });
             if is_text {
                 self.begin_pointer_drag(button, color);
                 self.state = DrawingState::PendingTextClick {
@@ -557,19 +555,19 @@ impl InputState {
                     moved: false,
                 };
                 return;
-            } else {
-                self.text_editing.set_last_click(None);
-                self.begin_pointer_drag(button, color);
-                self.state = DrawingState::Selecting {
-                    start_x: x,
-                    start_y: y,
-                    additive: self.modifiers.shift,
-                };
-                self.pointer.replace_provisional_bounds(None);
-                self.update_provisional_dirty_with(measurer, x, y);
-                self.needs_redraw = true;
-                return;
             }
+
+            self.text_editing.set_last_click(None);
+            self.begin_pointer_drag(button, color);
+            self.state = DrawingState::Selecting {
+                start_x: x,
+                start_y: y,
+                additive: self.modifiers.shift,
+            };
+            self.pointer.replace_provisional_bounds(None);
+            self.update_provisional_dirty_with(measurer, x, y);
+            self.needs_redraw = true;
+            return;
         }
 
         self.text_editing.set_last_click(None);

@@ -163,7 +163,7 @@ impl InputState {
                 } else {
                     "Highlight pen disabled"
                 };
-                info!("{}", message);
+                info!("{message}");
             }
             _ => return false,
         }

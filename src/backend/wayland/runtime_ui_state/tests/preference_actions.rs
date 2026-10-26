@@ -180,7 +180,7 @@ fn a_rollback_restores_every_durable_chrome_preference() {
             |i| i.ui_visibility.show_floating_badge_always,
             |i| {
                 i.ui_visibility.show_floating_badge_always =
-                    !i.ui_visibility.show_floating_badge_always
+                    !i.ui_visibility.show_floating_badge_always;
             },
         ),
         (

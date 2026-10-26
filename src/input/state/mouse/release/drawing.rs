@@ -140,48 +140,45 @@ pub(super) fn finish_drawing(
         // A recognized stroke enters history as its ink, then turns into the
         // shape as a second step, so the first undo gives the ink back.
         let created = ink.clone().unwrap_or_else(|| shape.clone());
-        match frame.try_add_shape_with_id(created, max_shapes) {
-            Some(new_id) => {
-                if let Some(index) = frame.find_index(new_id) {
-                    if let Some(new_shape) = frame.shape(new_id) {
-                        let snapshot = new_shape.clone();
+        if let Some(new_id) = frame.try_add_shape_with_id(created, max_shapes) {
+            if let Some(index) = frame.find_index(new_id) {
+                if let Some(new_shape) = frame.shape(new_id) {
+                    let snapshot = new_shape.clone();
+                    frame.push_undo_action(
+                        UndoAction::Create {
+                            shapes: vec![(index, snapshot.clone())],
+                        },
+                        undo_limit,
+                    );
+                    if let Some(ink) = ink
+                        && let Some(target) = frame.shape_mut(new_id)
+                    {
+                        target.set_shape(shape.clone());
                         frame.push_undo_action(
-                            UndoAction::Create {
-                                shapes: vec![(index, snapshot.clone())],
+                            UndoAction::Modify {
+                                shape_id: new_id,
+                                before: ShapeSnapshot {
+                                    shape: ink,
+                                    locked: snapshot.locked,
+                                },
+                                after: ShapeSnapshot {
+                                    shape: shape.clone(),
+                                    locked: snapshot.locked,
+                                },
                             },
                             undo_limit,
                         );
-                        if let Some(ink) = ink
-                            && let Some(target) = frame.shape_mut(new_id)
-                        {
-                            target.set_shape(shape.clone());
-                            frame.push_undo_action(
-                                UndoAction::Modify {
-                                    shape_id: new_id,
-                                    before: ShapeSnapshot {
-                                        shape: ink,
-                                        locked: snapshot.locked,
-                                    },
-                                    after: ShapeSnapshot {
-                                        shape: shape.clone(),
-                                        locked: snapshot.locked,
-                                    },
-                                },
-                                undo_limit,
-                            );
-                        }
-                        Some((new_id, snapshot))
-                    } else {
-                        None
                     }
+                    Some((new_id, snapshot))
                 } else {
                     None
                 }
-            }
-            None => {
-                limit_reached = true;
+            } else {
                 None
             }
+        } else {
+            limit_reached = true;
+            None
         }
     };
 
@@ -290,9 +287,9 @@ fn finished_path_damage_regions(shape: &Shape, fallback: Option<Rect>) -> Option
             Some(split_path_damage_regions(points, *thick, fallback?))
         }
         Shape::FreehandPressure { points, .. } => {
-            let max_thick = points
-                .iter()
-                .fold(1.0f64, |max, &(_, _, thickness)| max.max(thickness as f64));
+            let max_thick = points.iter().fold(1.0f64, |max, &(_, _, thickness)| {
+                max.max(f64::from(thickness))
+            });
             let points = points.iter().map(|&(x, y, _)| (x, y)).collect::<Vec<_>>();
             Some(split_path_damage_regions(&points, max_thick, fallback?))
         }

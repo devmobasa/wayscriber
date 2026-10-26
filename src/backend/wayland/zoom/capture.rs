@@ -180,11 +180,8 @@ impl ZoomState {
 
         self.capture_done = false;
 
-        let output = match self.active_output.clone() {
-            Some(out) => out,
-            None => {
-                anyhow::bail!("No active output available for zoom capture");
-            }
+        let Some(output) = self.active_output.clone() else {
+            anyhow::bail!("No active output available for zoom capture");
         };
         let (source_geometry, target_output_id) = require_verified_capture_source(
             self.active_geometry.clone(),
@@ -224,7 +221,7 @@ impl ZoomState {
                     "capture.preflight component=zoom phase=screencopy-buffer width={width} height={height} stride={stride} format={format:?}"
                 );
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
-                    warn!("Failed to prepare zoom buffer: {}", err);
+                    warn!("Failed to prepare zoom buffer: {err}");
                     self.fail_capture(input_state, false, err.to_string());
                 }
             }
@@ -233,7 +230,7 @@ impl ZoomState {
             }
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
-                    warn!("Failed to issue zoom copy: {}", err);
+                    warn!("Failed to issue zoom copy: {err}");
                     self.fail_capture(input_state, false, err.to_string());
                 }
             }
@@ -243,9 +240,8 @@ impl ZoomState {
                         WEnum::Value(v) => v.bits(),
                         WEnum::Unknown(raw) => raw,
                     };
-                    capture.y_invert = Flags::from_bits(raw_flags)
-                        .map(|f| f.contains(Flags::YInvert))
-                        .unwrap_or(false);
+                    capture.y_invert =
+                        Flags::from_bits(raw_flags).is_some_and(|f| f.contains(Flags::YInvert));
                 }
             }
             FrameEvent::Ready { .. } => {
@@ -257,7 +253,7 @@ impl ZoomState {
                         return;
                     }
                     Err(err) => {
-                        warn!("Zoom capture ready handling failed: {}", err);
+                        warn!("Zoom capture ready handling failed: {err}");
                         self.fail_capture(input_state, false, err.to_string());
                         return;
                     }
@@ -307,7 +303,7 @@ impl ZoomState {
         let format = match format {
             WEnum::Value(fmt) => fmt,
             WEnum::Unknown(raw) => {
-                anyhow::bail!("Unknown wl_shm format {}", raw);
+                anyhow::bail!("Unknown wl_shm format {raw}");
             }
         };
 
@@ -465,9 +461,8 @@ mod tests {
             data: vec![0; 3200 * 1800 * 4],
         };
 
-        let error = match finalize_capture_image(image, &context) {
-            Err(error) => error,
-            Ok(_) => panic!("a full output cannot be stretched into a shorter viewport"),
+        let Err(error) = finalize_capture_image(image, &context) else {
+            panic!("a full output cannot be stretched into a shorter viewport");
         };
         assert!(error.to_string().contains("aspect does not match"));
     }

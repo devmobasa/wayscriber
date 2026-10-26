@@ -268,7 +268,7 @@ pub(super) fn binding_row(
             .shortcuts
             .editor()
             .filter(|editor| editor.field == field);
-        let editor_text = editing.map(|editor| editor.text.as_str()).unwrap_or(value);
+        let editor_text = editing.map_or(value, |editor| editor.text.as_str());
         let editor_error = editing.and_then(|editor| editor.parse_error());
         text_editor.refresh(editing.is_some(), editor_text, editor_error.as_deref());
 

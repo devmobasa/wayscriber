@@ -35,7 +35,7 @@ pub fn fill_transparent(ctx: &cairo::Context, width: i32, height: i32) {
     // 0.05 alpha = barely visible, just enough to confirm it's working
     ctx.set_source_rgba(0.1, 0.1, 0.1, 0.05);
     ctx.set_operator(cairo::Operator::Source);
-    ctx.rectangle(0.0, 0.0, width as f64, height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(width), f64::from(height));
     let _ = ctx.fill();
 }
 

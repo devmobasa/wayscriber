@@ -547,7 +547,7 @@ impl OutputGeometry {
     /// Crop origin inside a portal/desktop screenshot of `image_width` ×
     /// `image_height`.
     ///
-    /// Prefer the walked layout origin. If optional zxdg_output metadata is
+    /// Prefer the walked layout origin. If optional `zxdg_output` metadata is
     /// missing, `(0, 0)` is inferred only when topology proves there is a
     /// single output and the image is that output's physical size.
     pub fn portal_crop_origin(&self, image_width: u32, image_height: u32) -> Option<(u32, u32)> {

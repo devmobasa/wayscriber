@@ -176,11 +176,11 @@ impl TooltipCapture {
         self.sync_native_chrome();
         self.inner.native_popovers.set_suppressed(suppressed);
 
-        if !suppressed {
+        if suppressed {
+            self.set_input_enabled(false);
+        } else {
             self.set_input_enabled(true);
             self.inner.mapped_before_capture.set(false);
-        } else {
-            self.set_input_enabled(false);
         }
     }
 

@@ -1,7 +1,7 @@
 //! Session persistence bookkeeping for per-output snapshots.
 //!
 //! Tracks the current session options and whether a snapshot has been loaded
-//! so WaylandState can coordinate persistence without storing extra fields.
+//! so `WaylandState` can coordinate persistence without storing extra fields.
 
 use std::mem;
 

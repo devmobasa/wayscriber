@@ -9,7 +9,7 @@ pub(in crate::backend::wayland) struct UiAnimationClock {
 impl UiAnimationClock {
     pub(in crate::backend::wayland) fn from_fps(fps: u32) -> Self {
         Self {
-            interval: (fps != 0).then(|| Duration::from_secs_f64(1.0 / fps as f64)),
+            interval: (fps != 0).then(|| Duration::from_secs_f64(1.0 / f64::from(fps))),
             next_tick: None,
         }
     }

@@ -82,9 +82,8 @@ impl InputState {
         ctx.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
         ctx.set_font_size(config.footer_font_size);
         let footer_width = text_width(ctx, footer, config.footer_font_size);
-        let recent_width = recent
-            .map(|label| text_width(ctx, label, config.footer_font_size))
-            .unwrap_or(0.0);
+        let recent_width =
+            recent.map_or(0.0, |label| text_width(ctx, label, config.footer_font_size));
         (title_width, footer_width, recent_width)
     }
 

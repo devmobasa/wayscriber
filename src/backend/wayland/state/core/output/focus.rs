@@ -90,7 +90,7 @@ impl WaylandState {
                 warn!("Output switch requested in xdg mode, but no xdg window is active");
                 return;
             };
-            info!("Switching xdg overlay to {}", target_label);
+            info!("Switching xdg overlay to {target_label}");
             window.set_fullscreen(Some(&target_output));
             window.commit();
             self.surface.request_output(target_output);
@@ -106,7 +106,7 @@ impl WaylandState {
             return;
         }
 
-        info!("Switching layer overlay to {}", target_label);
+        info!("Switching layer overlay to {target_label}");
         self.teardown_keyboard_focus();
         self.recreate_layer_surface_for_output(qh, &target_output);
         self.refresh_surface_output(current_output.as_ref(), None);

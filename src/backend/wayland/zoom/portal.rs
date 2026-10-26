@@ -123,10 +123,10 @@ impl ZoomState {
                     };
                     self.install_image(image, provenance);
                 } else {
-                    if !layout_matches {
-                        warn!("Portal zoom capture discarded after the output layout changed");
-                    } else {
+                    if layout_matches {
                         warn!("Portal zoom capture for inactive output discarded");
+                    } else {
+                        warn!("Portal zoom capture discarded after the output layout changed");
                     }
                     if self.queue_portal_layout_retry(target_output, !layout_matches) {
                         return;

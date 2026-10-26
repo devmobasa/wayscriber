@@ -42,6 +42,6 @@ fn validate_history_drops_actions_exceeding_compound_depth() {
         UndoAction::Compound { actions } => {
             assert_eq!(actions.len(), 1, "shallow compound should be preserved");
         }
-        other => panic!("expected compound action, got {:?}", other),
+        other => panic!("expected compound action, got {other:?}"),
     }
 }

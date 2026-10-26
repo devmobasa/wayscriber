@@ -271,7 +271,7 @@ pub(crate) fn handle_right_press(
     let screen = points.screen();
     let canvas = points.canvas();
     if state.should_toggle_radial_menu_from_mouse(MouseButton::Right) {
-        state.toggle_radial_menu(screen.x() as f64, screen.y() as f64);
+        state.toggle_radial_menu(f64::from(screen.x()), f64::from(screen.y()));
         return RoutingOutcome::Consumed(ConsumedBy::RadialMenuToggle);
     }
 
@@ -302,7 +302,7 @@ pub(crate) fn handle_right_press(
 pub(crate) fn handle_middle_press(state: &mut InputState, points: PointerPoints) -> RoutingOutcome {
     let screen = points.screen();
     if state.should_toggle_radial_menu_from_mouse(MouseButton::Middle) {
-        state.toggle_radial_menu(screen.x() as f64, screen.y() as f64);
+        state.toggle_radial_menu(f64::from(screen.x()), f64::from(screen.y()));
         RoutingOutcome::Consumed(ConsumedBy::RadialMenuToggle)
     } else {
         RoutingOutcome::NoRoute(NoRouteReason::NoPointerBinding)
@@ -331,8 +331,9 @@ fn open_context_menu_from_right_click(
                 .boards
                 .active_frame()
                 .shape(selection[0])
-                .map(|shape| matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. }))
-                .unwrap_or(false);
+                .is_some_and(|shape| {
+                    matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
+                });
         state.open_context_menu(
             (screen_x, screen_y),
             selection,
@@ -368,8 +369,8 @@ pub(crate) fn handle_radial_menu_motion(
         return None;
     }
     let screen = points.screen();
-    let x = screen.x() as f64;
-    let y = screen.y() as f64;
+    let x = f64::from(screen.x());
+    let y = f64::from(screen.y());
     if state.radial_menu_is_size_dragging() {
         // Drag capture: while the size gauge is held, every motion adjusts
         // thickness, even outside the band.
@@ -392,10 +393,10 @@ pub(crate) fn handle_color_picker_motion(
     if let Some(target) = state.color_picker_popup_drag_target() {
         // The drag keeps steering the area it started on, even once the
         // pointer leaves that area's bounds.
-        state.color_picker_popup_apply_drag(target, screen.x() as f64, screen.y() as f64);
+        state.color_picker_popup_apply_drag(target, f64::from(screen.x()), f64::from(screen.y()));
         state.color_picker_popup_set_hover(None);
     } else {
-        state.color_picker_popup_set_hover(Some((screen.x() as f64, screen.y() as f64)));
+        state.color_picker_popup_set_hover(Some((f64::from(screen.x()), f64::from(screen.y()))));
     }
     Some(RoutingOutcome::Consumed(ConsumedBy::ColorPickerPopup))
 }
@@ -526,8 +527,8 @@ pub(crate) fn handle_radial_menu_release(
         .radial_menu_handle_release_with_resources(
             resources,
             button,
-            screen.x() as f64,
-            screen.y() as f64,
+            f64::from(screen.x()),
+            f64::from(screen.y()),
         )
         .then_some(RoutingOutcome::Consumed(ConsumedBy::RadialMenu))
 }

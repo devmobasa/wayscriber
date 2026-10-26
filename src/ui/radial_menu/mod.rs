@@ -96,7 +96,7 @@ pub(crate) fn render_radial_menu_with_context(
 
     // Semi-transparent backdrop
     ctx.set_source_rgba(0.0, 0.0, 0.0, overlay::OVERLAY_DIM_LIGHT);
-    ctx.rectangle(0.0, 0.0, width as f64, height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(width), f64::from(height));
     let _ = ctx.fill();
 
     let cx = layout.center_x;
@@ -293,7 +293,7 @@ fn draw_compass_hover(
         return;
     };
     let (seg_angle, offset, tool_gap) = compass_geometry(layout);
-    let start = offset + idx as f64 * seg_angle;
+    let start = offset + f64::from(idx) * seg_angle;
     let end = start + seg_angle;
     draw_annular_sector(
         ctx,
@@ -337,7 +337,7 @@ fn draw_color_hover(
         return;
     };
     let (seg_angle, offset, gap) = color_ring_geometry(layout, swatches.len());
-    let start = offset + idx as f64 * seg_angle;
+    let start = offset + f64::from(idx) * seg_angle;
     let end = start + seg_angle;
     color_swatch_path(ctx, cx, cy, layout, swatch.recent, start + gap, end - gap);
     theme::set_color(ctx, COLOR_HOVER_OVERLAY);
@@ -363,10 +363,10 @@ fn draw_sub_ring(
     }
     let active_tool = input_state.active_tool();
     let (seg_angle, offset, _) = compass_geometry(layout);
-    let parent_start = offset + parent_idx as f64 * seg_angle;
+    let parent_start = offset + f64::from(parent_idx) * seg_angle;
     let child_angle = seg_angle / children.len() as f64;
-    let sub_gap = gap_half_angle((layout.sub_inner + layout.sub_outer) / 2.0);
-    let mid_r = (layout.sub_inner + layout.sub_outer) / 2.0;
+    let sub_gap = gap_half_angle(f64::midpoint(layout.sub_inner, layout.sub_outer));
+    let mid_r = f64::midpoint(layout.sub_inner, layout.sub_outer);
     // Narrow sub wedges render glyph-only; wide ones get the full
     // glyph + label + keycap stack.
     let show_labels = child_angle * mid_r >= overlay::RADIAL_SUB_LABEL_MIN_ARC;
@@ -536,7 +536,7 @@ fn draw_center_well(
 fn compass_geometry(layout: &RadialMenuLayout) -> (f64, f64, f64) {
     let seg_angle = 2.0 * PI / RADIAL_TOOL_SEGMENT_COUNT as f64;
     let offset = -PI / 2.0 - seg_angle / 2.0;
-    let gap = gap_half_angle((layout.tool_inner + layout.tool_outer) / 2.0);
+    let gap = gap_half_angle(f64::midpoint(layout.tool_inner, layout.tool_outer));
     (seg_angle, offset, gap)
 }
 
@@ -549,7 +549,7 @@ fn color_ring_geometry(layout: &RadialMenuLayout, count: usize) -> (f64, f64, f6
     let seg_angle = 2.0 * PI / count as f64;
     let offset = -PI / 2.0 - seg_angle / 2.0;
     let gap = if count > 1 {
-        gap_half_angle((layout.color_inner + layout.color_outer) / 2.0)
+        gap_half_angle(f64::midpoint(layout.color_inner, layout.color_outer))
     } else {
         0.0
     };
@@ -584,13 +584,13 @@ fn compass_wedge_midpoint(
     seg_angle: f64,
 ) -> (f64, f64) {
     let mid_angle = start + seg_angle / 2.0;
-    let mid_r = (layout.tool_inner + layout.tool_outer) / 2.0;
+    let mid_r = f64::midpoint(layout.tool_inner, layout.tool_outer);
     (cx + mid_r * mid_angle.cos(), cy + mid_r * mid_angle.sin())
 }
 
 /// Size-ring track stroke geometry: (arc radius, stroke width).
 fn size_ring_track_geometry(layout: &RadialMenuLayout) -> (f64, f64) {
-    let mid_r = (layout.size_inner + layout.size_outer) / 2.0;
+    let mid_r = f64::midpoint(layout.size_inner, layout.size_outer);
     let width = (layout.size_outer - layout.size_inner) - 2.0 * overlay::RADIAL_SIZE_TRACK_INSET;
     (mid_r, width.max(1.0))
 }
@@ -665,7 +665,7 @@ fn draw_annular_sector(
 
 // ── Slice content resolution (ActionMeta registry) ──
 
-/// Short label of a compass slice, resolved through the ActionMeta registry
+/// Short label of a compass slice, resolved through the `ActionMeta` registry
 /// for action slices.
 fn slice_label(slice: &RadialSlice) -> &'static str {
     match slice.kind {

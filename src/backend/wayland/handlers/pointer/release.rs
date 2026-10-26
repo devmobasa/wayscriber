@@ -109,7 +109,7 @@ impl WaylandState {
                 }
             }
             ReleaseRoute::Unowned => {
-                self.release_by_toolbar_state(event, on_toolbar, inline_active, button)
+                self.release_by_toolbar_state(event, on_toolbar, inline_active, button);
             }
         }
     }
@@ -137,7 +137,7 @@ impl WaylandState {
             self.finish_main_surface_drag(event);
             return;
         }
-        debug!("Button {} released", button);
+        debug!("Button {button} released");
         if self.zoom.active && button == BTN_MIDDLE {
             if self.zoom.panning {
                 self.zoom.stop_pan();

@@ -125,7 +125,7 @@ fn menu_viewport_cap(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> 
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
-/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// (`natural_height`, `viewport_height`), both in pre-scale spec units; `None`
 /// while no menu popover is open. Max scroll = (natural - viewport).max(0).
 pub(super) fn menu_scroll_bounds_planned(
     engine: &UiTextEngine,
@@ -210,7 +210,7 @@ pub(super) fn push_menu_popover(
     }
     if max_scroll > 0.0 {
         let track = (
-            px + pw - (MENU_PAD + MENU_SCROLLBAR_W) / 2.0,
+            px + pw - f64::midpoint(MENU_PAD, MENU_SCROLLBAR_W),
             py + MENU_PAD,
             MENU_SCROLLBAR_W,
             viewport,
@@ -724,8 +724,9 @@ fn settings_notice_height(engine: &UiTextEngine, text: &str, bold: bool) -> f64 
     };
     engine
         .measure(style, text, Some(MENU_CONTENT_W))
-        .map(|extents| extents.height() + MENU_NOTICE_PADDING_Y)
-        .unwrap_or(MENU_TOGGLE_H)
+        .map_or(MENU_TOGGLE_H, |extents| {
+            extents.height() + MENU_NOTICE_PADDING_Y
+        })
         .max(MENU_TOGGLE_H)
 }
 

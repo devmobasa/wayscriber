@@ -278,10 +278,10 @@ fn apply_initial_mode(
     // Apply initial board from CLI (if provided).
     if let Some(initial_id) = backend.initial_mode.clone() {
         if input_state.boards.has_board(&initial_id) {
-            info!("Starting on board '{}'", initial_id);
+            info!("Starting on board '{initial_id}'");
             input_state.switch_board_force_with_measurer(measurer, &initial_id);
         } else if !initial_id.is_empty() {
-            warn!("Requested board '{}' not found; using default", initial_id);
+            warn!("Requested board '{initial_id}' not found; using default");
         }
     }
 }

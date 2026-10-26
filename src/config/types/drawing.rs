@@ -907,8 +907,7 @@ fn quick_color_label(entry: &QuickColorConfig, index: usize) -> String {
     let trimmed = entry.label.trim();
     if trimmed.is_empty() {
         QuickColorSlot::from_index(index)
-            .map(QuickColorSlot::label)
-            .unwrap_or("Quick color")
+            .map_or("Quick color", QuickColorSlot::label)
             .to_string()
     } else {
         trimmed.to_string()

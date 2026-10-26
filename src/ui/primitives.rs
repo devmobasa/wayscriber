@@ -208,8 +208,9 @@ pub(crate) fn draw_pill(
 ) {
     if let Some((sr, sg, sb, sa)) = shadow {
         for layer in (1..=PILL_SHADOW_LAYERS).rev() {
-            let spread = layer as f64;
-            let alpha = sa * (1.0 - (layer as f64 - 1.0) / PILL_SHADOW_LAYERS as f64) * 0.35;
+            let spread = f64::from(layer);
+            let alpha =
+                sa * (1.0 - (f64::from(layer) - 1.0) / f64::from(PILL_SHADOW_LAYERS)) * 0.35;
             ctx.set_source_rgba(sr, sg, sb, alpha);
             draw_rounded_rect(
                 ctx,
@@ -520,31 +521,27 @@ pub(crate) fn draw_badge_with_engine(
     let _ = ctx.fill();
 
     theme::set_color(ctx, theme::overlay::TEXT_WHITE);
-    match &hint_layout {
-        Some((hint_text_layout, hint_extents)) => {
-            label_layout.show_at_baseline(
-                ctx,
-                x + text_inset,
-                top_y + label_extents.height() + padding * 0.3,
-            );
-            // Hint text (dimmer)
-            theme::set_color(ctx, theme::with_alpha(theme::overlay::TEXT_WHITE, 0.7));
-            hint_text_layout.show_at_baseline(
-                ctx,
-                x + text_inset,
-                top_y + label_extents.height() + hint_extents.height() + padding * 0.6,
-            );
-        }
-        None => {
-            // Center the label ink vertically. A fixed baseline offset from
-            // the pill bottom assumed all ink sits above the baseline (true
-            // for all-caps FROZEN/ZOOM), but mixed-case labels like the
-            // board/page badge's "Overlay | Page 1/2" have descenders that
-            // dipped into the bottom padding and nearly touched the edge.
-            let baseline =
-                top_y + (height - label_extents.height()) / 2.0 - label_extents.y_bearing();
-            label_layout.show_at_baseline(ctx, x + text_inset, baseline);
-        }
+    if let Some((hint_text_layout, hint_extents)) = &hint_layout {
+        label_layout.show_at_baseline(
+            ctx,
+            x + text_inset,
+            top_y + label_extents.height() + padding * 0.3,
+        );
+        // Hint text (dimmer)
+        theme::set_color(ctx, theme::with_alpha(theme::overlay::TEXT_WHITE, 0.7));
+        hint_text_layout.show_at_baseline(
+            ctx,
+            x + text_inset,
+            top_y + label_extents.height() + hint_extents.height() + padding * 0.6,
+        );
+    } else {
+        // Center the label ink vertically. A fixed baseline offset from
+        // the pill bottom assumed all ink sits above the baseline (true
+        // for all-caps FROZEN/ZOOM), but mixed-case labels like the
+        // board/page badge's "Overlay | Page 1/2" have descenders that
+        // dipped into the bottom padding and nearly touched the edge.
+        let baseline = top_y + (height - label_extents.height()) / 2.0 - label_extents.y_bearing();
+        label_layout.show_at_baseline(ctx, x + text_inset, baseline);
     }
 
     height

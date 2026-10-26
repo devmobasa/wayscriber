@@ -222,16 +222,13 @@ fn attach_button_controller(popover: &gtk::Popover, sender: &ComponentSender<Con
         let Some(button_event) = event.downcast_ref::<ButtonEvent>() else {
             return Propagation::Proceed;
         };
-        let kind = event
-            .device()
-            .map(|device| match device.source() {
-                InputSource::Mouse | InputSource::Touchpad | InputSource::Trackpoint => {
-                    RecorderDeviceKind::Mouse
-                }
-                InputSource::Pen => RecorderDeviceKind::Pen,
-                _ => RecorderDeviceKind::Other,
-            })
-            .unwrap_or(RecorderDeviceKind::Other);
+        let kind = match event.device().map(|device| device.source()) {
+            Some(InputSource::Mouse | InputSource::Touchpad | InputSource::Trackpoint) => {
+                RecorderDeviceKind::Mouse
+            }
+            Some(InputSource::Pen) => RecorderDeviceKind::Pen,
+            _ => RecorderDeviceKind::Other,
+        };
         let modifiers = event.modifier_state();
         let recorded = KeyboardModifiers {
             ctrl: modifiers.contains(ModifierType::CONTROL_MASK),

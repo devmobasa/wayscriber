@@ -40,7 +40,7 @@ const INDICATOR_OUTLINE: Rgba = (0.0, 0.0, 0.0, 0.4);
 /// `theme::toolbar::COLOR_SWATCH_HAIRLINE_DARK`.
 const SWATCH_BORDER_ON_DARK: Rgba = (0.5, 0.5, 0.5, 0.8);
 const SWATCH_BORDER_ON_LIGHT: Rgba = (0.2, 0.2, 0.2, 0.6);
-/// Validation-error red for the hex field (softer than DESTRUCTIVE_RGB).
+/// Validation-error red for the hex field (softer than `DESTRUCTIVE_RGB`).
 const HEX_INVALID_GLOW: Rgba = (0.9, 0.3, 0.3, 0.25);
 const HEX_INVALID_BORDER: Rgba = (0.9, 0.35, 0.3, 0.9);
 /// Hex input border when unfocused.
@@ -105,8 +105,8 @@ pub(crate) fn color_picker_popup_visual_geometry_with_engine(
             tooltip,
             anchor_x,
             anchor_y,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(screen_width),
+            f64::from(screen_height),
         )
     {
         bounds = union_bounds(
@@ -143,7 +143,7 @@ pub fn render_color_picker_popup(
         input_state,
         screen_width,
         screen_height,
-    )
+    );
 }
 
 pub(crate) fn render_color_picker_popup_with_engine(
@@ -157,14 +157,12 @@ pub(crate) fn render_color_picker_popup_with_engine(
         return;
     }
 
-    let layout = match input_state.color_picker_popup_layout() {
-        Some(layout) => layout,
-        None => return,
+    let Some(layout) = input_state.color_picker_popup_layout() else {
+        return;
     };
 
-    let current_color = match input_state.color_picker_popup_current_color() {
-        Some(color) => color,
-        None => return,
+    let Some(current_color) = input_state.color_picker_popup_current_color() else {
+        return;
     };
 
     let hex_buffer = input_state
@@ -177,7 +175,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
 
     // Dim background
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
-    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(screen_width), f64::from(screen_height));
     let _ = ctx.fill();
 
     // Panel background
@@ -296,15 +294,10 @@ pub(crate) fn render_color_picker_popup_with_engine(
     // restore the inline hex actions the pre-overhaul color section carried.
     let hover_pos = input_state.color_picker_popup_hover();
     let size = layout.action_btn_size;
-    let copy_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_copy_button(hx, hy))
-        .unwrap_or(false);
-    let paste_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_paste_button(hx, hy))
-        .unwrap_or(false);
-    let eyedropper_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy))
-        .unwrap_or(false);
+    let copy_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_copy_button(hx, hy));
+    let paste_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_paste_button(hx, hy));
+    let eyedropper_hover =
+        hover_pos.is_some_and(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy));
     draw_action_button(
         ctx,
         layout.copy_btn_x,
@@ -336,20 +329,15 @@ pub(crate) fn render_color_picker_popup_with_engine(
     }
 
     // Determine button hover states
-    let ok_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_ok_button(hx, hy))
-        .unwrap_or(false);
-    let cancel_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_cancel_button(hx, hy))
-        .unwrap_or(false);
+    let ok_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_ok_button(hx, hy));
+    let cancel_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_cancel_button(hx, hy));
 
     // "Default" button: only while recoloring a slot the shipped palette
     // defines. It stages the built-in color instead of committing, so it is a
     // secondary action next to OK/Cancel.
     if let Some((default_x, default_y)) = layout.default_btn {
-        let default_hover = hover_pos
-            .map(|(hx, hy)| layout.point_in_default_button(hx, hy))
-            .unwrap_or(false);
+        let default_hover =
+            hover_pos.is_some_and(|(hx, hy)| layout.point_in_default_button(hx, hy));
         draw_button(
             engine,
             ctx,
@@ -421,8 +409,8 @@ pub(crate) fn render_color_picker_popup_with_engine(
             tooltip,
             anchor_x,
             anchor_y,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(screen_width),
+            f64::from(screen_height),
         );
     }
 

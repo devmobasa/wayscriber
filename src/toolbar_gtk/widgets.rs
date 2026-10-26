@@ -259,7 +259,7 @@ fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
 /// Whether a focus-widget change should drop the toolbar window's keyboard
 /// mode. Entries keep it: the editable hex field needs the keys it captures.
 /// Focus inside a popover keeps it too, for a different reason: the popover
-/// is an xdg_popup holding a keyboard grab on its own surface. Dropping the
+/// is an `xdg_popup` holding a keyboard grab on its own surface. Dropping the
 /// parent layer surface's keyboard mode there makes the compositor pull
 /// keyboard focus from the grabbing popup between a click's press and
 /// release, and that broken grab stalls the release — a Settings checkbox
@@ -473,7 +473,7 @@ impl SwatchButton {
         let draw_color = color_cell.clone();
         let draw_selected = selected_cell.clone();
         area.set_draw_func(move |_, ctx, width, height| {
-            let size = width.min(height) as f64;
+            let size = f64::from(width.min(height));
             let (r, g, b, a) = draw_color.get();
             // Rounded square with a subtle inner hairline, matching the
             // built-in bars. The fill is inset so the selected accent ring
@@ -481,7 +481,7 @@ impl SwatchButton {
             // translucent color sits on the checkerboard, as the built-in
             // bars paint it.
             let swatch_path = |ctx: &cairo::Context| {
-                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0)
+                rounded_rect_path(ctx, 4.0, 4.0, size - 8.0, size - 8.0, 4.0);
             };
             ui::checkerboard_behind(ctx, a, swatch_path);
             ctx.set_source_rgba(r, g, b, a);

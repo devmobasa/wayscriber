@@ -70,8 +70,7 @@ impl ToolbarRuntimeState {
         let startup_incident = bootstrap.startup_incident;
         if let Some(incident) = startup_incident {
             log::warn!(
-                "Runtime UI state started behind recovery barrier {:?}; runtime preference writes are blocked",
-                incident
+                "Runtime UI state started behind recovery barrier {incident:?}; runtime preference writes are blocked"
             );
         }
         let writer = RuntimeUiStateWriter::spawn_with_completion_notifier(store, move || {
@@ -679,7 +678,7 @@ impl ToolbarRuntimeState {
                 recovery_artifacts, ..
             } => self.note_reset_completed(&recovery_artifacts),
             SubmitSourceMutationResult::Integrated { recovery_artifacts } => {
-                self.note_recovery_artifacts(&recovery_artifacts)
+                self.note_recovery_artifacts(&recovery_artifacts);
             }
             SubmitSourceMutationResult::Rejected(error) => {
                 self.note_lifecycle_error(format!(

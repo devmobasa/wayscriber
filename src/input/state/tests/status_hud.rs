@@ -98,7 +98,7 @@ fn status_hud_reclassifies_hover_after_toolbar_hint_relayouts_segments() {
     let segment_now_under_pointer = input
         .status_hud
         .layout()
-        .and_then(|layout| layout.segment_at(x as f64, y as f64));
+        .and_then(|layout| layout.segment_at(f64::from(x), f64::from(y)));
     assert_eq!(
         segment_now_under_pointer,
         Some(StatusHudSegmentKind::Toolbar)
@@ -529,7 +529,7 @@ fn status_hud_ignored_while_radial_menu_overlays_it() {
 
     // Open the radial menu over the HUD (as the Tool chip does): its rings
     // render above the pill, so the HUD must stop consuming presses there.
-    input.open_radial_menu(x as f64, y as f64);
+    input.open_radial_menu(f64::from(x), f64::from(y));
     assert!(input.is_radial_menu_open());
 
     // The press side reports no hit while the menu is open.

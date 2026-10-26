@@ -125,7 +125,7 @@ impl WaylandState {
             }
             Ok(false) => {}
             Err(err) => {
-                log::warn!("Frozen pending image activation failed: {}", err);
+                log::warn!("Frozen pending image activation failed: {err}");
                 self.restore_xdg_after_frozen();
             }
         }

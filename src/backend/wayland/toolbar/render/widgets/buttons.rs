@@ -16,7 +16,7 @@ use crate::ui_text::{UiTextEngine, UiTextStyle};
 use std::f64::consts::PI;
 
 /// Faint white glow behind a hovered flat button (quieter than
-/// COLOR_ICON_HOVER_BG; value-coincides with COLOR_DIVIDER but is a hover
+/// `COLOR_ICON_HOVER_BG`; value-coincides with `COLOR_DIVIDER` but is a hover
 /// affordance, not a separator).
 const COLOR_BUTTON_HOVER_GLOW: Rgba = (1.0, 1.0, 1.0, 0.08);
 /// Warning-tinted glow behind a hovered destructive button (destructive

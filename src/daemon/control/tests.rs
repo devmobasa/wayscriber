@@ -505,8 +505,7 @@ fn take_daemon_toggle_request_drains_multiple_payloads_in_order() {
     assert!(
         daemon_command_dir()
             .read_dir()
-            .map(|mut entries| entries.next().is_none())
-            .unwrap_or(true)
+            .map_or(true, |mut entries| entries.next().is_none())
     );
 
     // SAFETY: this test still holds the environment mutex in `_guard`.

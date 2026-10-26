@@ -93,7 +93,7 @@ fn rollback_moved_artifacts_after_catalog_failure(
     reason: &str,
 ) -> Result<SessionCatalogActionResult, String> {
     match session::rollback_named_session_non_lock_artifacts_move(outcome) {
-        Ok(_) => Err(trf(
+        Ok(()) => Err(trf(
             "Move Session failed because {}; rolled back moved files for {}.",
             &[&reason, &item.display_name],
         )),

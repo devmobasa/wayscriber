@@ -75,8 +75,7 @@ pub fn format_unix_millis(ms: u64, template: &str) -> Option<String> {
 pub fn now_rfc3339() -> String {
     system_time_to_unix_seconds(SystemTime::now())
         .and_then(utc_datetime_from_unix)
-        .map(format_rfc3339_utc)
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+        .map_or_else(|| "1970-01-01T00:00:00Z".to_string(), format_rfc3339_utc)
 }
 
 fn push_padded_u8(out: &mut String, value: u8) {
@@ -163,9 +162,9 @@ fn libc_datetime_from_unix(secs: i64, local: bool) -> Option<LocalDateTime> {
     // one `tm`. The reentrant variants keep no pointer to either.
     let ptr = unsafe {
         if local {
-            libc::localtime_r(&raw, out.as_mut_ptr())
+            libc::localtime_r(&raw const raw, out.as_mut_ptr())
         } else {
-            libc::gmtime_r(&raw, out.as_mut_ptr())
+            libc::gmtime_r(&raw const raw, out.as_mut_ptr())
         }
     };
     if ptr.is_null() {

@@ -59,7 +59,7 @@ pub(super) fn dispatch_events(
         |state| route_woken_sources(state, signals),
         animation_timeout,
     )
-    .map_err(|e| anyhow::anyhow!("Wayland event queue error: {}", e))
+    .map_err(|e| anyhow::anyhow!("Wayland event queue error: {e}"))
 }
 
 #[cfg(test)]
@@ -134,7 +134,7 @@ mod tests {
         loop {
             // SAFETY: pollfd and the runtime wake descriptor stay valid for this
             // bounded test wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, 1_000) };
+            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
             if ready > 0 {
                 assert_ne!(pollfd.revents & libc::POLLIN, 0);
                 return;

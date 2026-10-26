@@ -242,10 +242,10 @@ impl FrozenState {
                 }
             }
         } else {
-            if !layout_matches {
-                warn!("Portal capture discarded after the output layout changed");
-            } else {
+            if layout_matches {
                 warn!("Portal capture for inactive output discarded");
+            } else {
+                warn!("Portal capture discarded after the output layout changed");
             }
             if self.queue_portal_layout_retry(target_output, !layout_matches) {
                 return;

@@ -26,7 +26,7 @@ fn no_backdrop<'a>() -> EraserReplayContext<'a> {
     }
 }
 
-fn with_backdrop<'a>(surface: &'a ImageSurface) -> EraserReplayContext<'a> {
+fn with_backdrop(surface: &ImageSurface) -> EraserReplayContext<'_> {
     EraserReplayContext {
         surface: Some(surface),
         ..no_backdrop()

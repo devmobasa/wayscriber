@@ -106,12 +106,11 @@ fn parse_action_file(path: &Path, content: &str) -> Option<TrayAction> {
     if action_str.is_empty() {
         return None;
     }
-    match TrayAction::parse(action_str) {
-        Some(action) => Some(action),
-        None => {
-            warn!("Unknown tray action '{}' in {}", action_str, path.display());
-            None
-        }
+    if let Some(action) = TrayAction::parse(action_str) {
+        Some(action)
+    } else {
+        warn!("Unknown tray action '{}' in {}", action_str, path.display());
+        None
     }
 }
 

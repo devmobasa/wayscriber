@@ -1,4 +1,4 @@
-//! Color picker popup state methods for InputState.
+//! Color picker popup state methods for `InputState`.
 
 use crate::draw::TextMeasurer;
 use std::borrow::Cow;
@@ -442,7 +442,7 @@ impl InputState {
         y: i32,
     ) -> bool {
         self.color_picker_popup
-            .note_action_press(x as f64, y as f64)
+            .note_action_press(f64::from(x), f64::from(y))
     }
 
     pub(in crate::input::state) fn color_picker_popup_clear_action_press(&mut self) {

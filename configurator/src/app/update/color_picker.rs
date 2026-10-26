@@ -121,7 +121,7 @@ impl ConfiguratorApp {
                 let values = rgb.map(format_rgb255);
                 for (component, value) in values.iter().enumerate() {
                     if let Some(slot) = self.draft.drawing_color.rgb.get_mut(component) {
-                        *slot = value.to_string();
+                        *slot = value.clone();
                     }
                 }
             }
@@ -130,7 +130,7 @@ impl ConfiguratorApp {
                 if let Some(entry) = self.draft.drawing_quick_colors.get_mut(index) {
                     for (component, value) in values.iter().enumerate() {
                         if let Some(slot) = entry.color.rgb.get_mut(component) {
-                            *slot = value.to_string();
+                            *slot = value.clone();
                         }
                     }
                 }
@@ -139,7 +139,7 @@ impl ConfiguratorApp {
                 if let Some(item) = self.draft.boards.items.get_mut(index) {
                     for (component, value) in values.iter().enumerate() {
                         item.background_color
-                            .set_component(component, value.to_string());
+                            .set_component(component, value.clone());
                     }
                 }
             }
@@ -148,7 +148,7 @@ impl ConfiguratorApp {
                     for (component, value) in values.iter().enumerate() {
                         item.default_pen_color
                             .color
-                            .set_component(component, value.to_string());
+                            .set_component(component, value.clone());
                     }
                 }
             }
@@ -206,7 +206,7 @@ impl ConfiguratorApp {
 
     fn apply_quad_rgb(&mut self, field: QuadField, values: &[String; 3], alpha: Option<f64>) {
         for (component, value) in values.iter().enumerate() {
-            self.draft.set_quad(field, component, value.to_string());
+            self.draft.set_quad(field, component, value.clone());
         }
         if let Some(alpha) = alpha {
             self.draft.set_quad(field, 3, format_float(alpha));

@@ -56,11 +56,9 @@ pub(super) fn poll_with_retry<T>(
     loop {
         match attempt(timeout_ms) {
             Err(err) if err.kind() == io::ErrorKind::Interrupted => {
-                timeout_ms = deadline
-                    .map(|deadline| {
-                        timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
-                    })
-                    .unwrap_or(-1);
+                timeout_ms = deadline.map_or(-1, |deadline| {
+                    timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
+                });
             }
             result => return result,
         }
@@ -102,7 +100,7 @@ impl RuntimeWakeSource {
             let result = unsafe {
                 libc::read(
                     self.fd.as_raw_fd(),
-                    (&mut value as *mut u64).cast(),
+                    (&raw mut value).cast(),
                     size_of::<u64>(),
                 )
             };
@@ -135,7 +133,7 @@ impl RuntimeWakeSource {
             };
             // SAFETY: pollfd is valid and the Arc-owned descriptor remains open
             // throughout this bounded or producer-woken wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+            let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
             if ready == 0 {
                 return Ok(None);
             }
@@ -159,16 +157,14 @@ impl RuntimeWakeSource {
 }
 
 pub(super) fn timeout_to_poll_ms(timeout: Option<Duration>) -> i32 {
-    timeout
-        .map(|duration| {
-            // poll(2) accepts integer milliseconds. Round positive fractions
-            // up so an unexpired deadline never becomes a zero-timeout spin.
-            duration
-                .as_nanos()
-                .div_ceil(1_000_000)
-                .min(i32::MAX as u128) as i32
-        })
-        .unwrap_or(-1)
+    timeout.map_or(-1, |duration| {
+        // poll(2) accepts integer milliseconds. Round positive fractions
+        // up so an unexpired deadline never becomes a zero-timeout spin.
+        duration
+            .as_nanos()
+            .div_ceil(1_000_000)
+            .min(i32::MAX as u128) as i32
+    })
 }
 
 impl RuntimeWakeHandle {
@@ -180,7 +176,7 @@ impl RuntimeWakeHandle {
             let result = unsafe {
                 libc::write(
                     self.fd.as_raw_fd(),
-                    (&value as *const u64).cast(),
+                    (&raw const value).cast(),
                     size_of::<u64>(),
                 )
             };
@@ -220,7 +216,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: pollfd is valid for the duration of this call.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+        let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
         assert!(ready >= 0, "poll failed: {}", io::Error::last_os_error());
         ready > 0 && pollfd.revents & libc::POLLIN != 0
     }

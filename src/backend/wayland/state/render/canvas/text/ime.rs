@@ -36,9 +36,9 @@ pub(super) fn paint_preedit_selection(
     attrs.insert(alpha);
     layout.set_attributes(Some(&attrs));
 
-    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    let baseline = f64::from(layout.baseline()) / f64::from(pango::SCALE);
     ctx.save().ok();
-    ctx.move_to(x as f64, y as f64 - baseline);
+    ctx.move_to(f64::from(x), f64::from(y) - baseline);
     // The transparent source suppresses a second glyph pass; Pango's explicit
     // background attributes still paint the selected range.
     ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0);
@@ -87,9 +87,9 @@ pub(super) fn paint_preedit_underline(
     attrs.insert(foreground_alpha);
     layout.set_attributes(Some(&attrs));
 
-    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    let baseline = f64::from(layout.baseline()) / f64::from(pango::SCALE);
     ctx.save().ok();
-    ctx.move_to(origin.0 as f64, origin.1 as f64 - baseline);
+    ctx.move_to(f64::from(origin.0), f64::from(origin.1) - baseline);
     ctx.set_source_rgba(0.0, 0.0, 0.0, color.a.clamp(0.0, 1.0));
     functions::show_layout(ctx, &layout);
     ctx.restore().ok();

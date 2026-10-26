@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_board_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.board.toggle_whiteboard, Action::ToggleWhiteboard)?;
         inserter.insert_all(&self.board.toggle_blackboard, Action::ToggleBlackboard)?;

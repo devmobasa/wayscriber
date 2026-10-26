@@ -202,8 +202,8 @@ impl InputState {
             &heights,
             rows_top,
             column_width,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(screen_width),
+            f64::from(screen_height),
         );
         let scroll = fit.scrolled_content.map(|content| {
             let max_offset = (content - fit.height).max(0.0);
@@ -232,8 +232,8 @@ impl InputState {
         };
         let panel_height = (rows_top + fit.height + ACTIONS_HEIGHT + tail + PADDING_BOTTOM).ceil();
 
-        let screen_w = screen_width as f64;
-        let screen_h = screen_height as f64;
+        let screen_w = f64::from(screen_width);
+        let screen_h = f64::from(screen_height);
         let (origin_x, origin_y) = place_panel(
             panel.anchor,
             panel.anchor_rect,
@@ -478,10 +478,10 @@ fn place_panel(
 ) -> (f64, f64) {
     let (mut origin_x, mut origin_y) = if screen_w > 0.0 && screen_h > 0.0 {
         if let Some(bounds) = anchor_rect {
-            let rect_x = bounds.x as f64;
-            let rect_y = bounds.y as f64;
-            let rect_w = bounds.width.max(1) as f64;
-            let rect_h = bounds.height.max(1) as f64;
+            let rect_x = f64::from(bounds.x);
+            let rect_y = f64::from(bounds.y);
+            let rect_w = f64::from(bounds.width.max(1));
+            let rect_h = f64::from(bounds.height.max(1));
             let center_x = rect_x + rect_w / 2.0;
             let center_y = rect_y + rect_h / 2.0;
 

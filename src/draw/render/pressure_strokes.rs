@@ -189,7 +189,7 @@ fn pressure_stroke_preview_samples(
 
     for i in 0..len {
         let (x, y) = points[i];
-        let width = (thicknesses[i] as f64).max(PRESSURE_STROKE_MIN_WIDTH);
+        let width = f64::from(thicknesses[i]).max(PRESSURE_STROKE_MIN_WIDTH);
         samples.push(PressureStrokeSample {
             x,
             y,
@@ -416,7 +416,7 @@ mod tests {
         );
         drop(ctx);
 
-        let alpha = alpha_at(&mut surface, 100, 80) as i32;
+        let alpha = i32::from(alpha_at(&mut surface, 100, 80));
         assert!(
             (expected_alpha - 8..=expected_alpha + 8).contains(&alpha),
             "expected preview overlap alpha near {expected_alpha}, got {alpha}"
@@ -449,7 +449,7 @@ mod tests {
             let (x0, y0) = window[0];
             let (x1, y1) = window[1];
             for step in 1..20 {
-                let t = step as f64 / 20.0;
+                let t = f64::from(step) / 20.0;
                 let x = x0 + (x1 - x0) * t;
                 let y = y0 + (y1 - y0) * t;
                 assert!(
@@ -480,7 +480,7 @@ mod tests {
         );
         drop(ctx);
 
-        let alpha = alpha_at(&mut surface, 100, 80) as i32;
+        let alpha = i32::from(alpha_at(&mut surface, 100, 80));
         assert!(
             (expected_alpha - 8..=expected_alpha + 8).contains(&alpha),
             "expected overlap alpha near {expected_alpha}, got {alpha}"

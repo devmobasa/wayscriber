@@ -109,7 +109,7 @@ pub(super) fn run_event_loop(
         if let Err(e) =
             dispatch::dispatch_events(event_queue, state, runtime_wake, signal_state, timeout)
         {
-            warn!("Event queue error: {}", e);
+            warn!("Event queue error: {e}");
             loop_error = Some(e);
             break;
         }
@@ -163,7 +163,7 @@ pub(super) fn run_event_loop(
             state.cancel_region_capture_for_teardown();
             state.finish_clipboard_fallback_saves();
             if let Err(err) = session_save::persist_session(state) {
-                warn!("Failed to save session state: {}", err);
+                warn!("Failed to save session state: {err}");
                 session_save::notify_session_failure(state, &err);
             }
             // Every exit path funnels here, including the post-dispatch break
@@ -256,7 +256,7 @@ fn persist_post_dispatch_state(state: &mut WaylandState) {
         }
     }
     if let Err(err) = session_save::autosave_if_due(state, Instant::now()) {
-        warn!("Failed to autosave session state: {}", err);
+        warn!("Failed to autosave session state: {err}");
     }
     if !state.input_state.should_exit {
         state.reconcile_text_input();

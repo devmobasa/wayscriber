@@ -280,14 +280,14 @@ fn document_load_enforces_finite_policy_for_every_float_and_array_component() {
             // Board RGB maps normalize to the canonical array representation.
             let output_path = case.path.replace(".rgb.", ".");
             let actual = get(&loaded, &output_path).and_then(Value::as_float);
-            let expected = if !input.is_finite() {
-                case.fallback
-            } else {
+            let expected = if input.is_finite() {
                 Some(match case.bounds {
                     Some((min, _)) if input < min => min,
                     Some((_, max)) if input > max => max,
                     _ => input,
                 })
+            } else {
+                case.fallback
             };
             assert_eq!(actual, expected, "{} input={input}", case.path);
             assert_eq!(

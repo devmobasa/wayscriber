@@ -1,8 +1,8 @@
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_tool_v2::Type;
 
-/// Physical tool types as defined by the zwp_tablet_tool_v2 protocol.
+/// Physical tool types as defined by the `zwp_tablet_tool_v2` protocol.
 ///
-/// See: https://wayland.app/protocols/tablet-v2#zwp_tablet_tool_v2:enum:type
+/// See: <https://wayland.app/protocols/tablet-v2#zwp_tablet_tool_v2:enum:type>
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TabletToolType {
     /// Pen tool (0x140)
@@ -43,7 +43,7 @@ impl TabletToolType {
     /// Protocol value for lens tool
     const LENS_VALUE: u32 = 0x147;
 
-    /// Converts from the raw u32 protocol value to TabletToolType.
+    /// Converts from the raw u32 protocol value to `TabletToolType`.
     pub fn from_raw(value: u32) -> Self {
         match value {
             Self::PEN_VALUE => TabletToolType::Pen,

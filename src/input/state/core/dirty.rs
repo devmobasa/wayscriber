@@ -152,7 +152,7 @@ impl InputState {
                     let start = point_thicknesses.len().saturating_sub(2);
                     point_thicknesses[start..]
                         .iter()
-                        .fold(1.0f64, |max, &thickness| max.max(thickness as f64))
+                        .fold(1.0f64, |max, &thickness| max.max(f64::from(thickness)))
                 } else {
                     self.thickness_for_tool(*tool)
                 }
