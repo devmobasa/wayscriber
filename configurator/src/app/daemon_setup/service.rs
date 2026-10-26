@@ -54,9 +54,8 @@ pub(super) fn detect_service_unit_path(systemctl_available: bool) -> Option<Path
 }
 
 pub(super) fn query_service_enabled() -> bool {
-    let capture = match run_command("systemctl", &["--user", "is-enabled", SERVICE_NAME]) {
-        Ok(capture) => capture,
-        Err(_) => return false,
+    let Ok(capture) = run_command("systemctl", &["--user", "is-enabled", SERVICE_NAME]) else {
+        return false;
     };
     if !capture.success {
         return false;
@@ -66,9 +65,8 @@ pub(super) fn query_service_enabled() -> bool {
 }
 
 pub(super) fn query_service_active() -> bool {
-    let capture = match run_command("systemctl", &["--user", "is-active", SERVICE_NAME]) {
-        Ok(capture) => capture,
-        Err(_) => return false,
+    let Ok(capture) = run_command("systemctl", &["--user", "is-active", SERVICE_NAME]) else {
+        return false;
     };
     capture.success && capture.stdout.trim() == "active"
 }

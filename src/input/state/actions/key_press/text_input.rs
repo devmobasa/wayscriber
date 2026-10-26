@@ -194,7 +194,7 @@ impl InputState {
                 .font_descriptor
                 .to_pango_string(self.style.current_font_size)
         });
-        let changed = match self.text_editing.apply_key_edit(
+        let Some(changed) = self.text_editing.apply_key_edit(
             &mut self.state,
             key,
             ctrl,
@@ -204,9 +204,8 @@ impl InputState {
                 font: font_for_navigation.as_deref().unwrap_or_default(),
                 wrap_width: self.style.text_wrap_width,
             },
-        ) {
-            Some(changed) => changed,
-            None => return false,
+        ) else {
+            return false;
         };
         if changed {
             self.needs_redraw = true;

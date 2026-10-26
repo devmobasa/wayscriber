@@ -583,10 +583,9 @@ mod tests {
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         drop(shutdown_writer);
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("hangup must unwind through destructive broker cleanup"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            panic!("hangup must unwind through destructive broker cleanup");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
@@ -635,10 +634,9 @@ mod tests {
             1
         );
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("invalid packet must not authorize ownership release"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            panic!("invalid packet must not authorize ownership release");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
@@ -662,10 +660,9 @@ mod tests {
             2
         );
 
-        let error = match wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        {
-            Ok(_) => panic!("oversized packet must not authorize ownership release"),
-            Err(error) => error,
+        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
+        else {
+            panic!("oversized packet must not authorize ownership release");
         };
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);

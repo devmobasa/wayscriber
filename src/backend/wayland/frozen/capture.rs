@@ -223,11 +223,8 @@ impl FrozenState {
 
         self.capture_done = false;
 
-        let output = match self.active_output.clone() {
-            Some(out) => out,
-            None => {
-                anyhow::bail!("No active output available for frozen capture");
-            }
+        let Some(output) = self.active_output.clone() else {
+            anyhow::bail!("No active output available for frozen capture");
         };
         let (source_geometry, target_output_id) = require_verified_capture_source(
             self.active_geometry.clone(),
@@ -343,9 +340,11 @@ impl FrozenState {
         height: u32,
         stride: u32,
     ) -> Result<()> {
-        let capture = match self.direct_capture.as_mut() {
-            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
-            _ => anyhow::bail!("No WLR capture session present for buffer event"),
+        let Some(DirectCaptureAttempt::WlrScreencopy {
+            session: capture, ..
+        }) = self.direct_capture.as_mut()
+        else {
+            anyhow::bail!("No WLR capture session present for buffer event");
         };
 
         let format = match format {
@@ -375,9 +374,11 @@ impl FrozenState {
     }
 
     fn on_buffer_done(&mut self) -> Result<()> {
-        let capture = match self.direct_capture.as_mut() {
-            Some(DirectCaptureAttempt::WlrScreencopy { session, .. }) => session,
-            _ => anyhow::bail!("No WLR capture session present for buffer_done"),
+        let Some(DirectCaptureAttempt::WlrScreencopy {
+            session: capture, ..
+        }) = self.direct_capture.as_mut()
+        else {
+            anyhow::bail!("No WLR capture session present for buffer_done");
         };
         capture.request_copy();
         Ok(())

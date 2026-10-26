@@ -201,10 +201,10 @@ pub(crate) fn paint_pdf_page_background(
     width: f64,
     height: f64,
 ) {
-    let color = match page.backdrop {
-        CanvasExportBackdropSnapshot::Solid(color)
-        | CanvasExportBackdropSnapshot::BoardPaper { color, .. } => color,
-        _ => return,
+    let (CanvasExportBackdropSnapshot::Solid(color)
+    | CanvasExportBackdropSnapshot::BoardPaper { color, .. }) = page.backdrop
+    else {
+        return;
     };
     let _ = ctx.save();
     ctx.set_source_rgba(color.r, color.g, color.b, color.a);

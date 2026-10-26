@@ -731,9 +731,8 @@ mod tests {
             logical_to_image_scale_y: 1.0,
         };
 
-        let err = match render_canvas_surface(&export) {
-            Ok(_) => panic!("short backdrop must fail"),
-            Err(err) => err,
+        let Err(err) = render_canvas_surface(&export) else {
+            panic!("short backdrop must fail");
         };
 
         assert!(

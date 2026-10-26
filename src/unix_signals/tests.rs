@@ -23,9 +23,8 @@ fn setup_failure_restores_partial_installation_and_releases_singleton() {
     let _guard = test_signal_lock();
     let before = current_sigaction(TEST_SIGNAL).unwrap();
 
-    let err = match spawn_listener(&[TEST_SIGNAL, i32::MAX], |_| {}, || {}) {
-        Ok(_) => panic!("invalid signal unexpectedly installed"),
-        Err(err) => err,
+    let Err(err) = spawn_listener(&[TEST_SIGNAL, i32::MAX], |_| {}, || {}) else {
+        panic!("invalid signal unexpectedly installed");
     };
 
     assert_eq!(err.kind(), io::ErrorKind::InvalidInput);

@@ -750,9 +750,8 @@ fn load_snapshot_inner_rejects_fifo_without_opening_it() {
     let mut options = SessionOptions::new(temp.path().to_path_buf(), "fifo");
     options.persist_transparent = true;
 
-    let err = match load_snapshot_inner(&path, &options) {
-        Ok(_) => panic!("FIFO session artifact should be rejected before open/read"),
-        Err(err) => err,
+    let Err(err) = load_snapshot_inner(&path, &options) else {
+        panic!("FIFO session artifact should be rejected before open/read");
     };
     assert!(
         err.to_string().contains("not a regular file"),
@@ -773,9 +772,8 @@ fn load_named_primary_rejects_symlink_without_following_target() {
     options.persist_transparent = true;
     options.set_named_file_target(link.clone());
 
-    let err = match load_snapshot_inner(&link, &options) {
-        Ok(_) => panic!("symlink primary should reject"),
-        Err(err) => err,
+    let Err(err) = load_snapshot_inner(&link, &options) else {
+        panic!("symlink primary should reject");
     };
 
     assert!(

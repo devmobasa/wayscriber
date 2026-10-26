@@ -31,9 +31,8 @@ impl InputState {
         if dx == 0 && dy == 0 {
             return false;
         }
-        let (dx, dy) = match self.clamp_selection_translation(measurer, dx, dy) {
-            Some((dx, dy)) => (dx, dy),
-            None => return false,
+        let Some((dx, dy)) = self.clamp_selection_translation(measurer, dx, dy) else {
+            return false;
         };
         if dx == 0 && dy == 0 {
             return false;

@@ -100,18 +100,14 @@ impl CommandOwner {
         let mut references = BTreeMap::new();
         let mut duplicate_orders = BTreeSet::new();
         for entry in read_dir_bounded(&queue_dir(&self.root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
-            let name = if let Ok(name) = entry.file_name().into_string() {
-                name
-            } else {
+            let Ok(name) = entry.file_name().into_string() else {
                 quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
                 continue;
             };
             if name.starts_with('.') {
                 continue;
             }
-            let (order, identity) = if let Ok(parsed) = parse_queue_name(&name) {
-                parsed
-            } else {
+            let Ok((order, identity)) = parse_queue_name(&name) else {
                 quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
                 continue;
             };
@@ -198,9 +194,7 @@ impl CommandOwner {
         if !try_lock_until(&decision_lock, libc::LOCK_EX, retry_deadline)? {
             return Ok(None);
         }
-        let mut control = if let Ok(control) = read_control(&path) {
-            control
-        } else {
+        let Ok(mut control) = read_control(&path) else {
             unlock(&decision_lock)?;
             quarantine_entry(&self.root, &reference_path, QuarantineKind::Queue)?;
             quarantine_entry(&self.root, &path, QuarantineKind::Control)?;

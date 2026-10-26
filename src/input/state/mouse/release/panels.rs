@@ -25,9 +25,7 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return true;
     }
 
-    let layout = if let Some(layout) = state.color_picker_popup_layout() {
-        layout
-    } else {
+    let Some(layout) = state.color_picker_popup_layout() else {
         // No layout, close popup
         state.close_color_picker_popup(true);
         return true;

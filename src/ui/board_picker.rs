@@ -66,9 +66,8 @@ pub(crate) fn render_board_picker_with_halo(
             .iter()
             .flat_map(|board| board.pages.pages().iter().map(Frame::content_revision)),
     );
-    let layout = match input_state.board_picker_layout() {
-        Some(layout) => layout,
-        None => return,
+    let Some(layout) = input_state.board_picker_layout() else {
+        return;
     };
 
     let _ = ctx.save();

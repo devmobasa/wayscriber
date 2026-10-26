@@ -27,17 +27,13 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
             quarantine_entry(root, &path, QuarantineKind::Control)?;
             continue;
         }
-        let decision_lock = if let Ok(lock) = open_lock(&path.join("decision.lock"), false) {
-            lock
-        } else {
+        let Ok(decision_lock) = open_lock(&path.join("decision.lock"), false) else {
             quarantine_entry(root, &path, QuarantineKind::Control)?;
             continue;
         };
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
         lock_until(&decision_lock, libc::LOCK_EX, deadline)?;
-        let mut control = if let Ok(control) = read_control(&path) {
-            control
-        } else {
+        let Ok(mut control) = read_control(&path) else {
             unlock(&decision_lock)?;
             quarantine_entry(root, &path, QuarantineKind::Control)?;
             continue;
@@ -120,18 +116,14 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
     }
 
     for entry in read_dir_bounded(&queue_dir(root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
-        let name = if let Ok(name) = entry.file_name().into_string() {
-            name
-        } else {
+        let Ok(name) = entry.file_name().into_string() else {
             quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
             continue;
         };
         if name.starts_with('.') {
             continue;
         }
-        let (_order, identity) = if let Ok(parsed) = parse_queue_name(&name) {
-            parsed
-        } else {
+        let Ok((_order, identity)) = parse_queue_name(&name) else {
             quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
             continue;
         };

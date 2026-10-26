@@ -180,11 +180,8 @@ impl ZoomState {
 
         self.capture_done = false;
 
-        let output = match self.active_output.clone() {
-            Some(out) => out,
-            None => {
-                anyhow::bail!("No active output available for zoom capture");
-            }
+        let Some(output) = self.active_output.clone() else {
+            anyhow::bail!("No active output available for zoom capture");
         };
         let (source_geometry, target_output_id) = require_verified_capture_source(
             self.active_geometry.clone(),
@@ -464,9 +461,8 @@ mod tests {
             data: vec![0; 3200 * 1800 * 4],
         };
 
-        let error = match finalize_capture_image(image, &context) {
-            Err(error) => error,
-            Ok(_) => panic!("a full output cannot be stretched into a shorter viewport"),
+        let Err(error) = finalize_capture_image(image, &context) else {
+            panic!("a full output cannot be stretched into a shorter viewport");
         };
         assert!(error.to_string().contains("aspect does not match"));
     }

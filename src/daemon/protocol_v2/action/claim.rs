@@ -35,15 +35,11 @@ impl ActionJournal {
         for entry in raw_entries {
             let path = entry.path();
             let identity_on_disk = inode_identity(&path)?;
-            let name = if let Ok(name) = entry.file_name().into_string() {
-                name
-            } else {
+            let Ok(name) = entry.file_name().into_string() else {
                 quarantine_action(&self.root, &path, identity_on_disk)?;
                 continue;
             };
-            let (order, identity) = if let Ok(parsed) = parse_action_name(&name) {
-                parsed
-            } else {
+            let Ok((order, identity)) = parse_action_name(&name) else {
                 quarantine_action(&self.root, &path, identity_on_disk)?;
                 continue;
             };

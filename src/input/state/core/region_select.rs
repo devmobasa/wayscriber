@@ -321,22 +321,22 @@ impl InputState {
         owner: RegionInputSource,
         point: (f64, f64),
     ) -> bool {
-        let (purpose, generation) = match self.region_select_ui_state {
-            RegionSelectUiState::Armed {
-                purpose,
-                generation,
-            }
-            | RegionSelectUiState::Review {
-                purpose,
-                generation,
-                ..
-            }
-            | RegionSelectUiState::Measured {
-                purpose,
-                generation,
-                ..
-            } => (purpose, generation),
-            _ => return false,
+        let (RegionSelectUiState::Armed {
+            purpose,
+            generation,
+        }
+        | RegionSelectUiState::Review {
+            purpose,
+            generation,
+            ..
+        }
+        | RegionSelectUiState::Measured {
+            purpose,
+            generation,
+            ..
+        }) = self.region_select_ui_state
+        else {
+            return false;
         };
         self.sync_region_projection(RegionSelectUiState::Selecting {
             purpose,

@@ -157,14 +157,12 @@ pub(crate) fn render_color_picker_popup_with_engine(
         return;
     }
 
-    let layout = match input_state.color_picker_popup_layout() {
-        Some(layout) => layout,
-        None => return,
+    let Some(layout) = input_state.color_picker_popup_layout() else {
+        return;
     };
 
-    let current_color = match input_state.color_picker_popup_current_color() {
-        Some(color) => color,
-        None => return,
+    let Some(current_color) = input_state.color_picker_popup_current_color() else {
+        return;
     };
 
     let hex_buffer = input_state

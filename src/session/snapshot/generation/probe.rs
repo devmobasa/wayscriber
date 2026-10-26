@@ -71,9 +71,8 @@ fn scan_header(bytes: &[u8]) -> Option<u64> {
         if cursor.peek() == Some(b'}') {
             return found;
         }
-        let key = match cursor.string(MAX_KEY_BYTES, true) {
-            Some(key) => key,
-            None => return found,
+        let Some(key) = cursor.string(MAX_KEY_BYTES, true) else {
+            return found;
         };
         if cursor.expect(b':').is_none() {
             return found;

@@ -37,10 +37,10 @@ impl InputState {
             Tool::LiveShape => true,
             _ => return None,
         };
-        let shape = match self.provisional_tool_stroke(current_x, current_y) {
-            ProvisionalToolStroke::Shape(shape)
-            | ProvisionalToolStroke::Recognized { shape, .. } => shape,
-            _ => return None,
+        let (ProvisionalToolStroke::Shape(shape) | ProvisionalToolStroke::Recognized { shape, .. }) =
+            self.provisional_tool_stroke(current_x, current_y)
+        else {
+            return None;
         };
 
         let extent = match &shape {

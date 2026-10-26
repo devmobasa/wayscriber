@@ -64,9 +64,8 @@ impl ToolbarSurface {
             }
         }
 
-        let pool = match self.pool.as_mut() {
-            Some(p) => p,
-            None => return Err(anyhow!("shm pool is missing after creation")),
+        let Some(pool) = self.pool.as_mut() else {
+            return Err(anyhow!("shm pool is missing after creation"));
         };
         let (buffer, canvas) = pool
             .create_buffer(

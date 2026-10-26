@@ -139,9 +139,8 @@ fn inactive_session_reservation_refuses_a_running_daemon() {
     let _env = EnvGuard::set(&[(XDG_RUNTIME_DIR_ENV, temp.path().as_os_str())]);
     let _daemon_lock = acquire_runtime_lock_for_clear(RuntimeLockKind::Daemon).unwrap();
 
-    let error = match reserve_inactive_session_operation(SessionCatalogOperation::Move) {
-        Ok(_) => panic!("a held daemon lock must refuse the operation"),
-        Err(error) => error,
+    let Err(error) = reserve_inactive_session_operation(SessionCatalogOperation::Move) else {
+        panic!("a held daemon lock must refuse the operation");
     };
 
     assert!(error.contains("manually started daemon"), "{error}");
