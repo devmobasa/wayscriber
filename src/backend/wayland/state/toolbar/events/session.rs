@@ -372,8 +372,7 @@ impl WaylandState {
             (SessionFileDialogMode::Open, Ok(Some(path))) => {
                 self.handle_toolbar_open_session_path(&path);
             }
-            (SessionFileDialogMode::Open, Ok(None)) | (SessionFileDialogMode::SaveAs, Ok(None)) => {
-            }
+            (SessionFileDialogMode::Open | SessionFileDialogMode::SaveAs, Ok(None)) => {}
             (SessionFileDialogMode::Open, Err(error)) => {
                 self.set_session_toolbar_error(format!("{}: {error}", tr("Open session failed")));
             }
@@ -665,8 +664,10 @@ enum DialogFramePhase {
 fn dialog_frame_accepted(phase: DialogFramePhase, outcome: RenderOutcome) -> bool {
     match (phase, outcome) {
         (DialogFramePhase::Entry, RenderOutcome::Committed { .. })
-        | (DialogFramePhase::Restoration, RenderOutcome::Committed { .. })
-        | (DialogFramePhase::Restoration, RenderOutcome::BuffersInFlight) => true,
+        | (
+            DialogFramePhase::Restoration,
+            RenderOutcome::Committed { .. } | RenderOutcome::BuffersInFlight,
+        ) => true,
         (DialogFramePhase::Entry, RenderOutcome::BuffersInFlight) => false,
     }
 }

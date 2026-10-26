@@ -126,10 +126,12 @@ impl InputState {
                     }
                 }
                 // Collapse when hovering a different tool, color, or outer segment
-                Some(RadialSegmentId::Tool(_))
-                | Some(RadialSegmentId::Color(_))
-                | Some(RadialSegmentId::SizeRing)
-                | Some(RadialSegmentId::Center) => {
+                Some(
+                    RadialSegmentId::Tool(_)
+                    | RadialSegmentId::Color(_)
+                    | RadialSegmentId::SizeRing
+                    | RadialSegmentId::Center,
+                ) => {
                     *expanded_sub_ring = None;
                 }
                 None => {}
@@ -289,7 +291,7 @@ impl InputState {
                 }
                 // The gauge is a drag/scroll surface, never a commit target.
                 Some(RadialSegmentId::SizeRing) => return true,
-                Some(RadialSegmentId::Tool(_)) | Some(RadialSegmentId::Center) | None => {}
+                Some(RadialSegmentId::Tool(_) | RadialSegmentId::Center) | None => {}
             }
         }
 

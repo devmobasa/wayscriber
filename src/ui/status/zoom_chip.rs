@@ -249,10 +249,7 @@ fn zoom_glyph_advance(font_size: f64) -> f64 {
 
 /// Whether a piece is a vector +/- mark (drawn as strokes) rather than text.
 fn is_glyph_icon(kind: Option<ZoomChipButtonKind>) -> bool {
-    matches!(
-        kind,
-        Some(ZoomChipButtonKind::Out) | Some(ZoomChipButtonKind::In)
-    )
+    matches!(kind, Some(ZoomChipButtonKind::Out | ZoomChipButtonKind::In))
 }
 
 /// One chip piece before positioning: a glyph/label button or the `NN%`

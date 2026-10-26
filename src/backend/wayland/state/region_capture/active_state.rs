@@ -141,8 +141,10 @@ impl ActiveScreenRegion {
 
     pub(super) fn selection_owner(self) -> Option<RegionInputSource> {
         match self.phase() {
-            Some(RegionInteractionPhase::Selecting { owner })
-            | Some(RegionInteractionPhase::Review { owner: Some(owner) }) => Some(owner),
+            Some(
+                RegionInteractionPhase::Selecting { owner }
+                | RegionInteractionPhase::Review { owner: Some(owner) },
+            ) => Some(owner),
             Some(
                 RegionInteractionPhase::Armed
                 | RegionInteractionPhase::Review { owner: None }

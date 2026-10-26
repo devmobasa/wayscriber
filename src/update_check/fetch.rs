@@ -135,7 +135,7 @@ fn failure_detail(program: &str, stderr: &str, code: Option<i32>) -> String {
         ("curl", Some(7)) => tr("could not connect").to_string(),
         ("curl", Some(22)) => tr("server returned an error response").to_string(),
         ("curl", Some(28)) => tr("request timed out").to_string(),
-        ("curl", Some(35) | Some(60)) => tr("TLS verification failed").to_string(),
+        ("curl", Some(35 | 60)) => tr("TLS verification failed").to_string(),
         ("curl", Some(63)) => tr("response larger than expected").to_string(),
         (_, Some(4)) => tr("network failure").to_string(),
         (_, Some(5)) => tr("TLS verification failed").to_string(),

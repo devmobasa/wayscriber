@@ -1519,7 +1519,7 @@ fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
     let clean = app.update_message(request.clone());
     assert!(matches!(
         clean.as_slice(),
-        [Effect::CloseWindow] | [Effect::LoadConfig]
+        [Effect::CloseWindow | Effect::LoadConfig]
     ));
     if !close {
         app.update_command(CommandMessage::ConfigLoaded(Err("failed reload".into())));
@@ -1554,7 +1554,7 @@ fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
     if save_succeeds {
         assert!(matches!(
             effects.as_slice(),
-            [Effect::CloseWindow] | [Effect::LoadConfig]
+            [Effect::CloseWindow | Effect::LoadConfig]
         ));
     } else {
         assert!(effects.is_empty());
@@ -1564,7 +1564,7 @@ fn check_leave_dirty_draft(close: bool, save_succeeds: bool) {
         assert!(matches!(
             app.update_message(Message::LeaveDiscardRequested)
                 .as_slice(),
-            [Effect::CloseWindow] | [Effect::LoadConfig]
+            [Effect::CloseWindow | Effect::LoadConfig]
         ));
     }
 }

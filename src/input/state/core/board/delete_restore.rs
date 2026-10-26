@@ -103,8 +103,8 @@ impl InputState {
                 return false;
             }
             match action {
-                Some(Action::BoardDelete) | Some(Action::PageDelete) => true,
-                Some(Action::BoardRestoreDeleted) | Some(Action::PageRestoreDeleted) => {
+                Some(Action::BoardDelete | Action::PageDelete) => true,
+                Some(Action::BoardRestoreDeleted | Action::PageRestoreDeleted) => {
                     include_restore_actions
                 }
                 _ => false,

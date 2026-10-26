@@ -529,9 +529,11 @@ impl WaylandState {
     ) -> Option<ScreenSourceToken> {
         match self.region_capture.active() {
             Some(ActiveScreenRegion::Ready { source, .. }) => Some(source),
-            Some(ActiveScreenRegion::Measure { .. })
-            | Some(ActiveScreenRegion::PendingFrozen { .. })
-            | Some(ActiveScreenRegion::PendingZoom { .. })
+            Some(
+                ActiveScreenRegion::Measure { .. }
+                | ActiveScreenRegion::PendingFrozen { .. }
+                | ActiveScreenRegion::PendingZoom { .. },
+            )
             | None => None,
         }
     }

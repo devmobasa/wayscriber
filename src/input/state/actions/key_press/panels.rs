@@ -149,10 +149,10 @@ impl InputState {
         if self.board_picker_is_quick() {
             match key {
                 Key::Delete | Key::F2 => return true,
-                Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => return true,
-                Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => return true,
-                Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => return true,
-                Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => return true,
+                Key::Char('n' | 'N') if self.modifiers.ctrl => return true,
+                Key::Char('r' | 'R') if self.modifiers.ctrl => return true,
+                Key::Char('c' | 'C') if self.modifiers.ctrl => return true,
+                Key::Char('p' | 'P') if self.modifiers.ctrl => return true,
                 _ => {}
             }
         }
@@ -220,19 +220,19 @@ impl InputState {
                 }
                 true
             }
-            Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
+            Key::Char('n' | 'N') if self.modifiers.ctrl => {
                 self.board_picker_create_new_with_measurer(measurer);
                 true
             }
-            Key::Char('r') | Key::Char('R') if self.modifiers.ctrl => {
+            Key::Char('r' | 'R') if self.modifiers.ctrl => {
                 self.board_picker_rename_selected_with_measurer(measurer);
                 true
             }
-            Key::Char('c') | Key::Char('C') if self.modifiers.ctrl => {
+            Key::Char('c' | 'C') if self.modifiers.ctrl => {
                 self.board_picker_edit_color_selected_with_measurer(measurer);
                 true
             }
-            Key::Char('p') | Key::Char('P') if self.modifiers.ctrl => {
+            Key::Char('p' | 'P') if self.modifiers.ctrl => {
                 self.board_picker_toggle_pin_selected();
                 true
             }
@@ -311,15 +311,15 @@ impl InputState {
                 }
                 true
             }
-            Key::Char('n') | Key::Char('N') if self.modifiers.ctrl => {
+            Key::Char('n' | 'N') if self.modifiers.ctrl => {
                 self.board_picker_add_page_with_measurer(measurer);
                 true
             }
-            Key::Char('g') | Key::Char('G') if self.modifiers.ctrl => {
+            Key::Char('g' | 'G') if self.modifiers.ctrl => {
                 self.board_picker_begin_page_jump();
                 true
             }
-            Key::Char('f') | Key::Char('F') if self.modifiers.ctrl => {
+            Key::Char('f' | 'F') if self.modifiers.ctrl => {
                 self.board_picker_begin_page_search();
                 true
             }
@@ -428,12 +428,8 @@ impl InputState {
             Key::Return | Key::Space => self.activate_properties_panel_entry_with(measurer),
             Key::Left => self.adjust_properties_panel_entry_with(measurer, -adjust_step),
             Key::Right => self.adjust_properties_panel_entry_with(measurer, adjust_step),
-            Key::Char('+') | Key::Char('=') => {
-                self.adjust_properties_panel_entry_with(measurer, adjust_step)
-            }
-            Key::Char('-') | Key::Char('_') => {
-                self.adjust_properties_panel_entry_with(measurer, -adjust_step)
-            }
+            Key::Char('+' | '=') => self.adjust_properties_panel_entry_with(measurer, adjust_step),
+            Key::Char('-' | '_') => self.adjust_properties_panel_entry_with(measurer, -adjust_step),
             _ => false,
         }
     }

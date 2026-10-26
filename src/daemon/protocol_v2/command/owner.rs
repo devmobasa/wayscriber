@@ -163,7 +163,7 @@ impl CommandOwner {
         let claimed = self.earliest_ref_less_control(&referenced_controls)?;
         let use_claimed = match (&reference, &claimed) {
             (None, Some(_)) => true,
-            (Some(_), None) | (None, None) => false,
+            (Some(_) | None, None) => false,
             (
                 Some((reference_order, (reference_identity, _, _))),
                 Some((claim_order, claim_identity, _)),
