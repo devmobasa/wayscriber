@@ -151,8 +151,7 @@ impl FrozenState {
         if let FrozenCaptureSource::Portal { .. } = pending.source {
             let Some(geometry) = pending
                 .source_geometry
-                .as_ref()
-                .cloned()
+                .clone()
                 .and_then(|geometry| geometry.with_revalidated_output_count(live_output_count))
             else {
                 let topology_changed = pending

@@ -125,7 +125,7 @@ impl RuntimeUiStateController {
     pub(super) fn finish_external_reconciliation_write(
         &mut self,
     ) -> Result<(), PipelineProtocolError> {
-        let Some(staged) = self.staged_reload.as_ref().cloned() else {
+        let Some(staged) = self.staged_reload.clone() else {
             let barrier = self.active_barrier.as_ref().expect("barrier checked").id;
             self.close_barrier_and_resolve_previews(
                 barrier,

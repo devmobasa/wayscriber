@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn due_when_never_attempted_or_interval_elapsed() {
-        let day = Duration::from_secs(86_400);
+        let day = Duration::from_hours(24);
 
         assert!(is_due(0, 1_750_000_000, day));
         assert!(is_due(1_750_000_000, 1_750_086_400, day));
@@ -424,13 +424,13 @@ mod tests {
         attempted.note_attempt();
         let untouched = CheckThrottle::default();
 
-        assert!(attempted.attempted_within(Duration::from_secs(86_400)));
+        assert!(attempted.attempted_within(Duration::from_hours(24)));
         // A zero interval means "no throttle", so the guard must not block.
         assert!(!attempted.attempted_within(Duration::ZERO));
 
         // One watcher's attempt does not become ambient process-wide state.
-        assert!(!attempted.is_due_now(Duration::from_secs(86_400)));
-        assert!(untouched.is_due_now(Duration::from_secs(86_400)));
+        assert!(!attempted.is_due_now(Duration::from_hours(24)));
+        assert!(untouched.is_due_now(Duration::from_hours(24)));
 
         // SAFETY: this test still holds the environment mutex in `_lock`.
         unsafe {
@@ -538,7 +538,7 @@ mod tests {
         assert!(!is_due(
             cache::load().last_attempt_unix,
             cache::now_unix(),
-            Duration::from_secs(86_400)
+            Duration::from_hours(24)
         ));
 
         // A record with no success on it (a migrated v1 file) is unknown rather

@@ -22,8 +22,7 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
         let identity_valid = entry
             .file_name()
             .into_string()
-            .ok()
-            .is_some_and(|identity| validate_id(&identity).is_ok());
+            .is_ok_and(|identity| validate_id(&identity).is_ok());
         if !identity_valid {
             quarantine_entry(root, &path, QuarantineKind::Control)?;
             continue;

@@ -25,7 +25,7 @@ use super::types::{AvailableUpdateNotice, TrayStatusShared};
 
 /// How often the watcher wakes to ask whether a check is due. The gap between
 /// actual requests comes from `[updates] interval_hours`.
-const POLL_INTERVAL: Duration = Duration::from_secs(30 * 60);
+const POLL_INTERVAL: Duration = Duration::from_mins(30);
 
 /// Grace period before the first check, so a daemon started with the session is
 /// not racing the network stack.

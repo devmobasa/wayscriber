@@ -69,7 +69,7 @@ mod tests {
 
         assert!(config.check);
         assert!(config.notify);
-        assert_eq!(config.interval(), Duration::from_secs(86_400));
+        assert_eq!(config.interval(), Duration::from_hours(24));
     }
 
     #[test]

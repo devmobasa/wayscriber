@@ -349,10 +349,10 @@ impl Tool {
         }
     }
 
-    pub(crate) fn provisional_stroke<'a>(
+    pub(crate) fn provisional_stroke(
         self,
-        snapshot: ProvisionalToolSnapshot<'a>,
-    ) -> ProvisionalToolStroke<'a> {
+        snapshot: ProvisionalToolSnapshot<'_>,
+    ) -> ProvisionalToolStroke<'_> {
         debug_assert_eq!(
             self, snapshot.tool,
             "preview a stroke with the tool that captured its snapshot"
@@ -542,7 +542,7 @@ impl Tool {
     }
 }
 
-impl<'stroke> ProvisionalToolStroke<'stroke> {
+impl ProvisionalToolStroke<'_> {
     pub(crate) fn bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
         match self {
             Self::BorrowedFreehand { points, size, .. } => bounding_box_for_points(points, *size),

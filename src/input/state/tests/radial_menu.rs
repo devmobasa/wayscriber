@@ -277,7 +277,7 @@ fn notes_sub_ring_is_step_marker_then_sticky_note() {
 
 #[test]
 fn non_parent_wedges_have_no_sub_ring_children() {
-    for slice in RADIAL_COMPASS_SLICES.iter() {
+    for slice in &RADIAL_COMPASS_SLICES {
         let expected = matches!(slice.kind, RadialSliceKind::Parent(_));
         assert_eq!(
             sub_ring_child_count(slice.dir.index()) > 0,
@@ -339,7 +339,7 @@ fn notes_sub_ring_child_dispatches_sticky_note_mode() {
 #[test]
 fn compass_ring_offers_no_history_or_clear_actions() {
     let mut ring_actions: Vec<Action> = Vec::new();
-    for slice in RADIAL_COMPASS_SLICES.iter() {
+    for slice in &RADIAL_COMPASS_SLICES {
         match slice.kind {
             RadialSliceKind::Action(action) => ring_actions.push(action),
             RadialSliceKind::Parent(parent) => ring_actions.extend(parent.children()),

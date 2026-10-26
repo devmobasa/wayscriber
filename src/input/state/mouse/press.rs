@@ -555,19 +555,19 @@ impl InputState {
                     moved: false,
                 };
                 return;
-            } else {
-                self.text_editing.set_last_click(None);
-                self.begin_pointer_drag(button, color);
-                self.state = DrawingState::Selecting {
-                    start_x: x,
-                    start_y: y,
-                    additive: self.modifiers.shift,
-                };
-                self.pointer.replace_provisional_bounds(None);
-                self.update_provisional_dirty_with(measurer, x, y);
-                self.needs_redraw = true;
-                return;
             }
+
+            self.text_editing.set_last_click(None);
+            self.begin_pointer_drag(button, color);
+            self.state = DrawingState::Selecting {
+                start_x: x,
+                start_y: y,
+                additive: self.modifiers.shift,
+            };
+            self.pointer.replace_provisional_bounds(None);
+            self.update_provisional_dirty_with(measurer, x, y);
+            self.needs_redraw = true;
+            return;
         }
 
         self.text_editing.set_last_click(None);

@@ -611,7 +611,7 @@ fn reset_visible_does_not_touch_fields_outside_the_filter() {
     let _ = app.handle_shortcut_manager_filter_changed(ShortcutManagerFilter::Unbound);
     app.draft
         .keybindings
-        .set(KeybindingField::ToggleFloatingBadge, "".to_string());
+        .set(KeybindingField::ToggleFloatingBadge, String::new());
     let _ = app.handle_shortcut_reset_visible_requested();
     let _ = app.handle_shortcut_reset_visible_confirmed();
     assert_eq!(

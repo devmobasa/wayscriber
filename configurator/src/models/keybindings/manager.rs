@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn unbound_filter_is_empty_parsed_lists_only() {
         let (mut draft, defaults) = drafts();
-        draft.set(KeybindingField::ToggleFloatingBadge, "".to_string());
+        draft.set(KeybindingField::ToggleFloatingBadge, String::new());
         draft.set(KeybindingField::Exit, "Ctrl+Shift".to_string());
         let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
         let visible = summary.visible_fields(
@@ -578,8 +578,8 @@ mod tests {
     #[test]
     fn category_scope_keeps_the_filtered_identity_set() {
         let (mut draft, defaults) = drafts();
-        draft.set(KeybindingField::Undo, "".to_string());
-        draft.set(KeybindingField::ClearCanvas, "".to_string());
+        draft.set(KeybindingField::Undo, String::new());
+        draft.set(KeybindingField::ClearCanvas, String::new());
         let summary = ShortcutManagerSummary::from_drafts(&draft, &defaults);
         let visible = summary.visible_fields(
             ShortcutManagerFilter::Unbound,

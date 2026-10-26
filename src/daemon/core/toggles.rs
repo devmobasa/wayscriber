@@ -95,9 +95,9 @@ impl Daemon {
             if self.overlay.state() == OverlayState::Hidden {
                 self.show_overlay()?.require_shown()?;
                 return Ok(was_hidden);
-            } else {
-                self.pending_launch = None;
             }
+
+            self.pending_launch = None;
             return Ok(false);
         }
 

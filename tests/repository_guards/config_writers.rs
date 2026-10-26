@@ -491,7 +491,7 @@ struct Audit<'tree> {
     test_sources: TestSources,
 }
 
-impl<'tree> Audit<'tree> {
+impl Audit<'_> {
     fn fail(&mut self, failure: String) {
         self.failures.push(failure);
     }

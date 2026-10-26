@@ -121,7 +121,7 @@ pub(crate) fn start_system_tray(
                     tokio::select! {
                         () = worker.cancelled() => {
                             info!("Tray-local stop requested - shutting down system tray");
-                            let _ = handle.shutdown().await;
+                            handle.shutdown().await;
                             break;
                         }
                         () = time::sleep(time::Duration::from_millis(100)) => {
@@ -135,7 +135,7 @@ pub(crate) fn start_system_tray(
                             }
                             if tray_quit.is_raised() {
                                 info!("Quit signal received - shutting down system tray");
-                                let _ = handle.shutdown().await;
+                                handle.shutdown().await;
                                 break;
                             }
                         }

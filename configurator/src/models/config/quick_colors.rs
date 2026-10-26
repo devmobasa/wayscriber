@@ -51,7 +51,7 @@ impl QuickColorsDraft {
                 .to_known_color_spec_with_field(&color_field_name(index))
             {
                 Ok(color) => next_entries.push(QuickColorConfig {
-                    label: label.to_string(),
+                    label: label.clone(),
                     color,
                 }),
                 Err(error) => errors.push(error),

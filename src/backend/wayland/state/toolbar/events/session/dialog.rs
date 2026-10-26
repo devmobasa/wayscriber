@@ -305,8 +305,8 @@ pub(in crate::backend::wayland::state::toolbar::events) fn ensure_save_as_extens
     if path
         .extension()
         .and_then(|extension| extension.to_str())
-        .filter(|extension| !extension.is_empty())
-        .is_some()
+        .as_ref()
+        .is_some_and(|extension| !extension.is_empty())
     {
         return path;
     }
