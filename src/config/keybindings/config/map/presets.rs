@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_preset_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.presets.apply_preset_1, Action::ApplyPreset1)?;
         inserter.insert_all(&self.presets.apply_preset_2, Action::ApplyPreset2)?;

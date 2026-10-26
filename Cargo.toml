@@ -57,6 +57,10 @@ single_match_else = "warn"
 uninlined_format_args = "warn"
 unnested_or_patterns = "warn"
 
+[workspace.lints.rust]
+# Write the anonymous lifetime in paths: `Formatter<'_>`, not `Formatter`.
+elided_lifetimes_in_paths = "warn"
+
 [lints]
 workspace = true
 

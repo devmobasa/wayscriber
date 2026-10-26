@@ -681,7 +681,7 @@ impl Audit<'_> {
     }
 
     /// No write leaves an implementing file as a value.
-    fn const_initializers(&mut self, source: &Source, capable: &BTreeSet<String>) {
+    fn const_initializers(&mut self, source: &Source<'_>, capable: &BTreeSet<String>) {
         for item in const_items(&source.masked, &source.test_spans) {
             let named: BTreeSet<&str> = words(&source.masked[item.start..item.end])
                 .map(|(_, word)| word)
@@ -704,7 +704,7 @@ impl Audit<'_> {
     /// No write leaves an implementing file through a trait.
     fn trait_writers(
         &mut self,
-        source: &Source,
+        source: &Source<'_>,
         items: &[FunctionItem],
         capable: &BTreeSet<String>,
     ) {
@@ -726,7 +726,7 @@ impl Audit<'_> {
 
     /// A trait declared here may not name a method that can write, even
     /// without a body: the offer itself is the capability.
-    fn trait_declarations(&mut self, source: &Source, capable: &BTreeSet<String>) {
+    fn trait_declarations(&mut self, source: &Source<'_>, capable: &BTreeSet<String>) {
         for declaration in trait_declarations(&source.masked, &source.test_spans) {
             for method in declaration.methods.intersection(capable) {
                 self.fail(format!(
@@ -741,7 +741,7 @@ impl Audit<'_> {
         }
     }
 
-    fn io_write_surface(&mut self, source: &Source) {
+    fn io_write_surface(&mut self, source: &Source<'_>) {
         let items = function_items(&source.masked, &source.test_spans);
         if !items
             .iter()
@@ -776,7 +776,7 @@ impl Audit<'_> {
         }
     }
 
-    fn document_write_surface(&mut self, source: &Source) {
+    fn document_write_surface(&mut self, source: &Source<'_>) {
         let items = function_items(&source.masked, &source.test_spans);
         let seeds: BTreeSet<String> = names(WRITE_PRIMITIVES)
             .into_iter()

@@ -258,7 +258,7 @@ pub(super) fn render_command_row_shortcut_badge(
     desc_x: f64,
     is_selected: bool,
     shortcut_labels: &[String],
-    shortcut_style: &UiTextStyle,
+    shortcut_style: &UiTextStyle<'_>,
 ) -> f64 {
     let mut badge_left_edge = content_right;
     if let Some(shortcut) = shortcut_labels.first() {
@@ -336,7 +336,7 @@ pub(super) fn render_command_row_description(
     theme: &Theme,
     engine: &UiTextEngine,
     ctx: &cairo::Context,
-    desc_style: &UiTextStyle,
+    desc_style: &UiTextStyle<'_>,
     description: &str,
     desc_x: f64,
     label_y: f64,

@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_zoom_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.zoom.toggle_frozen_mode, Action::ToggleFrozenMode)?;
         inserter.insert_all(&self.zoom.zoom_in, Action::ZoomIn)?;

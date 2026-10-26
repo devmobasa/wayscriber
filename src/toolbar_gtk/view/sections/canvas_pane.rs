@@ -27,7 +27,7 @@ const DESTRUCTIVE_GUARD_GAP: f64 = 12.0;
 /// popover's `MENU_PAD` around the shared Canvas content area.
 const CANVAS_CONTENT_PAD_H: f64 = 10.0;
 
-pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk4::Box {
+pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx<'_>) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(10.0));
     let pad_h = ctx.px(CANVAS_CONTENT_PAD_H);
     column.set_margin_start(pad_h);
@@ -71,7 +71,7 @@ pub(in crate::toolbar_gtk) fn build_popover_content(ctx: &mut SectionCtx) -> gtk
 }
 
 /// A bold section header, styled like the collapsible cards' titles.
-fn section_title(ctx: &SectionCtx, title: &str) -> gtk4::Label {
+fn section_title(ctx: &SectionCtx<'_>, title: &str) -> gtk4::Label {
     let label = gtk4::Label::new(Some(title));
     label.add_css_class("section-title");
     label.set_xalign(0.0);
@@ -84,7 +84,7 @@ fn section_title(ctx: &SectionCtx, title: &str) -> gtk4::Label {
 /// gap. Enabled/glyph state is baked in at build time (the popover host
 /// rebuilds on the inputs that change them).
 fn command_section(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     column: &gtk4::Box,
     title: &str,
     noun: &'static str,

@@ -18,7 +18,7 @@ use super::SectionCtx;
 /// retains the registered updaters so ordinary checkbox echoes update in
 /// place.
 pub(in crate::toolbar_gtk) fn build_popover_content(
-    ctx: &mut SectionCtx,
+    ctx: &mut SectionCtx<'_>,
     settings_model: &model::ToolbarSettingsModel,
 ) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
@@ -58,7 +58,7 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
 
 /// The collapsed "Details" disclosure toggle under the notices. The popover
 /// content key tracks its open state, so a click rebuilds the notices.
-fn details_toggle(ctx: &SectionCtx, details: &model::ToolbarSettingsDetails) -> gtk4::Button {
+fn details_toggle(ctx: &SectionCtx<'_>, details: &model::ToolbarSettingsDetails) -> gtk4::Button {
     let button = gtk4::Button::with_label(details.label);
     button.add_css_class("tab");
     button.add_css_class("details");
@@ -76,7 +76,7 @@ fn details_toggle(ctx: &SectionCtx, details: &model::ToolbarSettingsDetails) -> 
 
 /// Simple / Regular / Advanced presets. Non-destructive: switching
 /// re-baselines the sections without touching explicit user overrides.
-fn layout_mode_segments(ctx: &mut SectionCtx) -> gtk4::Box {
+fn layout_mode_segments(ctx: &mut SectionCtx<'_>) -> gtk4::Box {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(4.0));
     row.set_homogeneous(true);
     let control = model::layout_mode_control(ctx.snapshot.layout_mode);
@@ -156,7 +156,7 @@ fn settings_toggle_event(template: &ToolbarEvent, checked: bool) -> ToolbarEvent
 /// Two-column toggle grid: wide toggles span the full row, narrow ones
 /// pair up, and a lone narrow leftover keeps its half-width cell.
 fn toggle_grid(
-    ctx: &mut SectionCtx,
+    ctx: &mut SectionCtx<'_>,
     settings_model: &model::ToolbarSettingsModel,
 ) -> Option<gtk4::Grid> {
     let rows = settings_model.toggle_rows();
@@ -214,7 +214,10 @@ fn toggle_grid(
 /// Configurator · Config file, or Back · built-in resets while customizing).
 /// The button set is structural (customize state, hidden overrides), so a
 /// rebuild follows every change and no updaters are needed.
-fn buttons_grid(ctx: &SectionCtx, buttons: &[model::ToolbarSettingsButton]) -> Option<gtk4::Grid> {
+fn buttons_grid(
+    ctx: &SectionCtx<'_>,
+    buttons: &[model::ToolbarSettingsButton],
+) -> Option<gtk4::Grid> {
     if buttons.is_empty() {
         return None;
     }
@@ -229,7 +232,10 @@ fn buttons_grid(ctx: &SectionCtx, buttons: &[model::ToolbarSettingsButton]) -> O
     Some(grid)
 }
 
-fn settings_button(ctx: &SectionCtx, button_model: &model::ToolbarSettingsButton) -> gtk4::Button {
+fn settings_button(
+    ctx: &SectionCtx<'_>,
+    button_model: &model::ToolbarSettingsButton,
+) -> gtk4::Button {
     let button = gtk4::Button::new();
     button.set_size_request(-1, ctx.px(24.0));
     if ctx.use_icons {
@@ -265,7 +271,7 @@ fn settings_button(ctx: &SectionCtx, button_model: &model::ToolbarSettingsButton
 
 /// Customize-mode group chooser: "Choose a group" over a two-column grid.
 fn group_chooser(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     settings_model: &model::ToolbarSettingsModel,
 ) -> Option<gtk4::Box> {
     let groups = settings_model.groups();
@@ -300,7 +306,7 @@ fn group_chooser(
 /// live in `resolved_toolbar_items` (structural), so every change
 /// rebuilds the pane and the rows need no updaters.
 fn item_override_rows(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     settings_model: &model::ToolbarSettingsModel,
 ) -> Option<gtk4::Box> {
     let overrides = settings_model.item_overrides();

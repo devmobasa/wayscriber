@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_tool_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(&self.tools.increase_thickness, Action::IncreaseThickness)?;
         inserter.insert_all(&self.tools.decrease_thickness, Action::DecreaseThickness)?;

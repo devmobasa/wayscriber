@@ -39,7 +39,7 @@ pub(crate) fn render_eraser_stroke(
     ctx: &cairo::Context,
     points: &[(i32, i32)],
     brush: &EraserBrush,
-    eraser_ctx: &EraserReplayContext,
+    eraser_ctx: &EraserReplayContext<'_>,
 ) {
     if points.is_empty() {
         return;

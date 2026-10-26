@@ -19,7 +19,7 @@ use super::SectionCtx;
 /// The pane's content for the top strip's Session popover. Live updates come
 /// from content-key rebuilds in the popover host, so no updaters register.
 pub(in crate::toolbar_gtk) fn build_popover_content(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     session: &model::ToolbarSessionModel,
 ) -> gtk4::Box {
     let column = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(6.0));
@@ -66,7 +66,10 @@ pub(in crate::toolbar_gtk) fn build_popover_content(
     column
 }
 
-fn session_button(ctx: &SectionCtx, button_model: &model::ToolbarSessionButton) -> gtk4::Button {
+fn session_button(
+    ctx: &SectionCtx<'_>,
+    button_model: &model::ToolbarSessionButton,
+) -> gtk4::Button {
     let button = gtk4::Button::new();
     button.set_size_request(-1, ctx.px(24.0));
     button.set_hexpand(true);
@@ -105,7 +108,7 @@ fn session_button_icon(event: &ToolbarEvent) -> Option<IconPainter> {
 }
 
 fn overwrite_confirmation_rows(
-    ctx: &SectionCtx,
+    ctx: &SectionCtx<'_>,
     confirmation: &model::session::ToolbarSessionOverwriteConfirmation,
 ) -> gtk4::Box {
     let rows = gtk4::Box::new(gtk4::Orientation::Vertical, ctx.px(5.0));
@@ -137,7 +140,7 @@ fn overwrite_confirmation_rows(
     rows
 }
 
-fn home_button(ctx: &SectionCtx, home: &model::session::ToolbarSessionHome) -> gtk4::Button {
+fn home_button(ctx: &SectionCtx<'_>, home: &model::session::ToolbarSessionHome) -> gtk4::Button {
     let button = gtk4::Button::new();
     button.set_size_request(-1, ctx.px(24.0));
     let label = gtk4::Label::new(Some(&home.label));
@@ -153,7 +156,7 @@ fn home_button(ctx: &SectionCtx, home: &model::session::ToolbarSessionHome) -> g
     button
 }
 
-fn recent_row(ctx: &SectionCtx, recent: &model::ToolbarSessionRecent) -> gtk4::Button {
+fn recent_row(ctx: &SectionCtx<'_>, recent: &model::ToolbarSessionRecent) -> gtk4::Button {
     let button = gtk4::Button::new();
     button.set_size_request(-1, ctx.px(22.0));
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, ctx.px(6.0));

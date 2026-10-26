@@ -5,7 +5,7 @@ use crate::config::Action;
 impl KeybindingsConfig {
     pub(super) fn insert_selection_bindings(
         &self,
-        inserter: &mut BindingInserter,
+        inserter: &mut BindingInserter<'_>,
     ) -> Result<(), String> {
         inserter.insert_all(
             &self.selection.duplicate_selection,
