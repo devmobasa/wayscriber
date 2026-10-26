@@ -719,7 +719,7 @@ fn accepted_cut_preview_paints_before_the_scrim_hole() {
     // writes through the pointer cast from the shared slice.
     let created = unsafe {
         cairo::ImageSurface::create_for_data_unsafe(
-            pixels.data().as_ptr() as *mut u8,
+            pixels.data().as_ptr().cast_mut(),
             cairo::Format::ARgb32,
             2,
             1,

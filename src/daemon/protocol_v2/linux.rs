@@ -421,7 +421,7 @@ pub(crate) fn wait_for_pidfd_exit(fd: BorrowedFd<'_>, timeout: Duration) -> io::
         let millis = i32::try_from(remaining.as_millis()).unwrap_or(i32::MAX);
         // SAFETY: one owned pollfd, valid for the call; the descriptor is
         // borrowed for at least this long.
-        let ready = unsafe { libc::poll(&mut poll_fd, 1, millis) };
+        let ready = unsafe { libc::poll(&raw mut poll_fd, 1, millis) };
         if ready < 0 {
             let error = io::Error::last_os_error();
             // A signal arriving mid-wait is expected on this thread.
@@ -465,7 +465,7 @@ impl BootClock {
         };
         // SAFETY: value is a valid writable timespec and CLOCK_BOOTTIME has no
         // additional preconditions.
-        if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut value) } != 0 {
+        if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &raw mut value) } != 0 {
             return Err(io::Error::last_os_error());
         }
         if value.tv_sec < 0 || !(0..1_000_000_000).contains(&value.tv_nsec) {
@@ -547,7 +547,7 @@ impl BootDeadlineSource {
             libc::timerfd_settime(
                 self.fd.as_raw_fd(),
                 libc::TFD_TIMER_ABSTIME,
-                &value,
+                &raw const value,
                 ptr::null_mut(),
             )
         } != 0
@@ -569,7 +569,10 @@ impl BootDeadlineSource {
             },
         };
         // SAFETY: value is initialized and fd owns a timerfd.
-        if unsafe { libc::timerfd_settime(self.fd.as_raw_fd(), 0, &value, ptr::null_mut()) } != 0 {
+        if unsafe {
+            libc::timerfd_settime(self.fd.as_raw_fd(), 0, &raw const value, ptr::null_mut())
+        } != 0
+        {
             return Err(io::Error::last_os_error());
         }
         Ok(())
@@ -582,7 +585,7 @@ impl BootDeadlineSource {
             let result = unsafe {
                 libc::read(
                     self.fd.as_raw_fd(),
-                    (&mut expirations as *mut u64).cast(),
+                    (&raw mut expirations).cast(),
                     size_of::<u64>(),
                 )
             };

@@ -441,7 +441,7 @@ impl<P: AsRawFd> AbandonablePipe<P> {
             }
             // SAFETY: pollfd points to one initialized entry, and the pipe
             // stays open for as long as `self` owns it.
-            let result = unsafe { libc::poll(&mut pollfd, 1, PIPE_POLL_INTERVAL_MS) };
+            let result = unsafe { libc::poll(&raw mut pollfd, 1, PIPE_POLL_INTERVAL_MS) };
             if result > 0 {
                 return Ok(());
             }

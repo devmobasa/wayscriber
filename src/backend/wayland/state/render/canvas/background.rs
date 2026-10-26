@@ -200,7 +200,7 @@ impl WaylandState {
             // no other alias mutates the buffer while Cairo holds it.
             let surface = unsafe {
                 cairo::ImageSurface::create_for_data_unsafe(
-                    image.data.as_ptr() as *mut u8,
+                    image.data.as_ptr().cast_mut(),
                     cairo::Format::ARgb32,
                     image.width as i32,
                     image.height as i32,

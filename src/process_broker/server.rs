@@ -69,8 +69,8 @@ fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
             fd,
             libc::SOL_SOCKET,
             libc::SO_TYPE,
-            (&mut socket_type as *mut i32).cast(),
-            &mut length,
+            (&raw mut socket_type).cast(),
+            &raw mut length,
         )
     } != 0
     {

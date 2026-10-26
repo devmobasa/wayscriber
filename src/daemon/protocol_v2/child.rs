@@ -558,7 +558,7 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
             loop {
                 // SAFETY: pollfd points to one initialized entry and the
                 // descriptor remains owned by this thread.
-                let result = unsafe { libc::poll(&mut pollfd, 1, -1) };
+                let result = unsafe { libc::poll(&raw mut pollfd, 1, -1) };
                 if result > 0 {
                     // SAFETY: loss of the owning daemon is an irrevocable
                     // fail-stop condition for its internal overlay child.

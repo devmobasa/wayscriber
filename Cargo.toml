@@ -34,9 +34,11 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 # Pedantic lints, adopted one at a time. Most of them have machine-applicable
 # fixes, so `cargo clippy --fix` can apply them.
+borrow_as_ptr = "warn"
 cast_lossless = "warn"
 doc_markdown = "warn"
 map_unwrap_or = "warn"
+ptr_cast_constness = "warn"
 semicolon_if_nothing_returned = "warn"
 single_match_else = "warn"
 uninlined_format_args = "warn"

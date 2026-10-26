@@ -79,7 +79,7 @@ fn receive_chunk(
     };
     // SAFETY: zero is a valid initial state for msghdr.
     let mut message: libc::msghdr = unsafe { mem::zeroed() };
-    message.msg_iov = &mut iovec;
+    message.msg_iov = &raw mut iovec;
     message.msg_iovlen = 1;
     message.msg_control = control.as_mut_ptr().cast();
     message.msg_controllen = RECEIVE_CONTROL_LEN;
@@ -87,7 +87,7 @@ fn receive_chunk(
     let read = loop {
         // SAFETY: message references the live, writable data and control buffers.
         let read =
-            unsafe { libc::recvmsg(socket.as_raw_fd(), &mut message, libc::MSG_CMSG_CLOEXEC) };
+            unsafe { libc::recvmsg(socket.as_raw_fd(), &raw mut message, libc::MSG_CMSG_CLOEXEC) };
         if read >= 0 {
             break read as usize;
         }
@@ -164,7 +164,7 @@ fn send_chunk(socket: &UnixStream, bytes: &[u8], descriptors: &[OwnedFd]) -> Res
     };
     // SAFETY: zero is a valid initial state for msghdr.
     let mut message: libc::msghdr = unsafe { mem::zeroed() };
-    message.msg_iov = &mut iovec;
+    message.msg_iov = &raw mut iovec;
     message.msg_iovlen = 1;
 
     if !raw.is_empty() {
@@ -172,7 +172,7 @@ fn send_chunk(socket: &UnixStream, bytes: &[u8], descriptors: &[OwnedFd]) -> Res
         message.msg_controllen = control_len;
         // SAFETY: the control buffer holds CMSG_SPACE bytes for these descriptors.
         unsafe {
-            let header = libc::CMSG_FIRSTHDR(&message);
+            let header = libc::CMSG_FIRSTHDR(&raw const message);
             (*header).cmsg_level = libc::SOL_SOCKET;
             (*header).cmsg_type = libc::SCM_RIGHTS;
             (*header).cmsg_len = libc::CMSG_LEN(size_of_val(raw.as_slice()) as u32) as usize;
@@ -186,7 +186,8 @@ fn send_chunk(socket: &UnixStream, bytes: &[u8], descriptors: &[OwnedFd]) -> Res
 
     loop {
         // SAFETY: message references the live data and control buffers.
-        let sent = unsafe { libc::sendmsg(socket.as_raw_fd(), &message, libc::MSG_NOSIGNAL) };
+        let sent =
+            unsafe { libc::sendmsg(socket.as_raw_fd(), &raw const message, libc::MSG_NOSIGNAL) };
         if sent > 0 {
             return Ok(sent as usize);
         }

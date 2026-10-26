@@ -100,7 +100,7 @@ impl RuntimeWakeSource {
             let result = unsafe {
                 libc::read(
                     self.fd.as_raw_fd(),
-                    (&mut value as *mut u64).cast(),
+                    (&raw mut value).cast(),
                     size_of::<u64>(),
                 )
             };
@@ -133,7 +133,7 @@ impl RuntimeWakeSource {
             };
             // SAFETY: pollfd is valid and the Arc-owned descriptor remains open
             // throughout this bounded or producer-woken wait.
-            let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+            let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
             if ready == 0 {
                 return Ok(None);
             }
@@ -176,7 +176,7 @@ impl RuntimeWakeHandle {
             let result = unsafe {
                 libc::write(
                     self.fd.as_raw_fd(),
-                    (&value as *const u64).cast(),
+                    (&raw const value).cast(),
                     size_of::<u64>(),
                 )
             };
@@ -216,7 +216,7 @@ mod tests {
             revents: 0,
         };
         // SAFETY: pollfd is valid for the duration of this call.
-        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout_ms) };
+        let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
         assert!(ready >= 0, "poll failed: {}", io::Error::last_os_error());
         ready > 0 && pollfd.revents & libc::POLLIN != 0
     }

@@ -162,9 +162,9 @@ fn libc_datetime_from_unix(secs: i64, local: bool) -> Option<LocalDateTime> {
     // one `tm`. The reentrant variants keep no pointer to either.
     let ptr = unsafe {
         if local {
-            libc::localtime_r(&raw, out.as_mut_ptr())
+            libc::localtime_r(&raw const raw, out.as_mut_ptr())
         } else {
-            libc::gmtime_r(&raw, out.as_mut_ptr())
+            libc::gmtime_r(&raw const raw, out.as_mut_ptr())
         }
     };
     if ptr.is_null() {

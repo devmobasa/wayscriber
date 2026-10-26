@@ -24,7 +24,7 @@ pub(super) fn paint_cut_preview(ctx: &cairo::Context, preview: RegionCutPreviewV
     // pointer, and no other alias mutates the buffer while Cairo holds it.
     let surface = unsafe {
         cairo::ImageSurface::create_for_data_unsafe(
-            pixels.data().as_ptr() as *mut u8,
+            pixels.data().as_ptr().cast_mut(),
             cairo::Format::ARgb32,
             width,
             height,

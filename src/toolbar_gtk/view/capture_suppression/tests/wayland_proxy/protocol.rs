@@ -55,7 +55,7 @@ pub(super) fn schema() -> Schema {
         XdgWmBase::interface(),
     ];
     while let Some(interface) = pending.pop() {
-        if ptr::eq(interface, &ANONYMOUS_INTERFACE)
+        if ptr::eq(interface, &raw const ANONYMOUS_INTERFACE)
             || schema.insert(interface.name, interface).is_some()
         {
             continue;

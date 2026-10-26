@@ -275,7 +275,7 @@ impl ExportBackdrop {
                 // The surface is owned by ExportBackdrop and dropped before the snapshot.
                 let surface = unsafe {
                     cairo::ImageSurface::create_for_data_unsafe(
-                        data.as_ptr() as *mut u8,
+                        data.as_ptr().cast_mut(),
                         cairo::Format::ARgb32,
                         *width,
                         *height,
@@ -331,7 +331,7 @@ impl ExportBackdrop {
         // it is used only as a paint/blur/eraser replay source.
         let surface = unsafe {
             cairo::ImageSurface::create_for_data_unsafe(
-                image.data.as_ptr() as *mut u8,
+                image.data.as_ptr().cast_mut(),
                 cairo::Format::ARgb32,
                 width,
                 height,

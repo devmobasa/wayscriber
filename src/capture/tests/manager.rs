@@ -174,7 +174,7 @@ async fn completion_wakes_an_already_blocked_runtime_poll_after_publication() {
         polling_tx.send(()).unwrap();
         // SAFETY: the runtime wake source outlives this bounded poll and owns
         // the descriptor for the entire test.
-        assert_eq!(unsafe { libc::poll(&mut pollfd, 1, 1_000) }, 1);
+        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 1_000) }, 1);
         assert_ne!(pollfd.revents & libc::POLLIN, 0);
     });
     polling_rx.recv().unwrap();
