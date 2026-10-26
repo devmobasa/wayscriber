@@ -64,9 +64,7 @@ impl QuickColorsDraft {
                 return;
             }
 
-            let persist_len = if next_entries.len() != effective_entries.len() {
-                next_entries.len()
-            } else {
+            let persist_len = if next_entries.len() == effective_entries.len() {
                 let source_len = config
                     .configured_entry_count()
                     .unwrap_or(config.entries.len());
@@ -76,6 +74,8 @@ impl QuickColorsDraft {
                     .rposition(|(next, previous)| next != previous)
                     .map_or(0, |index| index + 1);
                 source_len.max(changed_len).min(next_entries.len())
+            } else {
+                next_entries.len()
             };
             next_entries.truncate(persist_len);
             config.set_entries(next_entries);

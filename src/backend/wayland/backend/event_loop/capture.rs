@@ -253,9 +253,7 @@ fn frozen_toggle_pass_decision(
     frozen_active: bool,
     frozen_enabled: bool,
 ) -> FrozenTogglePassDecision {
-    let user_action = if !user_toggle {
-        FrozenUserToggleAction::None
-    } else {
+    let user_action = if user_toggle {
         match slot {
             Some(record)
                 if record.stage == AcquisitionStage::Queued
@@ -268,6 +266,8 @@ fn frozen_toggle_pass_decision(
             None if !frozen_enabled => FrozenUserToggleAction::ReportUnavailable,
             None => FrozenUserToggleAction::RequestUserFreeze,
         }
+    } else {
+        FrozenUserToggleAction::None
     };
     FrozenTogglePassDecision {
         user_action,

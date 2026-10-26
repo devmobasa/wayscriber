@@ -120,10 +120,10 @@ fn sanitize_range(value: f64, min: f64, max: f64, fallback: f64, field: &str) ->
 
 fn sanitize_color(color: &mut [f64; 4], fallback: [f64; 4]) {
     for (index, component) in color.iter_mut().enumerate() {
-        if !component.is_finite() {
-            *component = fallback[index];
-        } else {
+        if component.is_finite() {
             *component = component.clamp(0.0, 1.0);
+        } else {
+            *component = fallback[index];
         }
     }
 }

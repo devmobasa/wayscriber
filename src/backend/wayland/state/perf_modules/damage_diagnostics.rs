@@ -34,10 +34,10 @@ pub(super) fn effective_full_damage_reason(
     full_damage: bool,
     force_full_reason: Option<FullDamageReason>,
 ) -> Option<FullDamageReason> {
-    if !full_damage {
-        None
-    } else {
+    if full_damage {
         Some(force_full_reason.unwrap_or(FullDamageReason::DamageRegionsCoverSurface))
+    } else {
+        None
     }
 }
 

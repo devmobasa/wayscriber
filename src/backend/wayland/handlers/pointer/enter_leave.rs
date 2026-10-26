@@ -99,13 +99,13 @@ impl WaylandState {
             // Don't clear drag state if we're in a move drag - the user may be
             // dragging the toolbar and their pointer left the toolbar surface.
             // The drag will continue on the main surface.
-            if !self.toolbar_drag.is_moving() {
+            if self.toolbar_drag.is_moving() {
+                debug!("Preserving move drag state on toolbar leave");
+            } else {
                 debug!("Clearing toolbar drag state on leave");
                 self.finish_toolbar_item_drag(false);
                 self.toolbar_drag.set_item_dragging(false);
                 self.cancel_toolbar_move_drag();
-            } else {
-                debug!("Preserving move drag state on toolbar leave");
             }
             self.toolbar.mark_dirty();
             // Ensure pointer-driven visuals (e.g. eraser hover) update once on leave.

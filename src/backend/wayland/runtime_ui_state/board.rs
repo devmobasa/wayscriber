@@ -82,7 +82,9 @@ impl ToolbarRuntimeState {
         match self.update_board_seeds(config) {
             BoardSeedUpdate::Applied => {}
             BoardSeedUpdate::Staged => {
-                if pinned != pin_seed {
+                if pinned == pin_seed {
+                    input.apply_board_pinned_runtime(&board_id, pin_seed);
+                } else {
                     self.deferred_board_pin_restores.insert(
                         board_id.clone(),
                         DeferredBoardPinRestore {
@@ -93,8 +95,6 @@ impl ToolbarRuntimeState {
                             authority_epoch: self.controller.authority_epoch(),
                         },
                     );
-                } else {
-                    input.apply_board_pinned_runtime(&board_id, pin_seed);
                 }
                 return None;
             }

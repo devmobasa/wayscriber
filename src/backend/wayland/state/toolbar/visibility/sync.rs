@@ -67,12 +67,12 @@ impl WaylandState {
         let current = self.focus.current_keyboard_interactivity();
 
         let updated = if let Some(layer) = self.surface.layer_surface_mut() {
-            if current != Some(desired) {
+            if current == Some(desired) {
+                false
+            } else {
                 layer.set_keyboard_interactivity(desired);
                 layer.commit();
                 true
-            } else {
-                false
             }
         } else {
             self.focus.set_keyboard_interactivity(None);

@@ -87,10 +87,10 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
             wait_for_frame(&window);
             let renderer = window.renderer().unwrap();
             eprintln!("optional Vulkan probe selected {}", renderer.type_().name());
-            if renderer.type_().name() != "GskVulkanRenderer" {
-                outcome = Outcome::VulkanUnavailable;
-            } else {
+            if renderer.type_().name() == "GskVulkanRenderer" {
                 assert_renderer(&window);
+            } else {
+                outcome = Outcome::VulkanUnavailable;
             }
             window.destroy();
         }

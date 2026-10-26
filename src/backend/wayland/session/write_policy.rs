@@ -47,10 +47,10 @@ impl SessionState {
             .as_ref()
             .is_some_and(|options| self.refuses_source_write(&options.session_file_path()));
         if (!self.loaded || blocked) && dirty {
-            let refusal = if !self.loaded {
-                SourceWriteRefused::NotLoaded
-            } else {
+            let refusal = if self.loaded {
                 SourceWriteRefused::NotPreserved
+            } else {
+                SourceWriteRefused::NotLoaded
             };
             return Err(refusal.into());
         }

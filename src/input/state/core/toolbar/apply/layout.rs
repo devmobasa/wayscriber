@@ -24,20 +24,20 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_custom_section(&mut self, enable: bool) -> bool {
-        if self.history_limits.custom_section_enabled() != enable {
+        if self.history_limits.custom_section_enabled() == enable {
+            false
+        } else {
             self.history_limits.set_custom_section_enabled(enable);
             true
-        } else {
-            false
         }
     }
 
     pub(super) fn apply_toolbar_toggle_delay_sliders(&mut self, show: bool) -> bool {
-        if self.ui_visibility.show_delay_sliders != show {
+        if self.ui_visibility.show_delay_sliders == show {
+            false
+        } else {
             self.ui_visibility.show_delay_sliders = show;
             true
-        } else {
-            false
         }
     }
 
@@ -119,11 +119,11 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_more_colors(&mut self, show: bool) -> bool {
-        if self.ui_visibility.show_more_colors != show {
+        if self.ui_visibility.show_more_colors == show {
+            false
+        } else {
             self.ui_visibility.show_more_colors = show;
             true
-        } else {
-            false
         }
     }
 
@@ -186,29 +186,29 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_context_aware_ui(&mut self, enabled: bool) -> bool {
-        if self.ui_visibility.context_aware_ui != enabled {
+        if self.ui_visibility.context_aware_ui == enabled {
+            false
+        } else {
             self.ui_visibility.context_aware_ui = enabled;
             true
-        } else {
-            false
         }
     }
 
     pub(super) fn apply_toolbar_toggle_preset_toasts(&mut self, show: bool) -> bool {
-        if self.ui_visibility.show_preset_toasts != show {
+        if self.ui_visibility.show_preset_toasts == show {
+            false
+        } else {
             self.ui_visibility.show_preset_toasts = show;
             true
-        } else {
-            false
         }
     }
 
     pub(super) fn apply_toolbar_toggle_idle_fade(&mut self, enable: bool) -> bool {
-        if self.ui_visibility.idle_fade != enable {
+        if self.ui_visibility.idle_fade == enable {
+            false
+        } else {
             self.ui_visibility.idle_fade = enable;
             true
-        } else {
-            false
         }
     }
 
@@ -216,12 +216,12 @@ impl InputState {
         if self.presenter_mode_active() && self.presenter_mode_config().hide_tool_preview {
             return false;
         }
-        if self.ui_visibility.show_tool_preview != show {
+        if self.ui_visibility.show_tool_preview == show {
+            false
+        } else {
             self.ui_visibility.show_tool_preview = show;
             self.needs_redraw = true;
             true
-        } else {
-            false
         }
     }
 
@@ -236,13 +236,13 @@ impl InputState {
         // This is an explicit chrome control, so it takes ownership from
         // Focus Mode just like the keyboard/palette toggle does.
         self.break_focus_mode();
-        if self.ui_visibility.show_status_bar != show {
+        if self.ui_visibility.show_status_bar == show {
+            false
+        } else {
             self.ui_visibility.show_status_bar = show;
             self.refresh_status_hud_layout_with_resources(resources.ui_engine, resources.measurer);
             self.needs_redraw = true;
             true
-        } else {
-            false
         }
     }
 
@@ -297,13 +297,13 @@ impl InputState {
     }
 
     pub(super) fn apply_toolbar_toggle_floating_badge_always(&mut self, show: bool) -> bool {
-        if self.ui_visibility.show_floating_badge_always != show {
+        if self.ui_visibility.show_floating_badge_always == show {
+            false
+        } else {
             self.ui_visibility.show_floating_badge_always = show;
             self.dirty_tracker.mark_full();
             self.needs_redraw = true;
             true
-        } else {
-            false
         }
     }
 

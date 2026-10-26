@@ -1177,13 +1177,13 @@ fn control_button_node_with_tooltip(
     tooltip: String,
 ) -> WidgetNode {
     let enabled = control.enabled(snapshot);
-    let style = if !enabled {
-        ButtonStyle::disabled()
-    } else {
+    let style = if enabled {
         match control.role() {
             model::TopToolbarControlRole::Destructive => ButtonStyle::destructive(),
             _ => ButtonStyle::active(control.active(snapshot)),
         }
+    } else {
+        ButtonStyle::disabled()
     };
     let kind = if use_icons {
         let icon_size = if control == model::TopToolbarControl::ShapePicker {

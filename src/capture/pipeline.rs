@@ -151,7 +151,9 @@ pub(crate) async fn perform_capture(
         }
         CaptureDestination::ClipboardAndFile => {
             if let Some(save_config) = request.save_config.clone() {
-                if !save_config.save_directory.as_os_str().is_empty() {
+                if save_config.save_directory.as_os_str().is_empty() {
+                    None
+                } else {
                     match save_bytes(
                         Arc::clone(&dependencies.saver),
                         image_data.clone(),
@@ -166,8 +168,6 @@ pub(crate) async fn perform_capture(
                             None
                         }
                     }
-                } else {
-                    None
                 }
             } else {
                 None

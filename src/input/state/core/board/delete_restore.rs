@@ -198,10 +198,10 @@ impl InputState {
                         .action(tr("Undo"), Action::BoardRestoreDeleted),
                 );
 
-                if self.boards.active_board_id() != active_id_before {
-                    self.finish_board_transition_from(&current_spec, &active_id_before, false);
-                } else {
+                if self.boards.active_board_id() == active_id_before {
                     self.mark_board_surface_changed();
+                } else {
+                    self.finish_board_transition_from(&current_spec, &active_id_before, false);
                 }
             }
             BoardDeleteOutcome::Rejected(rejection) => {
