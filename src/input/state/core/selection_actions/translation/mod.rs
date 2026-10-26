@@ -2,9 +2,16 @@ use crate::draw::frame::ShapeSnapshot;
 use crate::draw::{ShapeId, TextMeasurer};
 use crate::input::InputState;
 
+use bounds::SelectionExtent;
+
 mod bounds;
 mod restore;
 mod undo;
+
+/// Steps an edge action may take. The delta from a selection edge to a
+/// visible edge spans at most three saturated `i32` steps, plus one if a
+/// limit shortened a step.
+const MAX_ALIGNMENT_STEPS: usize = 4;
 
 impl InputState {
     pub(crate) fn capture_movable_selection_snapshots(&self) -> Vec<(ShapeId, ShapeSnapshot)> {
@@ -74,24 +81,23 @@ impl InputState {
         measurer: &TextMeasurer,
         to_start: bool,
     ) -> bool {
-        let Some(bounds) = self.movable_selection_bounds(measurer) else {
-            return false;
-        };
-        let screen_width = self.view.screen_width().min(i32::MAX as u32) as i32;
-        if screen_width <= 0 {
+        if self.view.screen_width() == 0 {
             return false;
         }
 
-        let target_x = if to_start {
-            0
-        } else {
-            screen_width - bounds.width
-        };
-        let dx = target_x - bounds.x;
-        if dx == 0 {
-            return false;
-        }
-        self.translate_selection_with_undo_with(measurer, dx, 0)
+        // Align with the current view, which panning and zoom move away from
+        // the canvas origin.
+        let visible = self.visible_canvas_rect();
+        let start = i64::from(visible.x);
+        let end = start + i64::from(visible.width);
+        self.align_selection_with_undo_with(measurer, |extent| {
+            let dx = if to_start {
+                start - extent.min_x
+            } else {
+                end - extent.max_x
+            };
+            (dx, 0)
+        })
     }
 
     pub(crate) fn move_selection_to_vertical_edge_with(
@@ -99,23 +105,61 @@ impl InputState {
         measurer: &TextMeasurer,
         to_start: bool,
     ) -> bool {
-        let Some(bounds) = self.movable_selection_bounds(measurer) else {
-            return false;
-        };
-        let screen_height = self.view.screen_height().min(i32::MAX as u32) as i32;
-        if screen_height <= 0 {
+        if self.view.screen_height() == 0 {
             return false;
         }
 
-        let target_y = if to_start {
-            0
-        } else {
-            screen_height - bounds.height
-        };
-        let dy = target_y - bounds.y;
-        if dy == 0 {
+        let visible = self.visible_canvas_rect();
+        let start = i64::from(visible.y);
+        let end = start + i64::from(visible.height);
+        self.align_selection_with_undo_with(measurer, |extent| {
+            let dy = if to_start {
+                start - extent.min_y
+            } else {
+                end - extent.max_y
+            };
+            (0, dy)
+        })
+    }
+
+    /// Moves the selection by the delta that `delta_for` returns for its
+    /// current painted bounds, as one undo step.
+    ///
+    /// A delta can exceed the `i32` range, so it is applied in steps, and
+    /// the bounds are measured again after each one. Each step is limited
+    /// like any other move, and alignment stops when nothing is left to move
+    /// or a step is fully blocked.
+    fn align_selection_with_undo_with(
+        &mut self,
+        measurer: &TextMeasurer,
+        delta_for: impl Fn(SelectionExtent) -> (i64, i64),
+    ) -> bool {
+        let before = self.capture_movable_selection_snapshots();
+        if before.is_empty() {
             return false;
         }
-        self.translate_selection_with_undo_with(measurer, 0, dy)
+
+        let mut moved = false;
+        for _ in 0..MAX_ALIGNMENT_STEPS {
+            let Some(extent) = self.movable_selection_extent(measurer) else {
+                break;
+            };
+            let (dx, dy) = delta_for(extent);
+            if (dx, dy) == (0, 0)
+                || !self.apply_translation_to_selection_with(
+                    measurer,
+                    bounds::saturating_delta(dx),
+                    bounds::saturating_delta(dy),
+                )
+            {
+                break;
+            }
+            moved = true;
+        }
+
+        if moved {
+            self.push_translation_undo(measurer, before);
+        }
+        moved
     }
 }

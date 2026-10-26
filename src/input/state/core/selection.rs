@@ -9,6 +9,16 @@ use crate::util::Rect;
 use std::collections::HashSet;
 use std::time::Instant;
 
+/// What to repaint for a selection's chrome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SelectionChromeDamage {
+    /// The chrome's canvas area, if anything selected is painted.
+    Region(Option<Rect>),
+    /// The painted bounds do not fit a [`Rect`], for example because they
+    /// end past `i32::MAX`, yet every member still paints a halo.
+    Everything,
+}
+
 #[derive(Debug, Clone, Default)]
 enum SelectionState {
     #[default]
@@ -201,65 +211,55 @@ impl InputState {
         change: impl FnOnce(&mut SelectionInteraction),
     ) {
         let previous_ids = self.selected_shape_ids().to_vec();
-        let previous_chrome = self.selection_chrome_bounds_with(measurer);
+        let previous_chrome = self.selection_chrome_damage_with(measurer);
 
         change(&mut self.selection_interaction);
         self.close_properties_panel();
 
         if self.selected_shape_ids() != previous_ids.as_slice() {
-            self.mark_selection_dirty_region(previous_chrome);
+            self.mark_selection_chrome_damage(previous_chrome);
             self.mark_selection_chrome_dirty_with(measurer);
             self.needs_redraw = true;
         }
     }
 
-    /// Canvas bounds of everything painted for the selection: the halos, the
+    /// Canvas area of everything painted for the selection: the halos, the
     /// dashed handle frame, and the resize handle of a lone text shape, which
     /// sits outside the shape.
-    pub(crate) fn selection_chrome_bounds_with(&self, measurer: &TextMeasurer) -> Option<Rect> {
-        let bounds = self.selection_bounds_with(measurer)?;
-        match self.selected_text_resize_handle_with(measurer) {
+    pub(crate) fn selection_chrome_damage_with(
+        &self,
+        measurer: &TextMeasurer,
+    ) -> SelectionChromeDamage {
+        let Some(bounds) = self.selection_bounds_with(measurer) else {
+            return if self.selection_is_painted_with(measurer) {
+                SelectionChromeDamage::Everything
+            } else {
+                SelectionChromeDamage::Region(None)
+            };
+        };
+
+        let chrome = match self.selected_text_resize_handle_with(measurer) {
             Some((_, handle)) => bounds.union(handle),
             None => Some(bounds),
+        };
+        SelectionChromeDamage::Region(chrome)
+    }
+
+    pub(crate) fn mark_selection_chrome_damage(&mut self, damage: SelectionChromeDamage) {
+        match damage {
+            SelectionChromeDamage::Region(chrome) => self.mark_selection_dirty_region(chrome),
+            SelectionChromeDamage::Everything => {
+                self.dirty_tracker.mark_full();
+                self.mark_selection_dirty_region(None);
+            }
         }
     }
 
     /// Repaints the current selection chrome. Also used when an interaction
     /// ends and the handles it hid reappear without a membership change.
     pub(crate) fn mark_selection_chrome_dirty_with(&mut self, measurer: &TextMeasurer) {
-        let chrome = self.selection_chrome_bounds_with(measurer);
-        self.mark_selection_dirty_region(chrome);
-    }
-
-    pub(crate) fn selection_bounding_box_with(
-        &self,
-        measurer: &TextMeasurer,
-        ids: &[ShapeId],
-    ) -> Option<Rect> {
-        let frame = self.boards.active_frame();
-        let mut min_x = i32::MAX;
-        let mut min_y = i32::MAX;
-        let mut max_x = i32::MIN;
-        let mut max_y = i32::MIN;
-        let mut found = false;
-
-        for id in ids {
-            if let Some(shape) = frame.shape(*id)
-                && let Some(bounds) = shape.bounding_box_with(measurer)
-            {
-                min_x = min_x.min(bounds.x);
-                min_y = min_y.min(bounds.y);
-                max_x = max_x.max(bounds.x + bounds.width);
-                max_y = max_y.max(bounds.y + bounds.height);
-                found = true;
-            }
-        }
-
-        if found {
-            Rect::from_min_max(min_x, min_y, max_x, max_y)
-        } else {
-            None
-        }
+        let chrome = self.selection_chrome_damage_with(measurer);
+        self.mark_selection_chrome_damage(chrome);
     }
 
     pub(crate) fn selection_screen_bounding_box_with(

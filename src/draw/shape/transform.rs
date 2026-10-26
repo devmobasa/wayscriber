@@ -5,6 +5,43 @@ use crate::util;
 use super::Shape;
 
 impl Shape {
+    /// Limits movement so every translated integer coordinate stays representable.
+    pub(crate) fn constrain_translation(&self, dx: i32, dy: i32) -> (i32, i32) {
+        let constrain = |position: i32, delta: i32| {
+            let position = i64::from(position);
+            let clamped = i64::from(delta).clamp(
+                i64::from(i32::MIN) - position,
+                i64::from(i32::MAX) - position,
+            );
+            i32::try_from(clamped)
+                .expect("anchor-constrained movement lies between zero and the requested i32 delta")
+        };
+
+        match self {
+            Shape::Line { x1, y1, x2, y2, .. } | Shape::Arrow { x1, y1, x2, y2, .. } => (
+                constrain(*x2, constrain(*x1, dx)),
+                constrain(*y2, constrain(*y1, dy)),
+            ),
+            Shape::Rect { x, y, .. }
+            | Shape::BlurRect { x, y, .. }
+            | Shape::Image { x, y, .. }
+            | Shape::Text { x, y, .. }
+            | Shape::StepMarker { x, y, .. }
+            | Shape::StickyNote { x, y, .. } => (constrain(*x, dx), constrain(*y, dy)),
+            Shape::Ellipse { cx, cy, .. } | Shape::Spotlight { cx, cy, .. } => {
+                (constrain(*cx, dx), constrain(*cy, dy))
+            }
+            Shape::Polygon { points, .. } | Shape::EraserStroke { points, .. } => {
+                points.iter().fold((dx, dy), |(dx, dy), &(x, y)| {
+                    (constrain(x, dx), constrain(y, dy))
+                })
+            }
+            Shape::Freehand { .. }
+            | Shape::FreehandPressure { .. }
+            | Shape::MarkerStroke { .. } => (dx, dy),
+        }
+    }
+
     pub(crate) fn translate(&mut self, dx: i32, dy: i32) {
         match self {
             Shape::Freehand { points, .. } => {

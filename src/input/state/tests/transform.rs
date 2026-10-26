@@ -1,7 +1,7 @@
-use crate::draw::{ArrowStyle, TextMeasurer};
-use crate::ui_text::UiTextEngine;
-
 use super::*;
+use crate::draw::{ArrowStyle, TextMeasurer};
+use crate::input::{BOARD_ID_BLACKBOARD, BOARD_ID_TRANSPARENT};
+use crate::ui_text::UiTextEngine;
 
 #[test]
 fn translate_selection_with_undo_moves_shape() {
@@ -374,9 +374,11 @@ fn nudge_selection_clamps_right_and_bottom_edges() {
 
     let mut state = create_test_input_state();
     state.update_screen_dimensions(100, 100);
+    // Start with the stroke padding inside the canvas: a selection that
+    // already crosses an edge is not pulled back.
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 90,
-        y: 90,
+        x: 87,
+        y: 87,
         w: 10,
         h: 10,
         fill: false,
@@ -565,10 +567,10 @@ fn stretching_a_flat_curved_arrow_downward_grows_its_arc() {
 
 #[test]
 fn moving_a_selection_on_a_panned_board_follows_the_pointer() {
-    let measurer = crate::draw::TextMeasurer::default();
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.update_screen_dimensions(1920, 1080);
-    assert!(state.boards.switch_to_id(crate::input::BOARD_ID_BLACKBOARD));
+    assert!(state.boards.switch_to_id(BOARD_ID_BLACKBOARD));
     // Screen (0, 0) is canvas (-3306, 93) on this board.
     state.boards.active_frame_mut().set_view_offset(-3306, 93);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
@@ -577,6 +579,7 @@ fn moving_a_selection_on_a_panned_board_follows_the_pointer() {
         w: 480,
         h: 100,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -607,21 +610,19 @@ fn moving_a_selection_on_a_panned_board_follows_the_pointer() {
 }
 
 #[test]
-fn moving_a_selection_at_zoom_keeps_it_inside_the_visible_canvas() {
-    let measurer = crate::draw::TextMeasurer::default();
+fn moving_a_selection_on_a_panned_board_can_move_freely_across_canvas() {
+    let measurer = TextMeasurer::default();
     let mut state = create_test_input_state();
     state.update_screen_dimensions(1920, 1080);
-    assert!(state.boards.switch_to_id(crate::input::BOARD_ID_BLACKBOARD));
-    state.view.set_zoom_status(true, false, 4.0, (0.0, 0.0));
-    // At 4x the visible canvas is 480x270. The 400px-wide selection carries
-    // ~2px of line-width bounds padding, so it may slide 78px before its right
-    // edge reaches the visible canvas edge.
+    assert!(state.boards.switch_to_id(BOARD_ID_BLACKBOARD));
+    state.boards.active_frame_mut().set_view_offset(-1000, 500);
     let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
-        x: 0,
-        y: 0,
-        w: 400,
+        x: -500,
+        y: 600,
+        w: 200,
         h: 100,
         fill: false,
+        fill_color: None,
         color: state.style.current_color,
         thick: state.style.current_thickness,
     });
@@ -634,7 +635,51 @@ fn moving_a_selection_at_zoom_keeps_it_inside_the_visible_canvas() {
         .unwrap()
         .bounding_box()
         .expect("rect should have bounds");
-    state.apply_translation_to_selection_with(&measurer, 300, 0);
+
+    // On an infinite pannable board, dragging across or past the screen area must
+    // not be blocked by an artificial viewport clamp ("invisible wall").
+    assert!(state.apply_translation_to_selection_with(&measurer, 2500, 1500));
+
+    let after = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+
+    assert_eq!(after.x - before.x, 2500);
+    assert_eq!(after.y - before.y, 1500);
+}
+
+#[test]
+fn moving_a_selection_on_transparent_board_clamps_to_screen() {
+    let measurer = TextMeasurer::default();
+    let mut state = create_test_input_state();
+    state.update_screen_dimensions(1920, 1080);
+    assert!(state.boards.switch_to_id(BOARD_ID_TRANSPARENT));
+    let shape_id = state.boards.active_frame_mut().add_shape(Shape::Rect {
+        x: 1800,
+        y: 100,
+        w: 100,
+        h: 100,
+        fill: false,
+        fill_color: None,
+        color: state.style.current_color,
+        thick: state.style.current_thickness,
+    });
+    state.set_selection(vec![shape_id]);
+    let before = state
+        .boards
+        .active_frame()
+        .shape(shape_id)
+        .unwrap()
+        .bounding_box()
+        .expect("rect should have bounds");
+
+    // Transparent overlay is bounded by screen (1920x1080).
+    // A 100px-wide shape at x=1800 can only slide to x=1820 (with bounds padding) before hitting screen edge.
+    assert!(state.apply_translation_to_selection_with(&measurer, 300, 0));
     let after = state
         .boards
         .active_frame()
@@ -644,8 +689,8 @@ fn moving_a_selection_at_zoom_keeps_it_inside_the_visible_canvas() {
         .expect("rect should have bounds");
 
     assert_eq!(
-        after.x - before.x,
-        78,
-        "the selection must stop at the visible canvas edge (480 canvas px at 4x), not at the screen width"
+        (after.x + after.width, after.width),
+        (1920, before.width),
+        "the selection must stop exactly at the screen edge, before {before:?}"
     );
 }

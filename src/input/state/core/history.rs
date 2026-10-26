@@ -31,12 +31,12 @@ impl InputState {
         // A live slider drag holds snapshots from before it began; it has to
         // land as its own entry before history moves past it.
         self.finish_properties_slider_drag_with(measurer);
-        let selection_chrome = self.selection_chrome_bounds_with(measurer);
+        let selection_chrome = self.selection_chrome_damage_with(measurer);
         let Some(action) = step(self.boards.active_frame_mut()) else {
             return false;
         };
 
-        self.mark_selection_dirty_region(selection_chrome);
+        self.mark_selection_chrome_damage(selection_chrome);
         self.apply_action_side_effects_with(measurer, &action);
         // A recognition chip advertises this undo; once history moves it no
         // longer describes the canvas.

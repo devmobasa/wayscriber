@@ -14,7 +14,8 @@ const MIN_RESIZE_SIZE: f64 = 10.0;
 
 impl InputState {
     pub(super) fn point_near(&self, x: i32, y: i32, cx: i32, cy: i32, radius: i32) -> bool {
-        (x - cx).abs() <= radius && (y - cy).abs() <= radius
+        let near = |a: i32, b: i32| (i64::from(a) - i64::from(b)).abs() <= i64::from(radius);
+        near(x, cx) && near(y, cy)
     }
 
     pub(super) fn selection_handle_probes(

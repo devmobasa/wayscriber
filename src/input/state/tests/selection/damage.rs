@@ -187,3 +187,37 @@ fn deselecting_text_repaints_its_resize_handle() {
     assert!(!state.has_selection());
     assert_damage_covers(&damage, handle, "text resize handle");
 }
+
+#[test]
+fn a_selection_without_chrome_bounds_still_repaints_its_visible_members() {
+    let mut state = damage_state();
+    let visible = add_filled_rect(&mut state, 20, 20);
+    let at_limit = state.boards.active_frame_mut().add_shape(Shape::Line {
+        x1: i32::MAX - 50,
+        y1: 100,
+        x2: i32::MAX,
+        y2: 150,
+        color: state.style.current_color,
+        thick: 4.0,
+    });
+    let _ = state.take_dirty_regions();
+
+    state.set_selection(vec![visible, at_limit]);
+    assert_eq!(
+        state.selection_bounds(),
+        None,
+        "the fixture's painted bounds must end past i32::MAX"
+    );
+    let damage = state.take_dirty_regions();
+    assert_damage_covers(&damage, chrome_of(&state, visible), "new visible member");
+
+    state.on_key_press(Key::Escape);
+    let damage = state.take_dirty_regions();
+
+    assert!(!state.has_selection());
+    assert_damage_covers(
+        &damage,
+        chrome_of(&state, visible),
+        "previous visible member",
+    );
+}

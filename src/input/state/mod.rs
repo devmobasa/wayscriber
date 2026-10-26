@@ -198,6 +198,11 @@ pub(crate) mod test_support {
             self
         }
 
+        pub(crate) fn boards_config(mut self, boards_config: BoardsConfig) -> Self {
+            self.seed.boards_config = boards_config;
+            self
+        }
+
         pub(crate) fn build(self) -> InputState {
             InputState::from_seed(self.seed)
         }
