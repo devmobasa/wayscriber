@@ -58,7 +58,7 @@ mod tests {
     use std::env;
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a running Wayland compositor"]
     fn wayland_backend_smoke_test() {
         if env::var(super::WAYLAND_DISPLAY_ENV).is_err() {
             eprintln!(
