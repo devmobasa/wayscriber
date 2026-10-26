@@ -205,7 +205,7 @@ fn hyprland_rejects_invalid_monitor_scale() {
     assert!(
         parse_hyprland_targets(
             monitors,
-            br#"[]"#,
+            br"[]",
             &context("DP-1", Rect::new(0, 0, 1920, 1080).unwrap()),
         )
         .is_err()

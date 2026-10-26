@@ -63,13 +63,13 @@ future_boards = "kept"
 #[test]
 fn a_preserved_key_this_build_now_manages_loses_to_the_managed_value() {
     let decoded = decode_runtime_ui_file(
-        br#"
+        br"
 version = 1
 
 [toolbar.top_pinned]
 seed = false
 value = true
-"#,
+",
     );
     let mut wire = decoded.supported_wire.expect("supported wire");
 
@@ -218,12 +218,12 @@ fn a_file_without_the_added_toolbar_keys_still_decodes() {
     // The new keys are optional additions to V1, so a file written before
     // they existed stays supported and writable.
     let decoded = decode_runtime_ui_file(
-        br#"version = 1
+        br"version = 1
 
 [toolbar.top_pinned]
 seed = false
 value = true
-"#,
+",
     );
     assert_eq!(decoded.status, RuntimeUiFileStatus::Supported);
     let wire = decoded.supported_wire.expect("supported wire");
@@ -268,23 +268,23 @@ future_scalar = 7
 fn malformed_position_and_display_mode_values_invalidate_the_file() {
     for source in [
         // Non-finite offsets cannot be compared bit-exactly against a seed.
-        br#"version = 1
+        br"version = 1
 [toolbar.top_position]
 seed = { x = 0.0, y = 0.0 }
 value = { x = nan, y = 1.0 }
-"#
+"
         .as_slice(),
-        br#"version = 1
+        br"version = 1
 [toolbar.top_position]
 seed = { x = 0.0, y = 0.0 }
 value = { x = 1.0 }
-"#
+"
         .as_slice(),
-        br#"version = 1
+        br"version = 1
 [toolbar.top_position]
 seed = { x = 0.0, y = 0.0 }
 value = { x = 1.0, y = 2.0, z = 3.0 }
-"#
+"
         .as_slice(),
         br#"version = 1
 [toolbar.top_position]

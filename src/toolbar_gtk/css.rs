@@ -431,7 +431,7 @@ tooltip {{
 pub(super) fn capture_stylesheet(scale: f64) -> String {
     let v = GtkStylesheetValues::new(scale);
     format!(
-        r#"
+        r"
 .wayscriber-toolbar popover > contents {{
     box-shadow: 0 {shadow_offset_y}px {shadow_blur}px {popover_shadow};
 }}
@@ -485,7 +485,7 @@ popover.{class} > contents {{
 tooltip.{class} {{
     color: transparent;
 }}
-"#,
+",
         class = CAPTURE_TRANSPARENT_CLASS,
         shadow_offset_y = v.shadow_offset_y,
         shadow_blur = v.shadow_blur,
