@@ -237,9 +237,9 @@ fn history_depth_from_pages(pages: Option<&BoardPagesSnapshot>) -> HistoryDepth 
 }
 
 fn page_shape_count(pages: Option<&BoardPagesSnapshot>) -> usize {
-    pages
-        .map(|pages| pages.pages.iter().map(|page| page.shapes.len()).sum())
-        .unwrap_or(0)
+    pages.map_or(0, |pages| {
+        pages.pages.iter().map(|page| page.shapes.len()).sum()
+    })
 }
 
 fn find_existing_variant(

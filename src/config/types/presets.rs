@@ -87,10 +87,10 @@ pub struct ToolPresetConfig {
 impl ToolPresetConfig {
     #[must_use]
     pub fn preview_color_spec(&self) -> ColorSpec {
-        self.tool_settings
-            .as_ref()
-            .map(|settings| settings.color_spec_for_tool(self.tool))
-            .unwrap_or_else(|| self.color.clone())
+        self.tool_settings.as_ref().map_or_else(
+            || self.color.clone(),
+            |settings| settings.color_spec_for_tool(self.tool),
+        )
     }
 
     #[must_use]
@@ -102,8 +102,7 @@ impl ToolPresetConfig {
     pub fn preview_size(&self) -> f64 {
         self.tool_settings
             .as_ref()
-            .map(|settings| settings.size_for_tool(self.tool))
-            .unwrap_or(self.size)
+            .map_or(self.size, |settings| settings.size_for_tool(self.tool))
     }
 }
 

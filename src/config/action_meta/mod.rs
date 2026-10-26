@@ -188,9 +188,7 @@ pub fn action_meta(action: Action) -> Option<&'static ActionMeta> {
 /// The untranslated label from the metadata table, falling back to a word for
 /// actions that have no entry.
 fn source_label(action: Action) -> &'static str {
-    action_meta(action)
-        .map(|meta| meta.label)
-        .unwrap_or("Action")
+    action_meta(action).map_or("Action", |meta| meta.label)
 }
 
 #[must_use]
@@ -200,11 +198,7 @@ pub fn action_label(action: Action) -> &'static str {
 
 #[must_use]
 pub fn action_short_label(action: Action) -> &'static str {
-    i18n::tr(
-        action_meta(action)
-            .map(|meta| meta.short_label())
-            .unwrap_or("Action"),
-    )
+    i18n::tr(action_meta(action).map_or("Action", |meta| meta.short_label()))
 }
 
 /// The compact spelling used where a full label is too wide.
@@ -232,11 +226,7 @@ pub fn action_display_label(action: Action) -> &'static str {
 #[allow(dead_code)]
 #[must_use]
 pub fn action_description(action: Action) -> &'static str {
-    i18n::tr(
-        action_meta(action)
-            .map(|meta| meta.description)
-            .unwrap_or(""),
-    )
+    i18n::tr(action_meta(action).map_or("", |meta| meta.description))
 }
 
 #[cfg(test)]

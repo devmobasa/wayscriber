@@ -48,11 +48,7 @@ impl ToolbarSurfaceManager {
 
     /// Store the latest snapshot and report whether it differs from the previous one.
     pub fn update_snapshot(&mut self, snapshot: &ToolbarSnapshot) -> bool {
-        let changed = self
-            .last_snapshot
-            .as_ref()
-            .map(|prev| prev != snapshot)
-            .unwrap_or(true);
+        let changed = self.last_snapshot.as_ref() != Some(snapshot);
         self.last_snapshot = Some(snapshot.clone());
         changed
     }

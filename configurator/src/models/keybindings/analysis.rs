@@ -24,8 +24,9 @@ impl<'draft> ParsedShortcuts<'draft> {
         self.entries
             .iter()
             .find(|(candidate, _)| *candidate == field)
-            .map(|(_, parsed)| parsed.as_ref().map(Vec::as_slice).map_err(String::as_str))
-            .unwrap_or(Ok(&[]))
+            .map_or(Ok(&[]), |(_, parsed)| {
+                parsed.as_ref().map(Vec::as_slice).map_err(String::as_str)
+            })
     }
 
     pub(super) fn claimants(&self, binding: &Shortcut) -> Vec<ShortcutClaim> {

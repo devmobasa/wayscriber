@@ -363,8 +363,7 @@ fn refused_drawings_options(options: &session::SessionOptions) -> session::Sessi
         .unwrap_or_default();
     let mut name = path
         .file_stem()
-        .map(OsStr::to_os_string)
-        .unwrap_or_else(|| "session".into());
+        .map_or_else(|| "session".into(), OsStr::to_os_string);
     name.push(format!(".unsaved-{millis}.wayscriber-session"));
     let parent = path
         .parent()

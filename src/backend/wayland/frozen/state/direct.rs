@@ -71,8 +71,9 @@ impl DirectCaptureContext {
     pub(super) fn timeout(&self, now: Instant) -> Duration {
         self.started_at
             .checked_add(DIRECT_CAPTURE_TIMEOUT)
-            .map(|deadline| deadline.saturating_duration_since(now))
-            .unwrap_or(Duration::ZERO)
+            .map_or(Duration::ZERO, |deadline| {
+                deadline.saturating_duration_since(now)
+            })
     }
 }
 

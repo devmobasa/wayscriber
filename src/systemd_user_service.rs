@@ -92,8 +92,7 @@ pub fn render_user_service_unit(binary_path: &Path) -> String {
     let quoted_exec = quote_systemd_exec(binary_path);
     let binary_dir = binary_path
         .parent()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "/usr/bin".to_string());
+        .map_or_else(|| "/usr/bin".to_string(), |path| path.display().to_string());
     // Prepended so an install outside the system directories still finds its
     // own helpers first, and skipped when it is already one of them rather
     // than emitting the directory twice.

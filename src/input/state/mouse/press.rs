@@ -76,10 +76,9 @@ impl InputState {
                     .boards
                     .active_frame()
                     .shape(selection[0])
-                    .map(|shape| {
+                    .is_some_and(|shape| {
                         matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
-                    })
-                    .unwrap_or(false);
+                    });
             self.open_context_menu(
                 (screen_x, screen_y),
                 selection,
@@ -515,11 +514,10 @@ impl InputState {
                 .boards
                 .active_frame()
                 .shape(hit_id)
-                .map(|shape| {
+                .is_some_and(|shape| {
                     !shape.locked
                         && matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
-                })
-                .unwrap_or(false);
+                });
             if is_text {
                 self.begin_pointer_drag(button, color);
                 self.state = DrawingState::PendingTextClick {

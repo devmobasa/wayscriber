@@ -296,15 +296,10 @@ pub(crate) fn render_color_picker_popup_with_engine(
     // restore the inline hex actions the pre-overhaul color section carried.
     let hover_pos = input_state.color_picker_popup_hover();
     let size = layout.action_btn_size;
-    let copy_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_copy_button(hx, hy))
-        .unwrap_or(false);
-    let paste_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_paste_button(hx, hy))
-        .unwrap_or(false);
-    let eyedropper_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy))
-        .unwrap_or(false);
+    let copy_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_copy_button(hx, hy));
+    let paste_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_paste_button(hx, hy));
+    let eyedropper_hover =
+        hover_pos.is_some_and(|(hx, hy)| layout.point_in_eyedropper_button(hx, hy));
     draw_action_button(
         ctx,
         layout.copy_btn_x,
@@ -336,20 +331,15 @@ pub(crate) fn render_color_picker_popup_with_engine(
     }
 
     // Determine button hover states
-    let ok_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_ok_button(hx, hy))
-        .unwrap_or(false);
-    let cancel_hover = hover_pos
-        .map(|(hx, hy)| layout.point_in_cancel_button(hx, hy))
-        .unwrap_or(false);
+    let ok_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_ok_button(hx, hy));
+    let cancel_hover = hover_pos.is_some_and(|(hx, hy)| layout.point_in_cancel_button(hx, hy));
 
     // "Default" button: only while recoloring a slot the shipped palette
     // defines. It stages the built-in color instead of committing, so it is a
     // secondary action next to OK/Cancel.
     if let Some((default_x, default_y)) = layout.default_btn {
-        let default_hover = hover_pos
-            .map(|(hx, hy)| layout.point_in_default_button(hx, hy))
-            .unwrap_or(false);
+        let default_hover =
+            hover_pos.is_some_and(|(hx, hy)| layout.point_in_default_button(hx, hy));
         draw_button(
             engine,
             ctx,

@@ -76,8 +76,7 @@ impl Config {
                 .items
                 .iter()
                 .find(|item| item.background.is_transparent())
-                .map(|item| item.id.clone())
-                .unwrap_or_else(|| boards.items[0].id.clone());
+                .map_or_else(|| boards.items[0].id.clone(), |item| item.id.clone());
             warn!(
                 "Default board '{}' not found; falling back to '{}'",
                 boards.default_board, fallback

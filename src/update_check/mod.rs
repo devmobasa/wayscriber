@@ -111,15 +111,13 @@ pub fn background_checks_enabled(config_enabled: bool) -> bool {
 /// switch whose only job is to stop network access, an unrecognized value is
 /// honored rather than ignored, so a typo cannot silently re-enable the check.
 fn env_opt_out() -> bool {
-    env::var_os(DISABLE_UPDATE_CHECK_ENV)
-        .map(|value| {
-            let value = value.to_string_lossy().trim().to_ascii_lowercase();
-            !matches!(
-                value.as_str(),
-                "" | "0" | "false" | "no" | "off" | "disable" | "disabled"
-            )
-        })
-        .unwrap_or(false)
+    env::var_os(DISABLE_UPDATE_CHECK_ENV).is_some_and(|value| {
+        let value = value.to_string_lossy().trim().to_ascii_lowercase();
+        !matches!(
+            value.as_str(),
+            "" | "0" | "false" | "no" | "off" | "disable" | "disabled"
+        )
+    })
 }
 
 /// Report the last stored result without any network access.

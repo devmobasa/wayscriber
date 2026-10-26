@@ -143,7 +143,7 @@ impl SliderRow {
         drag.connect_drag_begin(move |gesture, x, _| {
             drag_state.dragging.set(true);
             // Jump the knob to the pressed position, like the built-in track.
-            let width = f64::from(gesture.widget().map(|w| w.width()).unwrap_or(1).max(1));
+            let width = f64::from(gesture.widget().map_or(1, |w| w.width()).max(1));
             let t = (x / width).clamp(0.0, 1.0);
             let value = drag_state.spec.value_from_t(t);
             drag_state.value.set(value);
@@ -159,7 +159,7 @@ impl SliderRow {
         let change = Rc::new(on_change);
         let update_change = change.clone();
         drag.connect_drag_update(move |gesture, dx, _| {
-            let width = f64::from(gesture.widget().map(|w| w.width()).unwrap_or(1).max(1));
+            let width = f64::from(gesture.widget().map_or(1, |w| w.width()).max(1));
             let (sx, _) = update_start.get();
             let t = ((sx + dx) / width).clamp(0.0, 1.0);
             let value = update_state.spec.value_from_t(t);

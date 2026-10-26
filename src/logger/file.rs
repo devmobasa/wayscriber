@@ -44,8 +44,9 @@ fn resolve_log_max_bytes() -> u64 {
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
         .filter(|value| *value > 0)
-        .map(|value| value.saturating_mul(BYTES_PER_MB))
-        .unwrap_or(DEFAULT_LOG_MAX_BYTES)
+        .map_or(DEFAULT_LOG_MAX_BYTES, |value| {
+            value.saturating_mul(BYTES_PER_MB)
+        })
 }
 
 fn current_log_date() -> String {

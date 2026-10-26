@@ -128,13 +128,13 @@ fn next_word_end(s: &str, caret: usize) -> usize {
 
 /// Byte offset of the start of the logical line containing `caret`.
 fn line_start(s: &str, caret: usize) -> usize {
-    s[..caret].rfind('\n').map(|i| i + 1).unwrap_or(0)
+    s[..caret].rfind('\n').map_or(0, |i| i + 1)
 }
 
 /// Byte offset of the end of the logical line containing `caret` (the position
 /// of the next newline, or the buffer end).
 fn line_end(s: &str, caret: usize) -> usize {
-    s[caret..].find('\n').map(|i| caret + i).unwrap_or(s.len())
+    s[caret..].find('\n').map_or(s.len(), |i| caret + i)
 }
 
 /// Grapheme count of `s` (used as the column metric for vertical movement).
@@ -146,8 +146,7 @@ fn grapheme_len(s: &str) -> usize {
 fn grapheme_col_to_byte(s: &str, col: usize) -> usize {
     s.grapheme_indices(true)
         .nth(col)
-        .map(|(i, _)| i)
-        .unwrap_or(s.len())
+        .map_or(s.len(), |(i, _)| i)
 }
 
 /// Clamp `caret` and `anchor` to valid char boundaries within `buffer` (used
@@ -193,9 +192,7 @@ pub(in crate::input::state) fn insert_str(
     text: &str,
     max_len: usize,
 ) -> bool {
-    let selected_len = selection_range(*caret, *anchor)
-        .map(|range| range.len())
-        .unwrap_or(0);
+    let selected_len = selection_range(*caret, *anchor).map_or(0, |range| range.len());
     let remaining = max_len.saturating_sub(buffer.len().saturating_sub(selected_len));
     let mut fit = text.len().min(remaining);
     while fit > 0 && !text.is_char_boundary(fit) {
@@ -557,52 +554,48 @@ impl TextEditing {
                 ctrl,
                 VisualCaretDirection::Right,
             ),
-            Key::Up => navigation
-                .measurer
-                .caret_on_adjacent_visual_line(
-                    buffer,
-                    navigation.font,
-                    navigation.wrap_width,
-                    *caret,
-                    VisualLineDirection::Up,
-                )
-                .map(|new| move_to_offset(caret, anchor, shift, new))
-                .unwrap_or_else(|| move_up(buffer, caret, anchor, shift)),
-            Key::Down => navigation
-                .measurer
-                .caret_on_adjacent_visual_line(
-                    buffer,
-                    navigation.font,
-                    navigation.wrap_width,
-                    *caret,
-                    VisualLineDirection::Down,
-                )
-                .map(|new| move_to_offset(caret, anchor, shift, new))
-                .unwrap_or_else(|| move_down(buffer, caret, anchor, shift)),
+            Key::Up => match navigation.measurer.caret_on_adjacent_visual_line(
+                buffer,
+                navigation.font,
+                navigation.wrap_width,
+                *caret,
+                VisualLineDirection::Up,
+            ) {
+                Some(new) => move_to_offset(caret, anchor, shift, new),
+                None => move_up(buffer, caret, anchor, shift),
+            },
+            Key::Down => match navigation.measurer.caret_on_adjacent_visual_line(
+                buffer,
+                navigation.font,
+                navigation.wrap_width,
+                *caret,
+                VisualLineDirection::Down,
+            ) {
+                Some(new) => move_to_offset(caret, anchor, shift, new),
+                None => move_down(buffer, caret, anchor, shift),
+            },
             Key::Home if ctrl => move_document_start(caret, anchor, shift),
-            Key::Home => navigation
-                .measurer
-                .caret_on_visual_line_edge(
-                    buffer,
-                    navigation.font,
-                    navigation.wrap_width,
-                    *caret,
-                    VisualLineEdge::Start,
-                )
-                .map(|new| move_to_offset(caret, anchor, shift, new))
-                .unwrap_or_else(|| move_line_home(buffer, caret, anchor, shift)),
+            Key::Home => match navigation.measurer.caret_on_visual_line_edge(
+                buffer,
+                navigation.font,
+                navigation.wrap_width,
+                *caret,
+                VisualLineEdge::Start,
+            ) {
+                Some(new) => move_to_offset(caret, anchor, shift, new),
+                None => move_line_home(buffer, caret, anchor, shift),
+            },
             Key::End if ctrl => move_document_end(buffer, caret, anchor, shift),
-            Key::End => navigation
-                .measurer
-                .caret_on_visual_line_edge(
-                    buffer,
-                    navigation.font,
-                    navigation.wrap_width,
-                    *caret,
-                    VisualLineEdge::End,
-                )
-                .map(|new| move_to_offset(caret, anchor, shift, new))
-                .unwrap_or_else(|| move_line_end(buffer, caret, anchor, shift)),
+            Key::End => match navigation.measurer.caret_on_visual_line_edge(
+                buffer,
+                navigation.font,
+                navigation.wrap_width,
+                *caret,
+                VisualLineEdge::End,
+            ) {
+                Some(new) => move_to_offset(caret, anchor, shift, new),
+                None => move_line_end(buffer, caret, anchor, shift),
+            },
             _ => return None,
         };
 

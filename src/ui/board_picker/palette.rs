@@ -65,7 +65,7 @@ pub(super) fn render_board_palette(
             );
             let _ = ctx.stroke();
 
-            if active_color.map(|active| active == color).unwrap_or(false) {
+            if active_color.is_some_and(|active| active == color) {
                 constants::set_color(ctx, INPUT_CARET);
                 ctx.set_line_width(1.5);
                 draw_rounded_rect(

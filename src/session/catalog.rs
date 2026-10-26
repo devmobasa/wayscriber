@@ -233,9 +233,10 @@ impl CatalogFile {
 
         let mut entry = CatalogEntry {
             id: generated_catalog_id(now),
-            display_name: display_name
-                .map(str::to_string)
-                .unwrap_or_else(|| display_name_for_path(&identity.exact_path)),
+            display_name: display_name.map_or_else(
+                || display_name_for_path(&identity.exact_path),
+                str::to_string,
+            ),
             path: path_to_string(&identity.exact_path)?,
             canonical_path: optional_path_to_string(identity.canonical_path.as_deref())?,
             created_at_millis: now,
@@ -444,8 +445,7 @@ fn generated_catalog_id(now: u64) -> String {
 fn now_epoch_millis() -> u64 {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_millis());
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 

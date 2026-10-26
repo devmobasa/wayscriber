@@ -100,10 +100,7 @@ fn clear_all_skips_locked_shapes() {
     let frame = state.boards.active_frame();
     assert!(frame.shape(unlocked_id).is_none());
     assert!(
-        frame
-            .shape(locked_id)
-            .map(|shape| shape.locked)
-            .unwrap_or(false),
+        frame.shape(locked_id).is_some_and(|shape| shape.locked),
         "locked shape should remain after clear_all"
     );
 }

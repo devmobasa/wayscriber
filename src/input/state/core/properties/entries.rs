@@ -32,8 +32,7 @@ fn summary_value<T: Clone>(
     summary
         .value
         .clone()
-        .map(format)
-        .unwrap_or_else(|| tr("Mixed").to_string())
+        .map_or_else(|| tr("Mixed").to_string(), format)
 }
 
 /// The summary's single editable value, or `None` when it is mixed or locked:

@@ -34,8 +34,10 @@ fn regular_spec_owns_control_order_ids_and_events() {
         let next = ids[position..]
             .iter()
             .position(|id| id == expected)
-            .map(|offset| position + offset)
-            .unwrap_or_else(|| panic!("{expected} missing from {ids:?}"));
+            .map_or_else(
+                || panic!("{expected} missing from {ids:?}"),
+                |offset| position + offset,
+            );
         position = next + 1;
     }
 

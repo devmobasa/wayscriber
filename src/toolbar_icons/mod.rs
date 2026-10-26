@@ -277,8 +277,10 @@ mod painter_tests {
             let action = meta.action;
             let icon = config::action_meta(action)
                 .and_then(|meta| meta.icon)
-                .map(action_icon_painter)
-                .unwrap_or_else(|| panic!("missing icon for {action:?}"));
+                .map_or_else(
+                    || panic!("missing icon for {action:?}"),
+                    action_icon_painter,
+                );
             let expected = match action {
                 Action::EnterTextMode => top_toolbar_icon_painter(TopToolbarIcon::Text),
                 Action::EnterStickyNoteMode => top_toolbar_icon_painter(TopToolbarIcon::StickyNote),

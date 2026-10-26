@@ -152,9 +152,7 @@ impl TextEditing {
             return None;
         };
         let caret = clamp_char_boundary(buffer, *caret);
-        let anchor = selection_anchor
-            .map(|anchor| clamp_char_boundary(buffer, anchor))
-            .unwrap_or(caret);
+        let anchor = selection_anchor.map_or(caret, |anchor| clamp_char_boundary(buffer, anchor));
         surrounding_text_window(buffer, caret, anchor)
     }
 
@@ -171,9 +169,7 @@ impl TextEditing {
             return false;
         };
         let caret = clamp_char_boundary(buffer, *caret);
-        let anchor = selection_anchor
-            .map(|anchor| clamp_char_boundary(buffer, anchor))
-            .unwrap_or(caret);
+        let anchor = selection_anchor.map_or(caret, |anchor| clamp_char_boundary(buffer, anchor));
         caret.abs_diff(anchor) <= MAX_SURROUNDING_TEXT_BYTES
     }
 
@@ -270,12 +266,8 @@ impl TextEditing {
                 let selection = caret_edit::selection_range(original_caret, original_anchor);
                 let before_edge = selection
                     .as_ref()
-                    .map(|range| range.start)
-                    .unwrap_or(original_caret);
-                let after_edge = selection
-                    .as_ref()
-                    .map(|range| range.end)
-                    .unwrap_or(original_caret);
+                    .map_or(original_caret, |range| range.start);
+                let after_edge = selection.as_ref().map_or(original_caret, |range| range.end);
                 let mut start = before_edge.saturating_sub(pending.delete_before as usize);
                 while start > 0 && !buffer.is_char_boundary(start) {
                     start -= 1;

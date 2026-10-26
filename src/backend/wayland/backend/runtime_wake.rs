@@ -56,11 +56,9 @@ pub(super) fn poll_with_retry<T>(
     loop {
         match attempt(timeout_ms) {
             Err(err) if err.kind() == io::ErrorKind::Interrupted => {
-                timeout_ms = deadline
-                    .map(|deadline| {
-                        timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
-                    })
-                    .unwrap_or(-1);
+                timeout_ms = deadline.map_or(-1, |deadline| {
+                    timeout_to_poll_ms(Some(deadline.saturating_duration_since(Instant::now())))
+                });
             }
             result => return result,
         }
@@ -159,16 +157,14 @@ impl RuntimeWakeSource {
 }
 
 pub(super) fn timeout_to_poll_ms(timeout: Option<Duration>) -> i32 {
-    timeout
-        .map(|duration| {
-            // poll(2) accepts integer milliseconds. Round positive fractions
-            // up so an unexpired deadline never becomes a zero-timeout spin.
-            duration
-                .as_nanos()
-                .div_ceil(1_000_000)
-                .min(i32::MAX as u128) as i32
-        })
-        .unwrap_or(-1)
+    timeout.map_or(-1, |duration| {
+        // poll(2) accepts integer milliseconds. Round positive fractions
+        // up so an unexpired deadline never becomes a zero-timeout spin.
+        duration
+            .as_nanos()
+            .div_ceil(1_000_000)
+            .min(i32::MAX as u128) as i32
+    })
 }
 
 impl RuntimeWakeHandle {

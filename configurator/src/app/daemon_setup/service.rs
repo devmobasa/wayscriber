@@ -135,9 +135,7 @@ pub(super) fn install_or_update_user_service() -> Result<PathBuf, String> {
 }
 
 pub(super) fn detect_managed_daemon_portal_runtime_supported() -> bool {
-    managed_daemon_runtime_capabilities()
-        .map(|capabilities| capabilities.portal)
-        .unwrap_or(false)
+    managed_daemon_runtime_capabilities().is_ok_and(|capabilities| capabilities.portal)
 }
 
 fn managed_daemon_runtime_capabilities() -> Result<RuntimeCapabilities, String> {

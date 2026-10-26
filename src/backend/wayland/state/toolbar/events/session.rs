@@ -74,8 +74,7 @@ pub(super) fn session_info_summary(inspection: &SessionInspection) -> String {
 
     let size = inspection
         .size_bytes
-        .map(format_byte_count)
-        .unwrap_or_else(|| tr("unknown size").to_string());
+        .map_or_else(|| tr("unknown size").to_string(), format_byte_count);
     let shapes = inspection
         .frame_counts
         .map(|counts| {
@@ -119,10 +118,7 @@ fn recent_session_snapshots(current_path: Option<&Path>) -> Vec<SessionRecentSna
         .into_iter()
         .filter_map(|entry| {
             let path = PathBuf::from(entry.path);
-            if current_path
-                .map(|current| catalog::session_paths_match(current, &path))
-                .unwrap_or(false)
-            {
+            if current_path.is_some_and(|current| catalog::session_paths_match(current, &path)) {
                 return None;
             }
             Some(SessionRecentSnapshot {

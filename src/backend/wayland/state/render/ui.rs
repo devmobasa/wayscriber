@@ -357,9 +357,7 @@ impl WaylandState {
         );
         self.input_state.set_toast_geometry(
             toast_geometry.map(|geometry| geometry.0),
-            toast_geometry
-                .map(|geometry| geometry.1)
-                .unwrap_or([None, None]),
+            toast_geometry.map_or([None, None], |geometry| geometry.1),
         );
         ui::render_preset_toast_with_engine(
             self.render.ui_text(),

@@ -386,8 +386,7 @@ fn non_empty_shapes(shapes: Vec<Shape>) -> Option<Vec<Shape>> {
 fn new_clipboard_app_instance_id() -> String {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_millis());
     format!("{}-{millis}", process::id())
 }
 

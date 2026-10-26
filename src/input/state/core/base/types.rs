@@ -444,7 +444,7 @@ impl ToastPress {
     }
 
     pub(crate) fn matches_target(self, target: Option<usize>) -> bool {
-        self.target == target.map(ToastTarget::Action).unwrap_or(ToastTarget::Body)
+        self.target == target.map_or(ToastTarget::Body, ToastTarget::Action)
     }
 
     pub(crate) fn action_index(self) -> Option<usize> {

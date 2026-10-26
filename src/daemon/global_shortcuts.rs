@@ -576,7 +576,6 @@ fn owned_value_as_string(value: &OwnedValue) -> Option<String> {
 fn make_handle_token(prefix: &str) -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_nanos());
     format!("{}_{}_{}", prefix, process::id(), nanos)
 }

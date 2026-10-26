@@ -35,6 +35,7 @@ wildcard_imports = "warn"
 # Pedantic lints, adopted one at a time. Most of them have machine-applicable
 # fixes, so `cargo clippy --fix` can apply them.
 cast_lossless = "warn"
+map_unwrap_or = "warn"
 uninlined_format_args = "warn"
 
 [lints]

@@ -48,13 +48,15 @@ impl InputState {
         let request = self
             .board_transitions
             .confirm_page_delete_for(now, &board_id, page_index)
-            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation().clone()))
-            .unwrap_or_else(|| {
-                PageDeleteRequest::Request(PageDeleteTarget {
-                    board: PageDeleteBoardTarget::BoardIndex(board_index),
-                    page_index,
-                })
-            });
+            .map_or_else(
+                || {
+                    PageDeleteRequest::Request(PageDeleteTarget {
+                        board: PageDeleteBoardTarget::BoardIndex(board_index),
+                        page_index,
+                    })
+                },
+                |pending| PageDeleteRequest::Confirm(pending.confirmation().clone()),
+            );
         let confirmation_is_current = matches!(&request, PageDeleteRequest::Confirm(confirmation) if self.page_delete_confirmation_is_current(confirmation));
         let should_prepare_active = is_active_board
             && ((matches!(&request, PageDeleteRequest::Request(_)) && page_count <= 1)
@@ -137,16 +139,15 @@ impl InputState {
         let page_count = self.boards.page_count();
         let page_index = self.boards.active_page_index();
 
-        let request = self
-            .board_transitions
-            .confirm_page_delete(now)
-            .map(|pending| PageDeleteRequest::Confirm(pending.confirmation().clone()))
-            .unwrap_or_else(|| {
+        let request = self.board_transitions.confirm_page_delete(now).map_or_else(
+            || {
                 PageDeleteRequest::Request(PageDeleteTarget {
                     board: PageDeleteBoardTarget::ActiveBoard,
                     page_index,
                 })
-            });
+            },
+            |pending| PageDeleteRequest::Confirm(pending.confirmation().clone()),
+        );
         let active_target = match &request {
             PageDeleteRequest::Confirm(confirmation) => {
                 confirmation.board_id == self.boards.active_board_id()

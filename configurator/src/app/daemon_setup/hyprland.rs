@@ -101,8 +101,7 @@ fn read_light_controls_status_from_config_root(config_root: &Path) -> HyprlandLi
     let main_config_path = main_config_path(config_root);
     let source_line = source_line_for_include(&include_path);
     let source_present = fs::read_to_string(&main_config_path)
-        .map(|content| has_source_line(&content, &source_line))
-        .unwrap_or(false);
+        .is_ok_and(|content| has_source_line(&content, &source_line));
 
     HyprlandLightControlsStatus {
         include_exists: include_path.exists(),
@@ -327,9 +326,7 @@ fn strip_matching_quotes(value: &str) -> &str {
 
 fn normalize_source_target(target: &str) -> PathBuf {
     let expanded = if let Some(stripped) = target.strip_prefix("~/") {
-        paths::home_dir()
-            .map(|home| home.join(stripped))
-            .unwrap_or_else(|| PathBuf::from(target))
+        paths::home_dir().map_or_else(|| PathBuf::from(target), |home| home.join(stripped))
     } else {
         PathBuf::from(target)
     };

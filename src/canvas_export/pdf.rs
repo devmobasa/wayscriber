@@ -315,9 +315,9 @@ pub fn resolve_pdf_page_layout(
     };
 
     let source_rect = match config.fit {
-        PdfFitMode::FitContentToPage => content_bounds
-            .map(|bounds| pad_source_rect(bounds, config.content_source_padding))
-            .unwrap_or(viewport_source),
+        PdfFitMode::FitContentToPage => content_bounds.map_or(viewport_source, |bounds| {
+            pad_source_rect(bounds, config.content_source_padding)
+        }),
         PdfFitMode::FitViewportToPage | PdfFitMode::Viewport => viewport_source,
     };
     let (page_width, page_height) =

@@ -250,7 +250,7 @@ pub(crate) fn lookup(language: Language, source: &str) -> &str {
         return source;
     };
 
-    catalog.get(source).map(String::as_str).unwrap_or(source)
+    catalog.get(source).map_or(source, String::as_str)
 }
 
 /// Translates `source` and substitutes each `{}` with the next argument.

@@ -102,9 +102,8 @@ impl StagedSeedReload {
         current: &InteractionSeedRegistry,
         seeds: &ValidatedInteractionSeeds,
     ) -> Result<Self, SeedRegistryError> {
-        let mut registry = previous
-            .map(|staged| staged.registry.clone())
-            .unwrap_or_else(|| current.clone());
+        let mut registry =
+            previous.map_or_else(|| current.clone(), |staged| staged.registry.clone());
         let mut changed_targets = previous
             .map(|staged| staged.changed_targets.clone())
             .unwrap_or_default();

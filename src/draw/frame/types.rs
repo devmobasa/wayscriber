@@ -236,8 +236,7 @@ impl HistoryTrimStats {
 pub(super) fn current_timestamp_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|dur| dur.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |dur| dur.as_millis() as u64)
 }
 
 #[cfg(test)]

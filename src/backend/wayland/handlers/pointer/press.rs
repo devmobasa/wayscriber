@@ -377,8 +377,7 @@ fn input_hud_button_label(button: u32) -> String {
         BTN_RIGHT => tr("Right Click").to_string(),
         BTN_MIDDLE => tr("Middle Click").to_string(),
         other => linux::pointer_button(other)
-            .map(|button| button.name())
-            .unwrap_or_else(|| trf("Button {}", &[&other])),
+            .map_or_else(|| trf("Button {}", &[&other]), |button| button.name()),
     }
 }
 

@@ -11,8 +11,7 @@ impl WaylandState {
         if let Some(preferred) = self.surface.placement().preferred_output_identity()
             && let Some(output) = self.protocol.output().outputs().find(|output| {
                 self.output_identity_for(output)
-                    .map(|id| id.eq_ignore_ascii_case(preferred))
-                    .unwrap_or(false)
+                    .is_some_and(|id| id.eq_ignore_ascii_case(preferred))
             })
         {
             return Some(output);

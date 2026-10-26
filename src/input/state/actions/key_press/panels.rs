@@ -293,8 +293,7 @@ impl InputState {
                     let remaining = self
                         .board_picker_page_panel_board_index()
                         .and_then(|bi| self.boards.board_states().get(bi))
-                        .map(|b| b.pages.page_count())
-                        .unwrap_or(0);
+                        .map_or(0, |b| b.pages.page_count());
                     if remaining == 0 {
                         self.board_picker_set_focus(BoardPickerFocus::BoardList);
                     } else {
@@ -347,8 +346,7 @@ impl InputState {
         let page_count = self
             .board_picker_page_panel_board_index()
             .and_then(|bi| self.boards.board_states().get(bi))
-            .map(|b| b.pages.page_count())
-            .unwrap_or(0);
+            .map_or(0, |b| b.pages.page_count());
         let current = self
             .board_picker_page_focus_page_index()
             .unwrap_or_else(|| {
@@ -362,7 +360,7 @@ impl InputState {
 
     fn navigate_board_picker_page_panel(&mut self, key: Key, page_count: usize, current: usize) {
         let layout = self.board_picker.layout;
-        let page_cols = layout.map(|l| l.page_cols.max(1)).unwrap_or(1);
+        let page_cols = layout.map_or(1, |l| l.page_cols.max(1));
 
         match key {
             Key::Left if current == 0 => {
@@ -389,15 +387,11 @@ impl InputState {
                 self.board_picker_set_page_focus_page_index(page_count.saturating_sub(1));
             }
             Key::PageUp if page_count > 0 => {
-                let step = layout
-                    .map(|l| l.page_visible_slots.max(page_cols))
-                    .unwrap_or(page_cols);
+                let step = layout.map_or(page_cols, |l| l.page_visible_slots.max(page_cols));
                 self.board_picker_set_page_focus_page_index(current.saturating_sub(step));
             }
             Key::PageDown if page_count > 0 => {
-                let step = layout
-                    .map(|l| l.page_visible_slots.max(page_cols))
-                    .unwrap_or(page_cols);
+                let step = layout.map_or(page_cols, |l| l.page_visible_slots.max(page_cols));
                 let next = current
                     .saturating_add(step)
                     .min(page_count.saturating_sub(1));

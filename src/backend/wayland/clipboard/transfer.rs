@@ -172,11 +172,10 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     );
 
     if mime_type == WAYSCRIBER_SELECTION_MIME {
-        return serde_json::from_slice::<WayscriberClipboardSelection>(&bytes)
-            .map(ClipboardPasteResult::PrivateSelection)
-            .unwrap_or_else(|err| {
-                ClipboardPasteResult::MalformedPrivateSelection(err.to_string())
-            });
+        return serde_json::from_slice::<WayscriberClipboardSelection>(&bytes).map_or_else(
+            |err| ClipboardPasteResult::MalformedPrivateSelection(err.to_string()),
+            ClipboardPasteResult::PrivateSelection,
+        );
     }
 
     if file_list::is_uri_list_mime(&mime_type) {

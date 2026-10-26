@@ -430,10 +430,10 @@ fn describe_limit(limit: session::SaveLimitExceeded) -> String {
 }
 
 fn config_path_display() -> String {
-    Config::config_path()
-        .as_deref()
-        .map(compact_path)
-        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
+    Config::config_path().as_deref().map_or_else(
+        |_| "~/.config/wayscriber/config.toml".to_string(),
+        compact_path,
+    )
 }
 
 fn compact_path(path: &Path) -> String {

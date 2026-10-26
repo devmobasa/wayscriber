@@ -87,13 +87,11 @@ pub(crate) fn render_help_overlay_result_with_content(
     let palette_binding = bindings
         .labels_for(Action::ToggleCommandPalette)
         .and_then(|labels| labels.first())
-        .map(|label| label.as_str())
-        .unwrap_or(NOT_BOUND_LABEL);
+        .map_or(NOT_BOUND_LABEL, |label| label.as_str());
     let config_binding = bindings
         .labels_for(Action::OpenConfigurator)
         .and_then(|labels| labels.first())
-        .map(|label| label.as_str())
-        .unwrap_or(NOT_BOUND_LABEL);
+        .map_or(NOT_BOUND_LABEL, |label| label.as_str());
     let version_text = format!("v{}", build_info::version());
     let header_hints = if quick_mode {
         vec![HeaderHint {
@@ -124,13 +122,11 @@ pub(crate) fn render_help_overlay_result_with_content(
     let help_binding = bindings
         .labels_for(Action::ToggleHelp)
         .and_then(|labels| labels.first())
-        .map(|label| label.as_str())
-        .unwrap_or("F1");
+        .map_or("F1", |label| label.as_str());
     let quick_help_binding = bindings
         .labels_for(Action::ToggleQuickHelp)
         .and_then(|labels| labels.first())
-        .map(|label| label.as_str())
-        .unwrap_or("Shift+F1");
+        .map_or("Shift+F1", |label| label.as_str());
     let note_text_base_owned;
     let note_text_base: &str = if quick_mode {
         note_text_base_owned = trf("{} for full help", &[&help_binding]);

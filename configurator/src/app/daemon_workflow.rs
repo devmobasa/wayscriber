@@ -60,10 +60,10 @@ impl DaemonFeedback {
                 trf("Background setup action failed: {}", &[error])
             }
             Self::Action(ActionFeedback::RefreshFailed { previous, error }) => {
-                let previous = previous
-                    .as_deref()
-                    .map(DaemonFeedback::text)
-                    .unwrap_or_else(|| tr("Background setup action failed.").to_string());
+                let previous = previous.as_deref().map_or_else(
+                    || tr("Background setup action failed.").to_string(),
+                    DaemonFeedback::text,
+                );
                 trf("{}\nStatus refresh failed: {}", &[&previous, error])
             }
         }

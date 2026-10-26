@@ -166,8 +166,7 @@ fn builtin_semantic_records(
             let lane = expected
                 .iter()
                 .find(|record| record_id(record) == raw_id)
-                .map(record_lane)
-                .unwrap_or(SemanticLane::Strip);
+                .map_or(SemanticLane::Strip, record_lane);
             (lane, raw_id)
         };
         let Some(record) = expected

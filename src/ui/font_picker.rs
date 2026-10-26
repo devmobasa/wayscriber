@@ -139,9 +139,7 @@ fn query_line(
     // Match count on the right, so a query that narrows to nothing says so
     // before the empty list has to. Measured first: it is short and always
     // wanted, so it is the query that gives way when the two would collide.
-    let count = match_count
-        .map(|count| count.to_string())
-        .unwrap_or_else(|| "…".to_string());
+    let count = match_count.map_or_else(|| "…".to_string(), |count| count.to_string());
     let count_width = text_width(ctx, "Sans", CHROME_FONT_SIZE, &count);
     theme::set_color(ctx, overlay::TEXT_HINT);
     draw_text_right(

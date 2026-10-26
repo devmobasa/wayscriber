@@ -55,9 +55,9 @@ pub fn paint_tree(
 }
 
 fn hovered(node: &WidgetNode, hover: Option<(f64, f64)>) -> bool {
-    hover
-        .map(|(hx, hy)| point_in_rect(hx, hy, node.rect.0, node.rect.1, node.rect.2, node.rect.3))
-        .unwrap_or(false)
+    hover.is_some_and(|(hx, hy)| {
+        point_in_rect(hx, hy, node.rect.0, node.rect.1, node.rect.2, node.rect.3)
+    })
 }
 
 fn label_style(size: f64, bold: bool) -> UiTextStyle<'static> {

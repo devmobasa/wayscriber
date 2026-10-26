@@ -296,9 +296,7 @@ pub(crate) fn gc_quarantine_tail(dir: &Path, retain: usize) -> io::Result<usize>
     let excess = entries.len() - retain;
     let mut removed = 0;
     for (_, _, path) in entries.into_iter().take(excess) {
-        let is_dir = fs::symlink_metadata(&path)
-            .map(|metadata| metadata.is_dir())
-            .unwrap_or(false);
+        let is_dir = fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_dir());
         let result = if is_dir {
             fs::remove_dir_all(&path)
         } else {

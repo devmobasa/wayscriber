@@ -31,8 +31,7 @@ fn surface_with_context(width: i32, height: i32) -> (ImageSurface, Context) {
 fn surface_has_pixels(surface: &mut ImageSurface) -> bool {
     surface
         .data()
-        .map(|data| data.iter().any(|byte| *byte != 0))
-        .unwrap_or(false)
+        .is_ok_and(|data| data.iter().any(|byte| *byte != 0))
 }
 
 fn alpha_at(surface: &mut ImageSurface, x: i32, y: i32) -> u8 {

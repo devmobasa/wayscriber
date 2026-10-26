@@ -233,9 +233,9 @@ pub(super) fn light_controls_group(
             None => set_visible(&path_label, false),
         }
 
-        let capability = status
-            .map(|status| status.light_shortcut_apply_capability)
-            .unwrap_or(LightShortcutApplyCapability::Manual);
+        let capability = status.map_or(LightShortcutApplyCapability::Manual, |status| {
+            status.light_shortcut_apply_capability
+        });
         let native = capability == LightShortcutApplyCapability::HyprlandNative;
         set_visible(&native_body, native);
         set_visible(&manual_label, !native);

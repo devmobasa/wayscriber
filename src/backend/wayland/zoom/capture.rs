@@ -243,9 +243,8 @@ impl ZoomState {
                         WEnum::Value(v) => v.bits(),
                         WEnum::Unknown(raw) => raw,
                     };
-                    capture.y_invert = Flags::from_bits(raw_flags)
-                        .map(|f| f.contains(Flags::YInvert))
-                        .unwrap_or(false);
+                    capture.y_invert =
+                        Flags::from_bits(raw_flags).is_some_and(|f| f.contains(Flags::YInvert));
                 }
             }
             FrameEvent::Ready { .. } => {

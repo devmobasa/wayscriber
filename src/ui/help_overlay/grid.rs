@@ -332,11 +332,8 @@ impl GridPainter<'_> {
             }
 
             ctx.new_path();
-            let badge_metrics = measured
-                .badge_text_metrics
-                .get(badge_index)
-                .map(|metrics| (metrics.width, metrics.height, metrics.y_bearing))
-                .unwrap_or_else(|| {
+            let badge_metrics = measured.badge_text_metrics.get(badge_index).map_or_else(
+                || {
                     let extents = text_extents_for_with_engine(
                         self.engine,
                         ctx,
@@ -347,7 +344,9 @@ impl GridPainter<'_> {
                         badge.label.as_str(),
                     );
                     (extents.width(), extents.height(), extents.y_bearing())
-                });
+                },
+                |metrics| (metrics.width, metrics.height, metrics.y_bearing),
+            );
             let badge_width = badge_metrics.0 + style.badge_padding_x * 2.0;
 
             draw_rounded_rect(

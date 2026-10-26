@@ -50,8 +50,7 @@ impl<T: Send + 'static> PortalOperation<T> {
     pub(super) fn poll(&mut self) -> PortalPoll<T> {
         self.active
             .as_mut()
-            .map(PortalTask::poll)
-            .unwrap_or(PortalPoll::Disconnected)
+            .map_or(PortalPoll::Disconnected, PortalTask::poll)
     }
     pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
         self.active.as_ref().map(|task| task.timeout(now))
@@ -142,8 +141,9 @@ where
     pub(super) fn timeout(&self, now: Instant) -> Duration {
         self.started_at
             .checked_add(PORTAL_CAPTURE_TIMEOUT)
-            .map(|deadline| deadline.saturating_duration_since(now))
-            .unwrap_or(Duration::ZERO)
+            .map_or(Duration::ZERO, |deadline| {
+                deadline.saturating_duration_since(now)
+            })
     }
 
     pub(super) fn timed_out(&self, now: Instant) -> bool {

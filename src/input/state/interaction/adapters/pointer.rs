@@ -331,8 +331,9 @@ fn open_context_menu_from_right_click(
                 .boards
                 .active_frame()
                 .shape(selection[0])
-                .map(|shape| matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. }))
-                .unwrap_or(false);
+                .is_some_and(|shape| {
+                    matches!(shape.shape, Shape::Text { .. } | Shape::StickyNote { .. })
+                });
         state.open_context_menu(
             (screen_x, screen_y),
             selection,

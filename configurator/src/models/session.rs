@@ -256,9 +256,7 @@ impl SessionCatalogItem {
 }
 
 fn optional_catalog_time(epoch_millis: Option<u64>) -> String {
-    epoch_millis
-        .map(format_catalog_time)
-        .unwrap_or_else(|| tr("Never").to_string())
+    epoch_millis.map_or_else(|| tr("Never").to_string(), format_catalog_time)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -391,10 +389,10 @@ fn default_sibling_target_path(path: &Path, suffix_word: &str) -> PathBuf {
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
         .unwrap_or("session.wayscriber-session");
-    let target_name = file_name
-        .strip_suffix(SESSION_SUFFIX)
-        .map(|stem| format!("{stem} {suffix_word}{SESSION_SUFFIX}"))
-        .unwrap_or_else(|| format!("{file_name} {suffix_word}"));
+    let target_name = file_name.strip_suffix(SESSION_SUFFIX).map_or_else(
+        || format!("{file_name} {suffix_word}"),
+        |stem| format!("{stem} {suffix_word}{SESSION_SUFFIX}"),
+    );
 
     match path
         .parent()

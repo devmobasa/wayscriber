@@ -313,9 +313,7 @@ pub(crate) fn short_label_for_event(
     match event {
         ToolbarEvent::ToggleFreeze if frozen_active => tr("Unfreeze"),
         ToolbarEvent::ToggleZoomLock if zoom_locked => tr("Unlock Zoom"),
-        _ => action_for_event(event)
-            .map(action_short_label)
-            .unwrap_or(fallback),
+        _ => action_for_event(event).map_or(fallback, action_short_label),
     }
 }
 
@@ -328,9 +326,7 @@ pub(crate) fn tooltip_label_for_event(
     match event {
         ToolbarEvent::ToggleFreeze if frozen_active => tr("Unfreeze"),
         ToolbarEvent::ToggleZoomLock if zoom_locked => tr("Unlock Zoom"),
-        _ => action_for_event(event)
-            .map(action_label)
-            .unwrap_or(fallback),
+        _ => action_for_event(event).map_or(fallback, action_label),
     }
 }
 

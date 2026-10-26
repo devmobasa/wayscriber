@@ -161,8 +161,7 @@ impl SurfaceState {
     pub fn is_surface(&self, surface: &wl_surface::WlSurface) -> bool {
         self.wl_surface
             .as_ref()
-            .map(|current| current.id() == surface.id())
-            .unwrap_or(false)
+            .is_some_and(|current| current.id() == surface.id())
     }
 
     /// Returns the mutable layer surface, if initialized.

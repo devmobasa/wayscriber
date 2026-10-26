@@ -68,10 +68,7 @@ impl InputState {
             } else if name.contains(&lower) || id.contains(&lower) {
                 score += 500;
             }
-            if best
-                .map(|(_, best_score)| score > best_score)
-                .unwrap_or(true)
-            {
+            if best.is_none_or(|(_, best_score)| score > best_score) {
                 best = Some((idx, score));
             }
         }
@@ -138,7 +135,7 @@ fn fuzzy_score_with_single_swap(needle: &str, haystack: &str) -> Option<i32> {
         let swapped: String = chars.iter().collect();
         if let Some(score) = fuzzy_score(&swapped, haystack) {
             let score = score - 25;
-            if best.map(|best| score > best).unwrap_or(true) {
+            if best.is_none_or(|best| score > best) {
                 best = Some(score);
             }
         }

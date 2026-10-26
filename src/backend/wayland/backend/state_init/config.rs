@@ -407,9 +407,10 @@ fn keybinding_notification_body(entries: &[String], closing: &str) -> String {
 }
 
 fn config_path_display() -> String {
-    Config::config_path()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "~/.config/wayscriber/config.toml".to_string())
+    Config::config_path().map_or_else(
+        |_| "~/.config/wayscriber/config.toml".to_string(),
+        |path| path.display().to_string(),
+    )
 }
 
 fn log_config(config: &Config) {

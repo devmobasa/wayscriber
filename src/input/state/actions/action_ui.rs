@@ -88,8 +88,7 @@ impl InputState {
                     info!(
                         "Render profile {}",
                         self.active_render_profile()
-                            .map(|profile| profile.name())
-                            .unwrap_or("off")
+                            .map_or("off", |profile| profile.name())
                     );
                 }
                 true
@@ -100,8 +99,7 @@ impl InputState {
                     info!(
                         "Render profile {}",
                         self.active_render_profile()
-                            .map(|profile| profile.name())
-                            .unwrap_or("off")
+                            .map_or("off", |profile| profile.name())
                     );
                 }
                 true

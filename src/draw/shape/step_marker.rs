@@ -18,8 +18,7 @@ pub(crate) fn step_marker_radius_with(
     let font_desc_str = font_descriptor.to_pango_string(size);
     let max_dim = measurer
         .measure(&text, &font_desc_str, size, None)
-        .map(|m| m.ink_width.max(m.ink_height))
-        .unwrap_or(size * 0.6);
+        .map_or(size * 0.6, |m| m.ink_width.max(m.ink_height));
     let padding = (size * STEP_MARKER_PADDING_RATIO).max(STEP_MARKER_PADDING_MIN);
     (max_dim / 2.0 + padding).max(STEP_MARKER_MIN_RADIUS)
 }

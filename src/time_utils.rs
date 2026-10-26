@@ -75,8 +75,7 @@ pub fn format_unix_millis(ms: u64, template: &str) -> Option<String> {
 pub fn now_rfc3339() -> String {
     system_time_to_unix_seconds(SystemTime::now())
         .and_then(utc_datetime_from_unix)
-        .map(format_rfc3339_utc)
-        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+        .map_or_else(|| "1970-01-01T00:00:00Z".to_string(), format_rfc3339_utc)
 }
 
 fn push_padded_u8(out: &mut String, value: u8) {

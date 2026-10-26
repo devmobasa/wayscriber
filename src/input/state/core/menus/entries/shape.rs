@@ -14,11 +14,11 @@ impl InputState {
         let frame = self.boards.active_frame();
         let locked = ids
             .iter()
-            .any(|id| frame.shape(*id).map(|shape| shape.locked).unwrap_or(false));
+            .any(|id| frame.shape(*id).is_some_and(|shape| shape.locked));
         let all_locked = !ids.is_empty()
             && ids
                 .iter()
-                .all(|id| frame.shape(*id).map(|shape| shape.locked).unwrap_or(false));
+                .all(|id| frame.shape(*id).is_some_and(|shape| shape.locked));
 
         // What a right-click on a shape is usually for comes first: its own
         // editor, then its properties.

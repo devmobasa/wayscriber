@@ -204,22 +204,24 @@ fn pick_template(boards: &[BoardState]) -> BoardSpec {
     let mut template = boards
         .iter()
         .find(|board| !board.spec.background.is_transparent())
-        .map(|board| board.spec.clone())
-        .unwrap_or_else(|| BoardSpec {
-            id: BOARD_ID_WHITEBOARD.to_string(),
-            name: "Whiteboard".to_string(),
-            background: BoardBackground::Solid(Color {
-                r: 0.992,
-                g: 0.992,
-                b: 0.992,
-                a: 1.0,
-            }),
-            grid: Default::default(),
-            default_pen_color: Some(PALETTE_BLACK),
-            auto_adjust_pen: true,
-            persist: true,
-            pinned: false,
-        });
+        .map_or_else(
+            || BoardSpec {
+                id: BOARD_ID_WHITEBOARD.to_string(),
+                name: "Whiteboard".to_string(),
+                background: BoardBackground::Solid(Color {
+                    r: 0.992,
+                    g: 0.992,
+                    b: 0.992,
+                    a: 1.0,
+                }),
+                grid: Default::default(),
+                default_pen_color: Some(PALETTE_BLACK),
+                auto_adjust_pen: true,
+                persist: true,
+                pinned: false,
+            },
+            |board| board.spec.clone(),
+        );
     template.pinned = false;
     template
 }

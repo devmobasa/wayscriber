@@ -300,8 +300,7 @@ impl WaylandState {
         );
         let (hover_mx, hover_my) = self
             .stylus_hover_cursor_position()
-            .map(|(x, y)| self.canvas_world_coords(x, y))
-            .unwrap_or((mx, my));
+            .map_or((mx, my), |(x, y)| self.canvas_world_coords(x, y));
 
         self.render_eraser_hover_halos(ctx, hover_mx, hover_my);
 

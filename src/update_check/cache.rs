@@ -243,8 +243,7 @@ fn store_at(path: &Path, cache: &UpdateCache) -> bool {
 pub(crate) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or(0)
+        .map_or(0, |elapsed| elapsed.as_secs())
 }
 
 /// Seconds since `then`, saturating at 0 when the clock has moved backwards.

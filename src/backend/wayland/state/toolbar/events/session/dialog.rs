@@ -202,8 +202,7 @@ fn run_kdialog_session_file_dialog(
             arguments.push(
                 current_path
                     .and_then(Path::parent)
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(default_session_dir)
+                    .map_or_else(default_session_dir, Path::to_path_buf)
                     .into_os_string(),
             );
         }

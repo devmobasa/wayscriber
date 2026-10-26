@@ -250,12 +250,11 @@ impl RuntimeUiStateController {
             model: model.clone(),
             passthrough: passthrough.clone(),
         };
-        let (next_seeds, changed_targets, tombstoned_targets) = self
-            .staged_reload
-            .as_ref()
-            .cloned()
-            .map(StagedSeedReload::into_parts)
-            .unwrap_or_else(|| (self.seeds.clone(), BTreeSet::new(), BTreeSet::new()));
+        let (next_seeds, changed_targets, tombstoned_targets) =
+            self.staged_reload.as_ref().cloned().map_or_else(
+                || (self.seeds.clone(), BTreeSet::new(), BTreeSet::new()),
+                StagedSeedReload::into_parts,
+            );
         let mut canonical_model = model;
         canonical_model.remove_targets(&tombstoned_targets);
         canonical_model.reconcile(&next_seeds);

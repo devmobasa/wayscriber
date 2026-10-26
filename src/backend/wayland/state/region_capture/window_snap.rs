@@ -188,8 +188,7 @@ impl WindowSnapSession {
         }
         let origin = self
             .hovered_target()
-            .map(|target| rect_center(target.screen_rect))
-            .unwrap_or(pointer);
+            .map_or(pointer, |target| rect_center(target.screen_rect));
         let current = self.hovered;
         let mut best: Option<(usize, f64)> = None;
         // Reverse provider order makes the visually topmost target win an

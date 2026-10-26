@@ -391,10 +391,10 @@ pub(in crate::ui::board_picker::page_panel) fn render_page_preview(
         },
     );
 
-    let label = frame
-        .page_name()
-        .map(|name| trf("Page {}: {}", &[&page_number, &name]))
-        .unwrap_or_else(|| trf("Page {}", &[&page_number]));
+    let label = frame.page_name().map_or_else(
+        || trf("Page {}", &[&page_number]),
+        |name| trf("Page {}: {}", &[&page_number, &name]),
+    );
     let label_style = UiTextStyle {
         family: "Sans",
         slant: cairo::FontSlant::Normal,

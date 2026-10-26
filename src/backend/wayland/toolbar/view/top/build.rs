@@ -1133,16 +1133,14 @@ fn preset_slot_node(
             model::TopToolbarIcon::Tool(model::semantic_icon_for_tool(preset.tool)),
         ))
     });
-    let color = preset
-        .map(|preset| {
-            (
-                preset.color.r,
-                preset.color.g,
-                preset.color.b,
-                preset.color.a,
-            )
-        })
-        .unwrap_or((0.0, 0.0, 0.0, 0.0));
+    let color = preset.map_or((0.0, 0.0, 0.0, 0.0), |preset| {
+        (
+            preset.color.r,
+            preset.color.g,
+            preset.color.b,
+            preset.color.a,
+        )
+    });
     WidgetNode::new(
         control.id().render_id().into_owned(),
         rect,

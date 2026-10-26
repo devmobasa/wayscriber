@@ -42,8 +42,9 @@ impl XdgFrozenFullscreen {
         Some(
             self.requested_at
                 .and_then(|requested_at| requested_at.checked_add(XDG_FROZEN_FULLSCREEN_TIMEOUT))
-                .map(|deadline| deadline.saturating_duration_since(now))
-                .unwrap_or(Duration::ZERO),
+                .map_or(Duration::ZERO, |deadline| {
+                    deadline.saturating_duration_since(now)
+                }),
         )
     }
 

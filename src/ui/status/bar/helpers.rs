@@ -72,7 +72,5 @@ pub(super) fn toolbar_hint_label(input_state: &InputState) -> String {
 }
 
 fn tool_action_label(tool: Tool) -> &'static str {
-    action_for_tool(tool)
-        .map(action_display_label)
-        .unwrap_or(tr("Select"))
+    action_for_tool(tool).map_or(tr("Select"), action_display_label)
 }

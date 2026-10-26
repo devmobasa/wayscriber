@@ -367,8 +367,10 @@ fn handle_capture_worker_failure(
         state.capture.finish_capture_lifecycle();
         let message = operation
             .filter(|operation| *operation == ImageOperationKind::Screenshot)
-            .map(|_| friendly_capture_error(CaptureFailureKind::Other))
-            .unwrap_or_else(|| "Capture services stopped unexpectedly.".to_string());
+            .map_or_else(
+                || "Capture services stopped unexpectedly.".to_string(),
+                |_| friendly_capture_error(CaptureFailureKind::Other),
+            );
         warn!("Board region capture worker failed: {error}");
         state
             .input_state
@@ -702,8 +704,7 @@ fn handle_capture_manager_failure(
     notification::send_notification_async(
         &state.tokio_handle,
         operation
-            .map(ImageOperationKind::failure_title)
-            .unwrap_or(tr("Capture failed"))
+            .map_or(tr("Capture failed"), ImageOperationKind::failure_title)
             .to_string(),
         message,
         Some("dialog-error".to_string()),

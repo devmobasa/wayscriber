@@ -59,13 +59,11 @@ impl WindowHandler for WaylandState {
         let width = configure
             .new_size
             .0
-            .map(|w| w.get())
-            .unwrap_or(fallback_dimensions.0);
+            .map_or(fallback_dimensions.0, |w| w.get());
         let height = configure
             .new_size
             .1
-            .map(|h| h.get())
-            .unwrap_or(fallback_dimensions.1);
+            .map_or(fallback_dimensions.1, |h| h.get());
 
         if self.surface.placement().xdg_frozen().requested() {
             if let Some(output) = self.preferred_fullscreen_output() {

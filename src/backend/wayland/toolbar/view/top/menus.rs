@@ -724,8 +724,9 @@ fn settings_notice_height(engine: &UiTextEngine, text: &str, bold: bool) -> f64 
     };
     engine
         .measure(style, text, Some(MENU_CONTENT_W))
-        .map(|extents| extents.height() + MENU_NOTICE_PADDING_Y)
-        .unwrap_or(MENU_TOGGLE_H)
+        .map_or(MENU_TOGGLE_H, |extents| {
+            extents.height() + MENU_NOTICE_PADDING_Y
+        })
         .max(MENU_TOGGLE_H)
 }
 

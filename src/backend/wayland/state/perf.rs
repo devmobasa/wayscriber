@@ -407,8 +407,7 @@ fn log_frame_pacing_summary(summary: &PerfFramePacingSummary, final_summary: boo
 
 fn perf_log_enabled_from_env() -> bool {
     env::var(PERF_LOG_ENV)
-        .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on" | "ON"))
-        .unwrap_or(false)
+        .is_ok_and(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on" | "ON"))
 }
 
 fn duration_ms(duration: Duration) -> u64 {

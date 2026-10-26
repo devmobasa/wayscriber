@@ -20,8 +20,7 @@ impl InputState {
             && self
                 .board_picker_board_index_for_row(edit_index)
                 .and_then(|board_index| self.boards.board_states().get(board_index))
-                .map(|board| !board.spec.background.is_transparent())
-                .unwrap_or(false)
+                .is_some_and(|board| !board.spec.background.is_transparent())
         {
             let colors = board_palette_colors();
             if !colors.is_empty() {
