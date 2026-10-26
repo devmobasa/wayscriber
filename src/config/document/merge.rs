@@ -33,7 +33,10 @@ pub(super) fn merge_config_document(
         && !merged.contains_key("config_revision")
         && updated_revision > 0
     {
-        merged.insert("config_revision", toml_edit::value(updated_revision as i64));
+        merged.insert(
+            "config_revision",
+            toml_edit::value(i64::from(updated_revision)),
+        );
     }
     merge_table_like(
         merged.as_table_mut(),

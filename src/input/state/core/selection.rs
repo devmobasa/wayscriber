@@ -130,7 +130,7 @@ impl SelectionInteraction {
             return false;
         };
         has_minimum_points
-            && now.duration_since(last.at).as_millis() <= max_elapsed_ms as u128
+            && now.duration_since(last.at).as_millis() <= u128::from(max_elapsed_ms)
             && (x - last.x).abs() <= max_distance
             && (y - last.y).abs() <= max_distance
     }

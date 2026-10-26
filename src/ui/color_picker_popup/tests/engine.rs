@@ -5,7 +5,7 @@ use super::*;
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, 800 * density, 600 * density).unwrap();
-    surface.set_device_scale(density as f64, density as f64);
+    surface.set_device_scale(f64::from(density), f64::from(density));
     let ctx = cairo::Context::new(&surface).unwrap();
     paint(&ctx);
     drop(ctx);

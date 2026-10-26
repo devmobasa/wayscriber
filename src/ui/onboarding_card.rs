@@ -181,14 +181,14 @@ pub(crate) fn render_onboarding_card_with_engine(
     let item_gap_y = ITEM_GAP_Y * CARD_TYPE_SCALE;
     let text_offset_y = TEXT_OFFSET_Y * CARD_TYPE_SCALE;
 
-    let available_width = (width as f64 - margin * 2.0).max(1.0);
+    let available_width = (f64::from(width) - margin * 2.0).max(1.0);
     let card_width = available_width
         .min(card_max_width)
         .max(card_min_width.min(available_width));
-    let x = (width as f64 - card_width - margin).max(margin);
+    let x = (f64::from(width) - card_width - margin).max(margin);
     let min_y = margin;
-    let max_y = (height as f64 - margin).max(min_y);
-    let y = (height as f64 * 0.06).clamp(min_y, max_y);
+    let max_y = (f64::from(height) - margin).max(min_y);
+    let y = (f64::from(height) * 0.06).clamp(min_y, max_y);
     let content_x = x + card_padding;
     let content_w = (card_width - card_padding * 2.0).max(1.0);
 

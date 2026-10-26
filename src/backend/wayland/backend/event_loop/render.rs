@@ -11,7 +11,7 @@ fn min_frame_time_from_fps(max_fps: u32) -> Option<Duration> {
     if max_fps == 0 {
         None
     } else {
-        Some(Duration::from_micros(1_000_000 / max_fps as u64))
+        Some(Duration::from_micros(1_000_000 / u64::from(max_fps)))
     }
 }
 

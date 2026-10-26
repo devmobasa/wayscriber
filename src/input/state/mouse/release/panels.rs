@@ -17,8 +17,8 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
     // read by that control too. Hit-testing the release point instead would
     // let a saturation drag released over the hue bar, the alpha bar, or a
     // recent swatch apply there as a fresh click.
-    let fx = x as f64;
-    let fy = y as f64;
+    let fx = f64::from(x);
+    let fy = f64::from(y);
     if let Some(target) = state.color_picker_popup_take_drag_target() {
         state.color_picker_popup_apply_drag(target, fx, fy);
         state.color_picker_popup_set_hex_editing(false);
@@ -202,7 +202,7 @@ pub(super) fn handle_board_picker_release(
             .map(|last| {
                 last.row == index
                     && now.duration_since(last.at).as_millis()
-                        <= BOARD_PICKER_DOUBLE_CLICK_MS as u128
+                        <= u128::from(BOARD_PICKER_DOUBLE_CLICK_MS)
                     && (x - last.x).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
                     && (y - last.y).abs() <= BOARD_PICKER_DOUBLE_CLICK_DISTANCE
             })

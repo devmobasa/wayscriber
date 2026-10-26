@@ -240,7 +240,7 @@ fn pill_width_never_exceeds_max_fraction_of_screen() {
             let layout =
                 compute_status_hud_layout(&state, position, &style, screen_width, screen_height)
                     .expect("layout");
-            let max_pill_width = screen_width as f64 * STATUS_BAR_MAX_WIDTH_FRACTION;
+            let max_pill_width = f64::from(screen_width) * STATUS_BAR_MAX_WIDTH_FRACTION;
             assert!(
                 layout.pill_width <= max_pill_width + 1e-6,
                 "pill width {} exceeds cap {} on {}x{} at {:?}",
@@ -252,7 +252,7 @@ fn pill_width_never_exceeds_max_fraction_of_screen() {
             );
             assert!(layout.pill_x >= 0.0, "pill off-screen at {:?}", position);
             assert!(
-                layout.pill_x + layout.pill_width <= screen_width as f64 + 1e-6,
+                layout.pill_x + layout.pill_width <= f64::from(screen_width) + 1e-6,
                 "pill runs off a {}px screen at {:?}",
                 screen_width,
                 position
@@ -281,7 +281,7 @@ fn measured_pill_width_stays_within_budget_for_realistic_cluster() {
 
     for screen_width in [1280_u32, 1366, 1920] {
         let measurement = measure(&style, LONG_PREFIX, CLUSTER_WIDTH, screen_width);
-        let max_pill_width = screen_width as f64 * STATUS_BAR_MAX_WIDTH_FRACTION;
+        let max_pill_width = f64::from(screen_width) * STATUS_BAR_MAX_WIDTH_FRACTION;
         assert!(
             !measurement.overflow,
             "cluster {} should fit {}px screen",

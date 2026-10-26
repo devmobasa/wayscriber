@@ -473,7 +473,7 @@ impl SwatchButton {
         let draw_color = color_cell.clone();
         let draw_selected = selected_cell.clone();
         area.set_draw_func(move |_, ctx, width, height| {
-            let size = width.min(height) as f64;
+            let size = f64::from(width.min(height));
             let (r, g, b, a) = draw_color.get();
             // Rounded square with a subtle inner hairline, matching the
             // built-in bars. The fill is inset so the selected accent ring

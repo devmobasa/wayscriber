@@ -277,10 +277,10 @@ fn frame_content_bounds(frame: &Frame, measurer: &TextMeasurer) -> Option<Canvas
     found
         .then(|| {
             CanvasExportRect::new(
-                min_x as f64,
-                min_y as f64,
-                (max_x - min_x).max(1) as f64,
-                (max_y - min_y).max(1) as f64,
+                f64::from(min_x),
+                f64::from(min_y),
+                f64::from((max_x - min_x).max(1)),
+                f64::from((max_y - min_y).max(1)),
             )
         })
         .flatten()

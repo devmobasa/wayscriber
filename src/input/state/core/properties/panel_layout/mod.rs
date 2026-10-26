@@ -15,15 +15,15 @@ pub(super) fn selection_panel_anchor(bounds: Option<Rect>, pointer: (i32, i32)) 
     bounds
         .map(|rect| {
             (
-                rect.x as f64 + rect.width as f64 + PANEL_ANCHOR_GAP,
-                (rect.y as f64 - PANEL_ANCHOR_GAP).max(PANEL_MARGIN),
+                f64::from(rect.x) + f64::from(rect.width) + PANEL_ANCHOR_GAP,
+                (f64::from(rect.y) - PANEL_ANCHOR_GAP).max(PANEL_MARGIN),
             )
         })
         .unwrap_or_else(|| {
             let (px, py) = pointer;
             (
-                px as f64 + PANEL_POINTER_OFFSET,
-                py as f64 - PANEL_POINTER_OFFSET,
+                f64::from(px) + PANEL_POINTER_OFFSET,
+                f64::from(py) - PANEL_POINTER_OFFSET,
             )
         })
 }

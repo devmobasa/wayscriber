@@ -347,8 +347,8 @@ fn render_sticky_add_button(
 }
 
 fn point_in_rect(x: i32, y: i32, rx: f64, ry: f64, rw: f64, rh: f64) -> bool {
-    let x = x as f64;
-    let y = y as f64;
+    let x = f64::from(x);
+    let y = f64::from(y);
     x >= rx && x <= rx + rw && y >= ry && y <= ry + rh
 }
 

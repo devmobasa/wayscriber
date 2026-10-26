@@ -261,12 +261,12 @@ fn resolve_zoom_anchor(
     width: u32,
     height: u32,
 ) -> (f64, f64) {
-    let center = (width as f64 * 0.5, height as f64 * 0.5);
+    let center = (f64::from(width) * 0.5, f64::from(height) * 0.5);
 
     match anchor {
-        ZoomAnchor::Pointer => pointer.map_or(center, |(x, y)| (x as f64, y as f64)),
+        ZoomAnchor::Pointer => pointer.map_or(center, |(x, y)| (f64::from(x), f64::from(y))),
         ZoomAnchor::ScreenCenter => center,
-        ZoomAnchor::At(x, y) => (x as f64, y as f64),
+        ZoomAnchor::At(x, y) => (f64::from(x), f64::from(y)),
     }
 }
 

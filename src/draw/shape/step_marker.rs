@@ -40,10 +40,10 @@ pub(crate) fn step_marker_bounds_with(
     let outline = step_marker_outline_thickness(size);
     let total = radius + (outline / 2.0);
     ensure_positive_rect_f64(
-        x as f64 - total,
-        y as f64 - total,
-        x as f64 + total,
-        y as f64 + total,
+        f64::from(x) - total,
+        f64::from(y) - total,
+        f64::from(x) + total,
+        f64::from(y) + total,
     )
 }
 

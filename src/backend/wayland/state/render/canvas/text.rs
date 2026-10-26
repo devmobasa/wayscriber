@@ -127,8 +127,8 @@ impl WaylandState {
         ) else {
             return;
         };
-        let caret_x = x as f64 + geom.x;
-        let top = y as f64 + geom.y_from_baseline;
+        let caret_x = f64::from(x) + geom.x;
+        let top = f64::from(y) + geom.y_from_baseline;
         let bottom = top + geom.height;
         render_caret_stroke(
             canvas.cairo,
@@ -282,10 +282,10 @@ impl WaylandState {
         let _ = ctx.save();
 
         let padding = 4.0;
-        let x = bounds.x as f64 - padding;
-        let y = bounds.y as f64 - padding;
-        let width = bounds.width as f64 + padding * 2.0;
-        let height = bounds.height as f64 + padding * 2.0;
+        let x = f64::from(bounds.x) - padding;
+        let y = f64::from(bounds.y) - padding;
+        let width = f64::from(bounds.width) + padding * 2.0;
+        let height = f64::from(bounds.height) + padding * 2.0;
 
         // Teal color at 50% alpha
         ctx.set_source_rgba(0.2, 0.55, 0.65, 0.5);
@@ -313,8 +313,14 @@ impl WaylandState {
         let glow_radius = 30.0 + progress * 20.0; // Expands slightly as it fades
 
         // Create radial gradient for glow effect
-        let gradient =
-            cairo::RadialGradient::new(x as f64, y as f64, 0.0, x as f64, y as f64, glow_radius);
+        let gradient = cairo::RadialGradient::new(
+            f64::from(x),
+            f64::from(y),
+            0.0,
+            f64::from(x),
+            f64::from(y),
+            glow_radius,
+        );
 
         // Teal glow color
         gradient.add_color_stop_rgba(0.0, 0.2, 0.55, 0.65, alpha);
@@ -322,7 +328,13 @@ impl WaylandState {
         gradient.add_color_stop_rgba(1.0, 0.2, 0.55, 0.65, 0.0);
 
         ctx.set_source(&gradient).ok();
-        ctx.arc(x as f64, y as f64, glow_radius, 0.0, consts::PI * 2.0);
+        ctx.arc(
+            f64::from(x),
+            f64::from(y),
+            glow_radius,
+            0.0,
+            consts::PI * 2.0,
+        );
         let _ = ctx.fill();
 
         let _ = ctx.restore();

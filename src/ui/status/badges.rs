@@ -85,7 +85,7 @@ pub(crate) fn render_frozen_badge_with_engine(
     draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
         frozen_badge_label(),
@@ -132,7 +132,7 @@ pub(crate) fn render_zoom_badge_with_engine(
     let height = draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING,
         BadgeAlign::Right,
         &label,
@@ -182,7 +182,7 @@ pub(crate) fn render_pan_badge_with_engine(
     let height = draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
         &label,
@@ -219,7 +219,7 @@ pub(crate) fn render_editing_badge_with_engine(
     draw_badge_with_engine(
         engine,
         ctx,
-        screen_width as f64 - BADGE_PADDING,
+        f64::from(screen_width) - BADGE_PADDING,
         BADGE_PADDING + offset_y,
         BadgeAlign::Right,
         editing_badge_label(),

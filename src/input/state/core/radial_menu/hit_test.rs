@@ -32,7 +32,7 @@ pub fn hit_test_radial(
         let child_count = sub_ring_child_count(parent_idx);
         if child_count > 0 {
             let segment_angle = 2.0 * PI / TOOL_SEGMENT_COUNT as f64;
-            let parent_start = segment_angle * parent_idx as f64;
+            let parent_start = segment_angle * f64::from(parent_idx);
             let parent_end = parent_start + segment_angle;
             if tool_angle >= parent_start && tool_angle < parent_end {
                 let child_angle = segment_angle / child_count as f64;

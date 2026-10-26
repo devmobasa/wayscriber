@@ -85,8 +85,8 @@ impl CanvasLayerCache {
             return false;
         };
         let _ = ctx.save();
-        ctx.translate(self.world_x as f64, self.world_y as f64);
-        let inv = 1.0 / self.scale.max(1) as f64;
+        ctx.translate(f64::from(self.world_x), f64::from(self.world_y));
+        let inv = 1.0 / f64::from(self.scale.max(1));
         ctx.scale(inv, inv);
         let ok = ctx.set_source_surface(surface, 0.0, 0.0).is_ok();
         if ok {
@@ -306,8 +306,8 @@ impl CanvasLayerCache {
                 bake_ctx.set_source_rgba(color.r, color.g, color.b, color.a);
                 let _ = bake_ctx.paint();
             }
-            bake_ctx.scale(scale as f64, scale as f64);
-            bake_ctx.translate(-(world_x as f64), -(world_y as f64));
+            bake_ctx.scale(f64::from(scale), f64::from(scale));
+            bake_ctx.translate(-f64::from(world_x), -f64::from(world_y));
 
             let paper = match background.filter(|_| grid.kind != BoardGridKind::None) {
                 Some(color) => match BoardPaper::for_context(color, grid, &bake_ctx) {

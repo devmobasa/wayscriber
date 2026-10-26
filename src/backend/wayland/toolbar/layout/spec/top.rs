@@ -107,7 +107,7 @@ impl ToolbarLayoutSpec {
         } else {
             Self::TOP_SIZE_TEXT.1
         };
-        let mut height = base_height as f64;
+        let mut height = f64::from(base_height);
         // Popovers (shapes grid + options, overflow) and the contextual
         // highlight-ring row grow the surface below the bar.
         height += top::top_extra_height(engine, snapshot);

@@ -26,7 +26,7 @@ fn snapshot_for(tool: Tool, style: ToolbarStrokeControls, open: bool) -> Toolbar
 fn tree_for(snapshot: &ToolbarSnapshot) -> WidgetTree {
     let engine = UiTextEngine::default();
     let (w, h) = top_size(&engine, snapshot);
-    build_top_view(&engine, snapshot, w as f64, h as f64)
+    build_top_view(&engine, snapshot, f64::from(w), f64::from(h))
 }
 
 fn feel_ids(tree: &WidgetTree) -> Vec<String> {
@@ -97,7 +97,7 @@ fn the_chip_stands_in_for_both_controls_inside_the_planned_width() {
         .expect("style pill");
     assert!(chip.rect.0 + chip.rect.2 <= pill.rect.0 + pill.rect.2);
     let (_, h) = top_size(&engine, &snapshot);
-    assert!(top_natural_width(&engine, &snapshot, h as f64) >= pill.rect.0 + pill.rect.2);
+    assert!(top_natural_width(&engine, &snapshot, f64::from(h)) >= pill.rect.0 + pill.rect.2);
     assert!(feel_ids(&tree).is_empty(), "the panel is closed");
 }
 
@@ -271,7 +271,7 @@ fn the_open_panel_grows_height_and_input_but_not_width() {
         assert!(top_extra_height(&engine, &open) > top_extra_height(&engine, &closed));
 
         let (w, h) = top_size(&engine, &open);
-        let tree = build_top_view(&engine, &open, w as f64, h as f64);
+        let tree = build_top_view(&engine, &open, f64::from(w), f64::from(h));
         let panel = tree
             .node_by_id(&"top.feel.panel".into())
             .expect("panel")
@@ -293,7 +293,10 @@ fn the_open_panel_grows_height_and_input_but_not_width() {
             .rect;
         assert!(caret_up, "{tool:?} opens below");
         assert!(panel.1 >= pill.1 + pill.3, "{tool:?} clears the pill");
-        assert!(panel.1 + panel.3 <= h as f64, "{tool:?} fits the surface");
+        assert!(
+            panel.1 + panel.3 <= f64::from(h),
+            "{tool:?} fits the surface"
+        );
         assert!(
             caret_x >= chip.0 && caret_x <= chip.0 + chip.2,
             "{tool:?} caret"
@@ -304,7 +307,7 @@ fn the_open_panel_grows_height_and_input_but_not_width() {
             "{tool:?}"
         );
 
-        let rects = top_input_rects(&engine, &open, w as f64, h as f64).expect("rects");
+        let rects = top_input_rects(&engine, &open, f64::from(w), f64::from(h)).expect("rects");
         assert!(
             rects.iter().any(|rect| rect.0 <= panel.0
                 && rect.0 + rect.2 >= panel.0 + panel.2

@@ -302,8 +302,8 @@ impl ColorPickerPopupLayout {
         let height = POPUP_HEIGHT - (ALPHA_HEIGHT + SLIDER_GAP - alpha_room);
 
         // Center the popup on screen
-        let origin_x = (screen_width as f64 - width) / 2.0;
-        let origin_y = (screen_height as f64 - height) / 2.0;
+        let origin_x = (f64::from(screen_width) - width) / 2.0;
+        let origin_y = (f64::from(screen_height) - height) / 2.0;
 
         // Content starts after padding and title
         let content_x = origin_x + PADDING;
@@ -693,9 +693,9 @@ pub fn parse_hex_color(value: &str) -> Option<Color> {
         u8::MAX
     };
     Some(Color {
-        r: r as f64 / 255.0,
-        g: g as f64 / 255.0,
-        b: b as f64 / 255.0,
-        a: a as f64 / 255.0,
+        r: f64::from(r) / 255.0,
+        g: f64::from(g) / 255.0,
+        b: f64::from(b) / 255.0,
+        a: f64::from(a) / 255.0,
     })
 }

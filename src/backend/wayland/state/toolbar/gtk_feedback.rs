@@ -33,16 +33,16 @@ fn clamp_gtk_surface_offset(
     Some((
         super::geometry::clamp_floating_axis_offset(
             offset.0,
-            viewport.0 as f64,
-            surface_size.width as f64,
+            f64::from(viewport.0),
+            f64::from(surface_size.width),
             start_margin.0,
             end_margin.0,
         )
         .0,
         super::geometry::clamp_floating_axis_offset(
             offset.1,
-            viewport.1 as f64,
-            surface_size.height as f64,
+            f64::from(viewport.1),
+            f64::from(surface_size.height),
             start_margin.1,
             end_margin.1,
         )

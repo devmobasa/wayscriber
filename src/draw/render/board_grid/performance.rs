@@ -24,7 +24,7 @@ fn render_case(
 ) -> (u128, usize) {
     let start = Instant::now();
     let target: cairo::Surface = if pdf {
-        cairo::PdfSurface::for_stream(size.0 as f64, size.1 as f64, Vec::<u8>::new())
+        cairo::PdfSurface::for_stream(f64::from(size.0), f64::from(size.1), Vec::<u8>::new())
             .unwrap()
             .as_ref()
             .clone()
@@ -45,7 +45,12 @@ fn render_case(
                 .pattern,
         ),
         Source::Viewport => {
-            let bounds = Rectangle::new(-1_000_021.0, -2_000_003.0, size.0 as f64, size.1 as f64);
+            let bounds = Rectangle::new(
+                -1_000_021.0,
+                -2_000_003.0,
+                f64::from(size.0),
+                f64::from(size.1),
+            );
             let record =
                 RecordingSurface::create(cairo::Content::ColorAlpha, Some(bounds)).unwrap();
             paint_geometry(

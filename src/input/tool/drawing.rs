@@ -551,7 +551,7 @@ impl<'stroke> ProvisionalToolStroke<'stroke> {
                 point_thicknesses,
                 ..
             } => {
-                let max_thick = point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)) as f64;
+                let max_thick = f64::from(point_thicknesses.iter().fold(0.0f32, |a, &b| a.max(b)));
                 bounding_box_for_points(points, max_thick)
             }
             Self::BorrowedMarker { points, size, .. } => {

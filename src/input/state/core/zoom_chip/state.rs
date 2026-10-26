@@ -58,13 +58,13 @@ impl ZoomChipState {
             && self
                 .layout
                 .as_ref()
-                .is_some_and(|layout| layout.chip_contains(x as f64, y as f64))
+                .is_some_and(|layout| layout.chip_contains(f64::from(x), f64::from(y)))
     }
 
     pub(crate) fn button_at(&self, x: i32, y: i32) -> Option<ZoomChipButtonKind> {
         self.layout
             .as_ref()
-            .and_then(|layout| layout.button_at(x as f64, y as f64))
+            .and_then(|layout| layout.button_at(f64::from(x), f64::from(y)))
     }
 
     pub(in crate::input::state) fn set_press_pending(&mut self, pressed: ZoomChipPress) {

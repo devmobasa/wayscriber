@@ -34,7 +34,12 @@ fn snapshot() -> ToolbarSnapshot {
 
 fn build(snapshot: &ToolbarSnapshot) -> WidgetTree {
     let (w, h) = top_size(&UiTextEngine::default(), snapshot);
-    build_top_view(&UiTextEngine::default(), snapshot, w as f64, h as f64)
+    build_top_view(
+        &UiTextEngine::default(),
+        snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
 }
 
 fn node_id_list(tree: &WidgetTree) -> Vec<&str> {
@@ -259,8 +264,13 @@ fn presets_render_as_slot_buttons_in_the_presets_island() {
 
     // The presets island joins the surface input region as its own rect.
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-        .expect("input rects");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("input rects");
     assert!(rects.contains(&island.rect));
 }
 
@@ -269,7 +279,7 @@ fn idle_hidden_strip_keeps_its_size_but_passes_input_through() {
     let engine = UiTextEngine::default();
     let mut snapshot = snapshot();
     let shown_size = top_size(&engine, &snapshot);
-    let (w, h) = (shown_size.0 as f64, shown_size.1 as f64);
+    let (w, h) = (f64::from(shown_size.0), f64::from(shown_size.1));
     let shown_rects = top_input_rects(&engine, &snapshot, w, h).expect("island rects");
     assert!(!shown_rects.is_empty());
 
@@ -491,8 +501,13 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-        .expect("no popover: the islands still restrict input");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("no popover: the islands still restrict input");
     assert_eq!(
         rects.len(),
         5,
@@ -505,7 +520,12 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     assert!(rects[2].0 + rects[2].2 < rects[3].0);
     // The style pill is the fifth rect, detached below the band.
     assert!(rects[4].1 > rects[0].1 + rects[0].3);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let islands: Vec<_> = tree
         .nodes()
         .iter()
@@ -523,14 +543,19 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-        .expect("partial input region");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("partial input region");
     assert_eq!(rects.len(), 6, "five islands + shapes panel: {rects:?}");
     assert_eq!(rects[0].0, 0.0);
     assert_eq!(rects[0].1, 0.0);
     for island in &rects[..5] {
         assert!(
-            island.1 + island.3 < h as f64,
+            island.1 + island.3 < f64::from(h),
             "islands end above the popover"
         );
     }
@@ -539,7 +564,12 @@ fn input_rects_cover_islands_and_open_popovers_only() {
     assert!(rects[0].0 + rects[0].2 < rects[1].0);
     assert!(rects[1].0 + rects[1].2 < rects[2].0);
     assert!(rects[2].0 + rects[2].2 < rects[3].0);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let panel = tree
         .node_by_id(&"top.shapes.panel".into())
         .expect("panel node");
@@ -561,9 +591,19 @@ fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
     let snapshot =
         ToolbarSnapshot::from_input_with_bindings(&state, ToolbarBindingHints::default());
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
-    let input_rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-        .expect("partial input region");
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
+    let input_rects = top_input_rects(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("partial input region");
 
     let islands: Vec<_> = tree
         .nodes()
@@ -574,7 +614,7 @@ fn island_backgrounds_stop_at_bar_band_when_popover_is_open() {
     for (island, input_rect) in islands.iter().zip(&input_rects[..5]) {
         assert_eq!(island.rect, *input_rect, "{}", island.id);
         assert!(
-            island.rect.1 + island.rect.3 < h as f64,
+            island.rect.1 + island.rect.3 < f64::from(h),
             "popover area must stay transparent"
         );
     }
@@ -590,7 +630,12 @@ fn minimized_strip_is_a_single_restore_tab() {
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!((w, h), (104, 32));
 
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let interactive: Vec<_> = tree
         .nodes()
         .iter()
@@ -627,7 +672,12 @@ fn micro_strip_is_a_single_round_chip() {
         "micro mode is one 44px chip"
     );
 
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let interactive: Vec<_> = tree
         .nodes()
         .iter()
@@ -668,7 +718,15 @@ fn micro_strip_is_a_single_round_chip() {
 
     // No popovers, ring rows, or partial input regions in micro mode: the
     // whole 44px surface takes input.
-    assert!(top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64).is_none());
+    assert!(
+        top_input_rects(
+            &UiTextEngine::default(),
+            &snapshot,
+            f64::from(w),
+            f64::from(h)
+        )
+        .is_none()
+    );
     assert_eq!(top_extra_height(&UiTextEngine::default(), &snapshot), 0.0);
 
     // Minimized wins if both states are somehow set.
@@ -1095,11 +1153,21 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     // no fourth input rect, no extra height for it.
     let select = snapshot_for_tool(Tool::Select);
     let (w, h) = top_size(&UiTextEngine::default(), &select);
-    let tree = build_top_view(&UiTextEngine::default(), &select, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &select,
+        f64::from(w),
+        f64::from(h),
+    );
     assert!(tree.node_by_id(&"top.island.style".into()).is_none());
     assert!(style_ids(&tree).is_empty());
-    let rects = top_input_rects(&UiTextEngine::default(), &select, w as f64, h as f64)
-        .expect("island input rects");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &select,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("island input rects");
     assert_eq!(
         rects.len(),
         4,
@@ -1128,7 +1196,12 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     selection.selection_has_text = true;
     selection.selected_text_bold = Some(false);
     let (w, h) = top_size(&UiTextEngine::default(), &selection);
-    let tree = build_top_view(&UiTextEngine::default(), &selection, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &selection,
+        f64::from(w),
+        f64::from(h),
+    );
     let style = tree
         .node_by_id(&"top.island.style".into())
         .expect("selection pill card");
@@ -1147,8 +1220,13 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
             "top.style.font-bold",
         ]
     );
-    let rects = top_input_rects(&UiTextEngine::default(), &selection, w as f64, h as f64)
-        .expect("island input rects");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &selection,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("island input rects");
     assert_eq!(rects.len(), 5, "selection pill rect: {rects:?}");
     let pill_rect = rects[4];
     assert_eq!(
@@ -1167,7 +1245,12 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
     ] {
         let snapshot = snapshot_for_tool(tool);
         let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-        let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+        let tree = build_top_view(
+            &UiTextEngine::default(),
+            &snapshot,
+            f64::from(w),
+            f64::from(h),
+        );
         let tools = tree
             .node_by_id(&"top.island.tools".into())
             .expect("tools island");
@@ -1208,8 +1291,13 @@ fn style_pill_geometry_holds_per_tool_and_select_hides_the_pill() {
 
         // The pill joins the surface input region as the fifth rect (after
         // the tools, presets, history, and chrome band islands).
-        let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-            .expect("island input rects");
+        let rects = top_input_rects(
+            &UiTextEngine::default(),
+            &snapshot,
+            f64::from(w),
+            f64::from(h),
+        )
+        .expect("island input rects");
         assert_eq!(rects.len(), 5, "{tool:?} rects: {rects:?}");
         assert_eq!(rects[4], style.rect, "{tool:?} pill input rect");
     }
@@ -1327,7 +1415,7 @@ fn shape_pen_meters_carry_captions_and_level_bars_inside_the_planned_width() {
         .node_by_id(&"top.island.style".into())
         .expect("style pill");
     let (_, h) = top_size(&engine, &snapshot);
-    assert!(top_natural_width(&engine, &snapshot, h as f64) >= style.rect.0 + style.rect.2);
+    assert!(top_natural_width(&engine, &snapshot, f64::from(h)) >= style.rect.0 + style.rect.2);
 }
 
 #[test]
@@ -1394,7 +1482,7 @@ fn shape_pen_steppers_carry_visible_captions_inside_the_planned_width() {
         .node_by_id(&"top.island.style".into())
         .expect("style pill");
     let (_, h) = top_size(&engine, &snapshot);
-    assert!(top_natural_width(&engine, &snapshot, h as f64) >= style.rect.0 + style.rect.2);
+    assert!(top_natural_width(&engine, &snapshot, f64::from(h)) >= style.rect.0 + style.rect.2);
 }
 
 #[test]
@@ -1477,8 +1565,8 @@ fn runtime_sized_menu_popovers_do_not_reenter_strip_planning() {
         let tree = build_top_view(
             &UiTextEngine::default(),
             &snapshot,
-            width as f64,
-            height as f64,
+            f64::from(width),
+            f64::from(height),
         );
         assert!(
             tree.node_by_id(&format!("top.menu.{name}.panel").into())
@@ -1813,8 +1901,13 @@ fn canvas_popover_scrolls_when_all_sections_exceed_the_viewport() {
     let panel = tree
         .node_by_id(&"top.menu.canvas.panel".into())
         .expect("canvas panel");
-    let rects = top_input_rects(&UiTextEngine::default(), &snapshot, w as f64, h as f64)
-        .expect("input rects");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("input rects");
     assert!(
         rects
             .iter()
@@ -1841,7 +1934,12 @@ fn session_popover_re_hosts_the_session_pane_content() {
         .collect();
 
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let panel = tree
         .node_by_id(&"top.menu.session.panel".into())
         .expect("session popover panel");
@@ -1951,8 +2049,13 @@ fn assert_session_popover_input_rect(
         .node_by_id(&"top.menu.session.panel".into())
         .expect("session popover panel");
     // The popover joins the input region as an extra rect below the band.
-    let rects = top_input_rects(&UiTextEngine::default(), snapshot, w as f64, h as f64)
-        .expect("input rects");
+    let rects = top_input_rects(
+        &UiTextEngine::default(),
+        snapshot,
+        f64::from(w),
+        f64::from(h),
+    )
+    .expect("input rects");
     assert!(
         rects
             .iter()
@@ -2234,7 +2337,12 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     assert!(natural > viewport, "short output must cap tall content");
 
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let panel = tree
         .node_by_id(&"top.menu.settings.panel".into())
         .expect("settings popover panel");
@@ -2276,7 +2384,12 @@ fn tall_popover_content_caps_the_panel_and_scrolls_internally() {
     let unscrolled_first = tree.node_by_id(&"top.menu.settings.button.0".into());
     assert!(unscrolled_first.is_some(), "top row visible before scroll");
     snapshot.top_popover_scroll = max_scroll + 500.0; // clamps to max
-    let scrolled = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let scrolled = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let scrolled_panel = scrolled
         .node_by_id(&"top.menu.settings.panel".into())
         .expect("panel");
@@ -2324,7 +2437,12 @@ fn tall_content_fills_a_tall_screen_without_scrolling() {
     );
 
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     assert!(
         tree.node_by_id(&"top.menu.settings.scrollbar".into())
             .is_none(),
@@ -2360,7 +2478,12 @@ fn tall_content_scrolls_on_a_short_screen() {
     );
 
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let scrollbar = tree
         .node_by_id(&"top.menu.settings.scrollbar".into())
         .expect("internal scrollbar on a short screen");

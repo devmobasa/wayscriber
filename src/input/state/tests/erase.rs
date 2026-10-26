@@ -110,8 +110,8 @@ fn erase_stroke_samples_randomized_crossings() {
 
     fn next_unit(seed: &mut u64) -> f64 {
         *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-        let value = ((*seed >> 33) as u32) as f64;
-        value / (u32::MAX as f64)
+        let value = f64::from((*seed >> 33) as u32);
+        value / f64::from(u32::MAX)
     }
 
     let mut seed = 0x1234_5678_9abc_def0u64;

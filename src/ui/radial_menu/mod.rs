@@ -96,7 +96,7 @@ pub(crate) fn render_radial_menu_with_context(
 
     // Semi-transparent backdrop
     ctx.set_source_rgba(0.0, 0.0, 0.0, overlay::OVERLAY_DIM_LIGHT);
-    ctx.rectangle(0.0, 0.0, width as f64, height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(width), f64::from(height));
     let _ = ctx.fill();
 
     let cx = layout.center_x;
@@ -293,7 +293,7 @@ fn draw_compass_hover(
         return;
     };
     let (seg_angle, offset, tool_gap) = compass_geometry(layout);
-    let start = offset + idx as f64 * seg_angle;
+    let start = offset + f64::from(idx) * seg_angle;
     let end = start + seg_angle;
     draw_annular_sector(
         ctx,
@@ -337,7 +337,7 @@ fn draw_color_hover(
         return;
     };
     let (seg_angle, offset, gap) = color_ring_geometry(layout, swatches.len());
-    let start = offset + idx as f64 * seg_angle;
+    let start = offset + f64::from(idx) * seg_angle;
     let end = start + seg_angle;
     color_swatch_path(ctx, cx, cy, layout, swatch.recent, start + gap, end - gap);
     theme::set_color(ctx, COLOR_HOVER_OVERLAY);
@@ -363,7 +363,7 @@ fn draw_sub_ring(
     }
     let active_tool = input_state.active_tool();
     let (seg_angle, offset, _) = compass_geometry(layout);
-    let parent_start = offset + parent_idx as f64 * seg_angle;
+    let parent_start = offset + f64::from(parent_idx) * seg_angle;
     let child_angle = seg_angle / children.len() as f64;
     let sub_gap = gap_half_angle((layout.sub_inner + layout.sub_outer) / 2.0);
     let mid_r = (layout.sub_inner + layout.sub_outer) / 2.0;

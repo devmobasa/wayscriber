@@ -186,8 +186,8 @@ pub(crate) fn paint_command_palette(
     draw_command_palette_frame(
         theme,
         ctx,
-        screen_width as f64,
-        screen_height as f64,
+        f64::from(screen_width),
+        f64::from(screen_height),
         x,
         y,
         palette_width,
@@ -254,10 +254,10 @@ pub(crate) fn paint_command_palette(
             engine,
             ctx,
             tooltip,
-            *pointer_x as f64,
-            *pointer_y as f64,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(*pointer_x),
+            f64::from(*pointer_y),
+            f64::from(screen_width),
+            f64::from(screen_height),
         );
     }
 }
@@ -314,10 +314,10 @@ pub(crate) fn command_palette_visual_geometry_with_engine(
         && let Some(tooltip_bounds) = command_palette_action_tooltip_geometry(
             engine,
             tooltip,
-            pointer_x as f64,
-            pointer_y as f64,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(pointer_x),
+            f64::from(pointer_y),
+            f64::from(screen_width),
+            f64::from(screen_height),
         )
     {
         bounds = union_bounds(bounds, tooltip_bounds);

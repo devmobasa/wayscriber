@@ -195,8 +195,8 @@ impl ClickHighlightState {
 
             draw::render_click_highlight(
                 ctx,
-                highlight.x as f64,
-                highlight.y as f64,
+                f64::from(highlight.x),
+                f64::from(highlight.y),
                 self.settings.radius,
                 self.settings.outline_thickness,
                 self.settings.fill_color,
@@ -213,8 +213,8 @@ impl ClickHighlightState {
 
         draw::render_click_highlight(
             ctx,
-            x as f64,
-            y as f64,
+            f64::from(x),
+            f64::from(y),
             self.settings.radius,
             self.settings.outline_thickness,
             self.settings.fill_color,

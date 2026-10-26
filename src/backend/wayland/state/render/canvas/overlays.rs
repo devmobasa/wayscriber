@@ -48,10 +48,10 @@ impl WaylandState {
         {
             let _ = ctx.save();
             ctx.rectangle(
-                handle.x as f64,
-                handle.y as f64,
-                handle.width as f64,
-                handle.height as f64,
+                f64::from(handle.x),
+                f64::from(handle.y),
+                f64::from(handle.width),
+                f64::from(handle.height),
             );
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.9);
             let _ = ctx.fill_preserve();

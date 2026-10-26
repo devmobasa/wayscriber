@@ -32,8 +32,8 @@ impl WaylandState {
         );
 
         let top_size = top_size(self.render.ui_text(), snapshot);
-        let top_base_w = top_size.0 as f64 / ui_scale;
-        let top_base_h = top_size.1 as f64 / ui_scale;
+        let top_base_w = f64::from(top_size.0) / ui_scale;
+        let top_base_h = f64::from(top_size.1) / ui_scale;
         let top_hover_local = self
             .toolbar_chrome
             .inline_hover()
@@ -68,8 +68,8 @@ impl WaylandState {
         let top_rect = (
             top_offset.0,
             top_offset.1,
-            top_size.0 as f64,
-            top_size.1 as f64,
+            f64::from(top_size.0),
+            f64::from(top_size.1),
         );
         hit::clip_hit_regions_to_bounds(&mut hits, 0, top_rect);
         self.toolbar_chrome.set_inline_rendered(hits, top_rect);

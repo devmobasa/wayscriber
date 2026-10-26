@@ -77,7 +77,7 @@ fn compute_input_hud_layout(
     let mut measured: Vec<(InputHudChip, f64)> = Vec::new();
     let mut row_height = 0.0_f64;
     let mut content_width = 0.0_f64;
-    let available = (screen_width as f64 - INPUT_HUD_EDGE_INSET * 2.0).max(0.0);
+    let available = (f64::from(screen_width) - INPUT_HUD_EDGE_INSET * 2.0).max(0.0);
     if available <= 0.0 {
         return None;
     }
@@ -124,13 +124,13 @@ fn compute_input_hud_layout(
     measured.reverse();
 
     let position = input_state.input_hud_position();
-    let x = row_origin_x(position, screen_width as f64, content_width);
+    let x = row_origin_x(position, f64::from(screen_width), content_width);
     let y = if position.is_top() {
         INPUT_HUD_EDGE_INSET
     } else if position.is_middle() {
-        ((screen_height as f64 - row_height) / 2.0).max(0.0)
+        ((f64::from(screen_height) - row_height) / 2.0).max(0.0)
     } else {
-        (screen_height as f64 - INPUT_HUD_EDGE_INSET - row_height).max(0.0)
+        (f64::from(screen_height) - INPUT_HUD_EDGE_INSET - row_height).max(0.0)
     };
 
     let mut cursor = x;

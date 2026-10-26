@@ -65,10 +65,10 @@ pub(crate) fn render_precision_entry_popup_with_engine(
 
     let x = anchor
         .0
-        .clamp(8.0, (screen_width as f64 - POPUP_W - 8.0).max(8.0));
+        .clamp(8.0, (f64::from(screen_width) - POPUP_W - 8.0).max(8.0));
     let y = anchor
         .1
-        .clamp(8.0, (screen_height as f64 - POPUP_H - 8.0).max(8.0));
+        .clamp(8.0, (f64::from(screen_height) - POPUP_H - 8.0).max(8.0));
 
     // Panel card.
     draw_rounded_rect(ctx, x, y, POPUP_W, POPUP_H, RADIUS_STD);

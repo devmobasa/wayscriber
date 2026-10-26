@@ -210,23 +210,23 @@ impl WaylandState {
             .context("Failed to create frozen image surface")?;
 
             let scale_x = if image.width > 0 {
-                phys_width as f64 / image.width as f64
+                f64::from(phys_width) / f64::from(image.width)
             } else {
                 1.0
             };
             let scale_y = if image.height > 0 {
-                phys_height as f64 / image.height as f64
+                f64::from(phys_height) / f64::from(image.height)
             } else {
                 1.0
             };
-            logical_to_image_scale_x = (scale as f64) / scale_x.max(f64::MIN_POSITIVE);
-            logical_to_image_scale_y = (scale as f64) / scale_y.max(f64::MIN_POSITIVE);
+            logical_to_image_scale_x = f64::from(scale) / scale_x.max(f64::MIN_POSITIVE);
+            logical_to_image_scale_y = f64::from(scale) / scale_y.max(f64::MIN_POSITIVE);
             let _ = ctx.save();
             if zoom_render_active {
                 let scale_x_safe = scale_x.max(f64::MIN_POSITIVE);
                 let scale_y_safe = scale_y.max(f64::MIN_POSITIVE);
-                let offset_x = self.zoom.view_offset.0 * (scale as f64) / scale_x_safe;
-                let offset_y = self.zoom.view_offset.1 * (scale as f64) / scale_y_safe;
+                let offset_x = self.zoom.view_offset.0 * f64::from(scale) / scale_x_safe;
+                let offset_y = self.zoom.view_offset.1 * f64::from(scale) / scale_y_safe;
                 ctx.scale(scale_x * self.zoom.scale, scale_y * self.zoom.scale);
                 ctx.translate(-offset_x, -offset_y);
             } else if (scale_x - 1.0).abs() > f64::EPSILON || (scale_y - 1.0).abs() > f64::EPSILON {
@@ -243,8 +243,8 @@ impl WaylandState {
             let pattern = cairo::SurfacePattern::create(&surface);
             pattern.set_extend(cairo::Extend::Pad);
             let mut matrix = cairo::Matrix::identity();
-            let scale_x_inv = 1.0 / (scale as f64 * scale_x.max(f64::MIN_POSITIVE));
-            let scale_y_inv = 1.0 / (scale as f64 * scale_y.max(f64::MIN_POSITIVE));
+            let scale_x_inv = 1.0 / (f64::from(scale) * scale_x.max(f64::MIN_POSITIVE));
+            let scale_y_inv = 1.0 / (f64::from(scale) * scale_y.max(f64::MIN_POSITIVE));
             matrix.scale(scale_x_inv, scale_y_inv);
             pattern.set_matrix(matrix);
             eraser_surface = Some(surface);

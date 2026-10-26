@@ -128,7 +128,7 @@ impl InputState {
         let padding = 16;
         let x = padding;
         let y = match &self.context_menu.layout {
-            Some(layout) => (layout.origin_y + layout.height + padding as f64) as i32,
+            Some(layout) => (layout.origin_y + layout.height + f64::from(padding)) as i32,
             None => padding,
         };
         (x, y)

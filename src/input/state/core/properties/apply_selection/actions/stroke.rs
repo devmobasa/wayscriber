@@ -11,13 +11,14 @@ impl InputState {
         measurer: &TextMeasurer,
         direction: i32,
     ) -> bool {
-        let delta = SELECTION_THICKNESS_STEP * direction as f64;
+        let delta = SELECTION_THICKNESS_STEP * f64::from(direction);
         let pressure_edit_mode = self.style.pressure_thickness_edit_mode;
         let pressure_editable = matches!(
             pressure_edit_mode,
             PressureThicknessEditMode::Add | PressureThicknessEditMode::Scale
         );
-        let pressure_scale = 1.0 + (self.style.pressure_thickness_scale_step * direction as f64);
+        let pressure_scale =
+            1.0 + (self.style.pressure_thickness_scale_step * f64::from(direction));
         let result = self.apply_selection_change_with(
             measurer,
             |shape| {
@@ -57,7 +58,7 @@ impl InputState {
                     PressureThicknessEditMode::Add => {
                         let mut changed = false;
                         for (_, _, thickness) in points.iter_mut() {
-                            let next = (*thickness as f64 + delta)
+                            let next = (f64::from(*thickness) + delta)
                                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS)
                                 as f32;
                             if (next - *thickness).abs() > f32::EPSILON {
@@ -73,7 +74,7 @@ impl InputState {
                         }
                         let mut changed = false;
                         for (_, _, thickness) in points.iter_mut() {
-                            let next = (*thickness as f64 * pressure_scale)
+                            let next = (f64::from(*thickness) * pressure_scale)
                                 .clamp(MIN_STROKE_THICKNESS, MAX_STROKE_THICKNESS)
                                 as f32;
                             if (next - *thickness).abs() > f32::EPSILON {

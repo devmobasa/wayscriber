@@ -152,8 +152,8 @@ fn builtin_semantic_records(
     let tree = wayland::build_top_toolbar_view(
         &UiTextEngine::default(),
         snapshot,
-        width as f64,
-        height as f64,
+        f64::from(width),
+        f64::from(height),
     );
     let mut records = Vec::new();
     for node in tree.nodes() {
@@ -399,8 +399,8 @@ fn assert_builtin_style_pill_scenario(name: &str, snapshot: &ToolbarSnapshot) {
     let tree = wayland::build_top_toolbar_view(
         &UiTextEngine::default(),
         snapshot,
-        width as f64,
-        height as f64,
+        f64::from(width),
+        f64::from(height),
     );
 
     assert_eq!(

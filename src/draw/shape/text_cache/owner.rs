@@ -66,18 +66,18 @@ impl TextMeasurer {
             let layout = configured_layout(ctx, text, font_desc_str, wrap_width);
 
             let (ink_rect, logical_rect) = layout.extents();
-            let scale = pango::SCALE as f64;
+            let scale = f64::from(pango::SCALE);
 
             TextMeasurement {
-                ink_x: ink_rect.x() as f64 / scale,
-                ink_y: ink_rect.y() as f64 / scale,
-                ink_width: ink_rect.width() as f64 / scale,
-                ink_height: ink_rect.height() as f64 / scale,
-                logical_x: logical_rect.x() as f64 / scale,
-                logical_y: logical_rect.y() as f64 / scale,
-                logical_width: logical_rect.width() as f64 / scale,
-                logical_height: logical_rect.height() as f64 / scale,
-                baseline: layout.baseline() as f64 / scale,
+                ink_x: f64::from(ink_rect.x()) / scale,
+                ink_y: f64::from(ink_rect.y()) / scale,
+                ink_width: f64::from(ink_rect.width()) / scale,
+                ink_height: f64::from(ink_rect.height()) / scale,
+                logical_x: f64::from(logical_rect.x()) / scale,
+                logical_y: f64::from(logical_rect.y()) / scale,
+                logical_width: f64::from(logical_rect.width()) / scale,
+                logical_height: f64::from(logical_rect.height()) / scale,
+                baseline: f64::from(layout.baseline()) / scale,
             }
         })?;
 

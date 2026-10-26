@@ -290,9 +290,9 @@ fn finished_path_damage_regions(shape: &Shape, fallback: Option<Rect>) -> Option
             Some(split_path_damage_regions(points, *thick, fallback?))
         }
         Shape::FreehandPressure { points, .. } => {
-            let max_thick = points
-                .iter()
-                .fold(1.0f64, |max, &(_, _, thickness)| max.max(thickness as f64));
+            let max_thick = points.iter().fold(1.0f64, |max, &(_, _, thickness)| {
+                max.max(f64::from(thickness))
+            });
             let points = points.iter().map(|&(x, y, _)| (x, y)).collect::<Vec<_>>();
             Some(split_path_damage_regions(&points, max_thick, fallback?))
         }

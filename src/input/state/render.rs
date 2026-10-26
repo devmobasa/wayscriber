@@ -251,7 +251,7 @@ impl InputState {
             } => {
                 let max_thick = point_thicknesses
                     .iter()
-                    .fold(1.0f64, |max, &thickness| max.max(thickness as f64));
+                    .fold(1.0f64, |max, &thickness| max.max(f64::from(thickness)));
                 let ranges = path_damage_ranges(points, damage_regions, max_thick);
                 if ranges.is_empty() {
                     return false;
@@ -374,10 +374,10 @@ impl InputState {
                 };
                 let _ = ctx.save();
                 ctx.rectangle(
-                    rect.x as f64,
-                    rect.y as f64,
-                    rect.width as f64,
-                    rect.height as f64,
+                    f64::from(rect.x),
+                    f64::from(rect.y),
+                    f64::from(rect.width),
+                    f64::from(rect.height),
                 );
                 ctx.set_source_rgba(0.2, 0.45, 1.0, 0.12);
                 let _ = ctx.fill_preserve();

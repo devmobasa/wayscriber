@@ -150,7 +150,7 @@ impl TopBar {
                 let (cx, cy) = offsets.get();
                 let (mut x, mut y) = drag_frame_position(drag_origin.get(), frame.delta);
                 (x, y) =
-                    clamp_drag_offsets(&window, (x, y), (base, BASE_MARGIN.0 as f64), END_MARGIN);
+                    clamp_drag_offsets(&window, (x, y), (base, f64::from(BASE_MARGIN.0)), END_MARGIN);
                 offsets.set((x, y));
                 seq.set(seq.get() + 1);
                 toolbar_gtk::drag_debug_log(format!(

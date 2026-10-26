@@ -24,7 +24,7 @@ pub(super) fn draw_overlay_frame(
 
     // Dim background behind overlay
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_HELP);
-    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(screen_width), f64::from(screen_height));
     let _ = ctx.fill();
 
     // Drop shadow (layered for softer effect)

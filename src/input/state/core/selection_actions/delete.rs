@@ -79,8 +79,8 @@ impl InputState {
 
         // Check if any segment needs densification
         let needs_sampling = points.windows(2).any(|w| {
-            let dx = (w[1].0 - w[0].0) as f64;
-            let dy = (w[1].1 - w[0].1) as f64;
+            let dx = f64::from(w[1].0 - w[0].0);
+            let dy = f64::from(w[1].1 - w[0].1);
             (dx * dx + dy * dy).sqrt() > step
         });
 
@@ -94,15 +94,15 @@ impl InputState {
         for window in points.windows(2) {
             let (x0, y0) = window[0];
             let (x1, y1) = window[1];
-            let dx = (x1 - x0) as f64;
-            let dy = (y1 - y0) as f64;
+            let dx = f64::from(x1 - x0);
+            let dy = f64::from(y1 - y0);
             let dist = (dx * dx + dy * dy).sqrt();
             let steps = ((dist / step).ceil() as i32).max(1);
             for i in 1..=steps {
-                let t = i as f64 / steps as f64;
+                let t = f64::from(i) / f64::from(steps);
                 let point = (
-                    (x0 as f64 + dx * t).round() as i32,
-                    (y0 as f64 + dy * t).round() as i32,
+                    (f64::from(x0) + dx * t).round() as i32,
+                    (f64::from(y0) + dy * t).round() as i32,
                 );
                 if sampled.last().copied() != Some(point) {
                     sampled.push(point);

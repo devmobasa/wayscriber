@@ -380,7 +380,7 @@ fn zoom_chip_click_percent_readout_consumes_without_action() {
         input
             .zoom_chip_layout()
             .unwrap()
-            .button_at(x as f64, y as f64),
+            .button_at(f64::from(x), f64::from(y)),
         None
     );
 

@@ -219,8 +219,8 @@ impl Feedback {
 
 fn contains(bounds: Option<ToastBounds>, x: i32, y: i32) -> bool {
     bounds.is_some_and(|(bx, by, bw, bh)| {
-        let xf = x as f64;
-        let yf = y as f64;
+        let xf = f64::from(x);
+        let yf = f64::from(y);
         xf >= bx && xf <= bx + bw && yf >= by && yf <= by + bh
     })
 }

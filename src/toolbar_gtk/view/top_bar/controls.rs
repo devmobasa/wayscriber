@@ -292,7 +292,7 @@ impl TopBar {
             area.set_valign(gtk4::Align::Fill);
             area.set_can_target(false);
             area.set_draw_func(move |_, ctx, width, height| {
-                let (fw, fh) = (width as f64, height as f64);
+                let (fw, fh) = (f64::from(width), f64::from(height));
                 let short = fw.min(fh).max(1.0);
                 // Neutral glyph, centered.
                 set_color(ctx, COLOR_TEXT_SECONDARY);

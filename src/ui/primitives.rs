@@ -208,8 +208,9 @@ pub(crate) fn draw_pill(
 ) {
     if let Some((sr, sg, sb, sa)) = shadow {
         for layer in (1..=PILL_SHADOW_LAYERS).rev() {
-            let spread = layer as f64;
-            let alpha = sa * (1.0 - (layer as f64 - 1.0) / PILL_SHADOW_LAYERS as f64) * 0.35;
+            let spread = f64::from(layer);
+            let alpha =
+                sa * (1.0 - (f64::from(layer) - 1.0) / f64::from(PILL_SHADOW_LAYERS)) * 0.35;
             ctx.set_source_rgba(sr, sg, sb, alpha);
             draw_rounded_rect(
                 ctx,

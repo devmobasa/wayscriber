@@ -714,7 +714,7 @@ mod tests {
             });
             let node = WidgetNode::new(
                 "test.preset",
-                (0.0, 0.0, SIZE as f64, SIZE as f64),
+                (0.0, 0.0, f64::from(SIZE), f64::from(SIZE)),
                 WidgetKind::PresetSlot {
                     glyph,
                     color: (1.0, 0.0, 0.0, 1.0),

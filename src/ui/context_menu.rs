@@ -306,9 +306,9 @@ fn draw_divider(ctx: &cairo::Context, layout: &ContextMenuLayout, y: f64) {
 
 /// A soft shadow under a pane: stacked translucent rects widening outward.
 fn draw_shadow(ctx: &cairo::Context, layout: &ContextMenuLayout) {
-    let alpha = SHADOW.3 / SHADOW_LAYERS as f64;
+    let alpha = SHADOW.3 / f64::from(SHADOW_LAYERS);
     for layer in 1..=SHADOW_LAYERS {
-        let spread = SHADOW_SPREAD * layer as f64;
+        let spread = SHADOW_SPREAD * f64::from(layer);
         constants::set_color(ctx, constants::with_alpha(SHADOW, alpha));
         draw_rounded_rect(
             ctx,

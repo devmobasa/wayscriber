@@ -82,8 +82,8 @@ fn arrow_bounding_box_includes_head() {
     )
     .expect("arrow geometry should exist");
     for (px, py) in [skeleton.head.left, skeleton.head.right] {
-        assert!(px >= x_min as f64 && px <= x_max as f64);
-        assert!(py >= y_min as f64 && py <= y_max as f64);
+        assert!(px >= f64::from(x_min) && px <= f64::from(x_max));
+        assert!(py >= f64::from(y_min) && py <= f64::from(y_max));
     }
 }
 

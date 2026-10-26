@@ -357,7 +357,7 @@ impl InputState {
             self.close_radial_menu();
         } else if !self.zoom_active() && matches!(self.state, DrawingState::Idle) {
             let (x, y) = self.pointer_position();
-            self.open_radial_menu(x as f64, y as f64);
+            self.open_radial_menu(f64::from(x), f64::from(y));
         }
     }
 

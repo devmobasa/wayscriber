@@ -98,7 +98,7 @@ fn the_newest_chip_clamps_to_the_available_width() {
     state.note_input_hud_key(Key::Backspace, modifiers);
 
     let screen_width = 160_u32;
-    let available = screen_width as f64 - INPUT_HUD_EDGE_INSET * 2.0;
+    let available = f64::from(screen_width) - INPUT_HUD_EDGE_INSET * 2.0;
     let layout = compute_input_hud_layout(&UiTextEngine::default(), &state, screen_width, 1080)
         .expect("layout");
     assert_eq!(layout.chips.len(), 1);
@@ -108,7 +108,7 @@ fn the_newest_chip_clamps_to_the_available_width() {
         layout.width
     );
     assert!(layout.x >= 0.0);
-    assert!(layout.x + layout.width <= screen_width as f64);
+    assert!(layout.x + layout.width <= f64::from(screen_width));
 
     // A surface no wider than its insets has no drawable span at all.
     let no_span = (INPUT_HUD_EDGE_INSET * 2.0) as u32;

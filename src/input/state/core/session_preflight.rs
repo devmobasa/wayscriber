@@ -107,8 +107,8 @@ impl CloneStorageEstimate {
         if written == 0 {
             return false;
         }
-        let threshold = ((options.max_file_size_bytes as u128) * 90).div_ceil(100);
-        (written as u128) >= threshold
+        let threshold = (u128::from(options.max_file_size_bytes) * 90).div_ceil(100);
+        u128::from(written) >= threshold
     }
 }
 

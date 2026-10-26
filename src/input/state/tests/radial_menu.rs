@@ -50,7 +50,7 @@ fn point_in_sub_tool_segment(
     let child_angle = seg_angle / child_count as f64;
     // Compute the desired tool_angle in hit-test space (0 at top, with half-seg offset).
     let tool_angle =
-        parent_idx as f64 * seg_angle + child_idx as f64 * child_angle + child_angle / 2.0;
+        f64::from(parent_idx) * seg_angle + f64::from(child_idx) * child_angle + child_angle / 2.0;
     // Convert back to raw atan2 angle (undo the +PI/2 and +half_seg transforms).
     let raw_angle = tool_angle - PI / 2.0 - half_seg;
     let radius = (layout.sub_inner + layout.sub_outer) / 2.0;
@@ -836,7 +836,7 @@ fn open_via_right_press_at_edge(state: &mut InputState, x: i32, y: i32) -> Radia
         .layout
         .expect("layout should exist for open radial menu");
     assert!(
-        layout.center_x - x as f64 > layout.center_radius,
+        layout.center_x - f64::from(x) > layout.center_radius,
         "edge press must clamp the layout center beyond a deadzone from the press point"
     );
     layout
@@ -983,7 +983,7 @@ fn size_ring_drag_adjusts_thickness_live_and_keeps_menu_open() {
     state.on_mouse_press(MouseButton::Left, pxi, pyi);
     assert!(state.radial_menu_is_size_dragging());
     let expected = size_ring_value_for_angle(
-        (pyi as f64 - layout.center_y).atan2(pxi as f64 - layout.center_x),
+        (f64::from(pyi) - layout.center_y).atan2(f64::from(pxi) - layout.center_x),
     );
     assert!((state.size_for_active_tool() - expected).abs() < 1e-9);
 
@@ -992,7 +992,7 @@ fn size_ring_drag_adjusts_thickness_live_and_keeps_menu_open() {
     let (txi, tyi) = (tx.round() as i32, ty.round() as i32);
     state.on_mouse_motion(txi, tyi);
     let expected_top = size_ring_value_for_angle(
-        (tyi as f64 - layout.center_y).atan2(txi as f64 - layout.center_x),
+        (f64::from(tyi) - layout.center_y).atan2(f64::from(txi) - layout.center_x),
     );
     assert!((state.size_for_active_tool() - expected_top).abs() < 1e-9);
 
@@ -1019,7 +1019,10 @@ fn recent_colors_are_deduped_most_recent_first_and_capped() {
     };
     // Steps of 0.125 are exact binary fractions, so equality is exact.
     for i in 0..8 {
-        state.apply_color_from_ui_with_measurer(&TextMeasurer::default(), color(i as f64 * 0.125));
+        state.apply_color_from_ui_with_measurer(
+            &TextMeasurer::default(),
+            color(f64::from(i) * 0.125),
+        );
     }
     assert_eq!(state.style.recent_colors.len(), 6, "recents are capped");
     assert_eq!(

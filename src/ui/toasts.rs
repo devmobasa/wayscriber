@@ -157,8 +157,8 @@ pub(crate) fn preset_toast_geometry_with_engine(
 /// The four screen-edge strips flashed by blocked-action feedback.
 #[must_use]
 pub fn blocked_feedback_rects(screen_width: u32, screen_height: u32) -> [(f64, f64, f64, f64); 4] {
-    let w = screen_width as f64;
-    let h = screen_height as f64;
+    let w = f64::from(screen_width);
+    let h = f64::from(screen_height);
     let b = BLOCKED_FEEDBACK_BORDER;
     [
         (0.0, 0.0, w, b),
@@ -216,7 +216,7 @@ pub(crate) fn render_preset_toast_with_engine(
         return;
     };
 
-    let fade = preset_toast_fade(progress as f64);
+    let fade = preset_toast_fade(f64::from(progress));
     let (r, g, b) = match kind {
         PresetFeedbackKind::Apply => TOAST_INFO,
         PresetFeedbackKind::Save => TOAST_SUCCESS,
@@ -273,7 +273,7 @@ pub(crate) fn render_ui_toast_with_engine(
     let (x, y, width, height) = layout.bounds;
     let text_style = toast_text_style(UI_TOAST_FONT_SIZE);
 
-    let fade = ui_toast_fade(elapsed.as_secs_f64(), duration_secs as f64);
+    let fade = ui_toast_fade(elapsed.as_secs_f64(), f64::from(duration_secs));
     let (r, g, b) = match toast.kind {
         UiToastKind::Info => TOAST_INFO,
         UiToastKind::Warning => TOAST_WARNING,
@@ -309,7 +309,7 @@ pub(crate) fn render_ui_toast_with_engine(
         let progress_height = 3.0;
         let progress_y = y + height - progress_height - 2.0;
         let progress_width = width - padding_x * 2.0;
-        let remaining_width = progress_width * (1.0 - progress as f64);
+        let remaining_width = progress_width * (1.0 - f64::from(progress));
 
         // Track background
         constants::set_color(ctx, PROGRESS_TRACK);

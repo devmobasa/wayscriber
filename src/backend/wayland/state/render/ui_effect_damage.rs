@@ -299,7 +299,7 @@ impl WaylandState {
 
         let preview_position = self.stylus_hover_cursor_position().unwrap_or_else(|| {
             let (x, y) = self.pointer.position();
-            (x as f64, y as f64)
+            (f64::from(x), f64::from(y))
         });
         let preview_rect = flags
             .active(UiEffect::ToolPreview)
@@ -405,9 +405,9 @@ impl WaylandState {
         // translate to screen space (zoom forces full damage, so only the
         // pan offset matters here).
         let (origin_x, origin_y) = self.canvas_view_origin();
-        let screen_x = *x as f64 - origin_x;
-        let screen_y = *y as f64 - origin_y;
-        let radius = TEXT_EDIT_ENTRY_MAX_RADIUS as f64;
+        let screen_x = f64::from(*x) - origin_x;
+        let screen_y = f64::from(*y) - origin_y;
+        let radius = f64::from(TEXT_EDIT_ENTRY_MAX_RADIUS);
         effect_rect(
             (
                 screen_x - radius,

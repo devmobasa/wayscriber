@@ -58,7 +58,7 @@ impl AboutWindowState {
         let _ = ctx.paint();
         ctx.set_operator(cairo::Operator::Over);
         if self.scale > 1 {
-            ctx.scale(self.scale as f64, self.scale as f64);
+            ctx.scale(f64::from(self.scale), f64::from(self.scale));
         }
 
         draw::draw_about(

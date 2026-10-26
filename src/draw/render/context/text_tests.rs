@@ -69,7 +69,7 @@ fn pixels(
 ) -> Vec<u8> {
     let mut surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, 400 * density, 380 * density).unwrap();
-    surface.set_device_scale(density as f64, density as f64);
+    surface.set_device_scale(f64::from(density), f64::from(density));
     {
         let ctx = cairo::Context::new(&surface).unwrap();
         ctx.set_source_rgb(1.0, 1.0, 1.0);

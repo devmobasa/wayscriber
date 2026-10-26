@@ -144,7 +144,7 @@ mod tests {
     fn tree_for(snapshot: &ToolbarSnapshot) -> WidgetTree {
         let engine = UiTextEngine::default();
         let (w, h) = top_size(&engine, snapshot);
-        build_top_view(&engine, snapshot, w as f64, h as f64)
+        build_top_view(&engine, snapshot, f64::from(w), f64::from(h))
     }
 
     #[test]
@@ -200,13 +200,16 @@ mod tests {
         assert!(top_extra_height(&engine, &open) >= top_extra_height(&engine, &closed));
 
         let (w, h) = top_size(&engine, &open);
-        let tree = build_top_view(&engine, &open, w as f64, h as f64);
+        let tree = build_top_view(&engine, &open, f64::from(w), f64::from(h));
         let panel = tree
             .node_by_id(&"top.layout.panel".into())
             .expect("panel")
             .rect;
-        assert!(panel.1 + panel.3 <= h as f64, "the panel fits the surface");
-        let rects = top_input_rects(&engine, &open, w as f64, h as f64).expect("rects");
+        assert!(
+            panel.1 + panel.3 <= f64::from(h),
+            "the panel fits the surface"
+        );
+        let rects = top_input_rects(&engine, &open, f64::from(w), f64::from(h)).expect("rects");
         assert!(
             rects.iter().any(|rect| rect.0 <= panel.0
                 && rect.1 <= panel.1

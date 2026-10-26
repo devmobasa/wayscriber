@@ -55,7 +55,7 @@ impl WaylandState {
         if max_scroll <= 0.0 {
             return false;
         }
-        let next = (snapshot.top_popover_scroll + scroll_direction as f64 * WHEEL_SCROLL_STEP)
+        let next = (snapshot.top_popover_scroll + f64::from(scroll_direction) * WHEEL_SCROLL_STEP)
             .clamp(0.0, max_scroll);
         if (next - snapshot.top_popover_scroll).abs() < 0.5 {
             return false;

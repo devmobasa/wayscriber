@@ -62,10 +62,10 @@ impl WaylandState {
             if !damage_screen.is_empty() {
                 for rect in damage_screen {
                     // Scale logical rect to physical pixels
-                    let x = rect.x as f64 * scale as f64;
-                    let y = rect.y as f64 * scale as f64;
-                    let w = rect.width as f64 * scale as f64;
-                    let h = rect.height as f64 * scale as f64;
+                    let x = f64::from(rect.x) * f64::from(scale);
+                    let y = f64::from(rect.y) * f64::from(scale);
+                    let w = f64::from(rect.width) * f64::from(scale);
+                    let h = f64::from(rect.height) * f64::from(scale);
                     ctx.rectangle(x, y, w, h);
                 }
                 ctx.clip();

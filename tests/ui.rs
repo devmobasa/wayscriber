@@ -309,7 +309,7 @@ fn help_overlay_footer_offers_clickable_replay_and_about() {
     for y in 0..1000 {
         for x in 0..1400 {
             if let Some(HelpOverlayRegion::Row(action)) =
-                result.hit_map.region_at(x as f64, y as f64)
+                result.hit_map.region_at(f64::from(x), f64::from(y))
                 && !found.contains(&action)
             {
                 found.push(action);
@@ -345,7 +345,8 @@ fn help_overlay_footer_offers_the_unbound_actions_toggle() {
     let toggle = (0..1000)
         .flat_map(|y| (0..1400).map(move |x| (x, y)))
         .find(|&(x, y)| {
-            result.hit_map.region_at(x as f64, y as f64) == Some(HelpOverlayRegion::ToggleUnbound)
+            result.hit_map.region_at(f64::from(x), f64::from(y))
+                == Some(HelpOverlayRegion::ToggleUnbound)
         })
         .expect("rendered unbound-actions toggle");
 
@@ -374,7 +375,7 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
     let mut about = None;
     for y in 0..1000 {
         for x in 0..1400 {
-            match result.hit_map.region_at(x as f64, y as f64) {
+            match result.hit_map.region_at(f64::from(x), f64::from(y)) {
                 Some(HelpOverlayRegion::Row(Action::ReplayTour)) => replay = Some((x, y)),
                 Some(HelpOverlayRegion::Row(Action::OpenAbout)) => about = Some((x, y)),
                 _ => {}
@@ -426,7 +427,7 @@ fn help_result_owns_rendered_footer_hits_and_matches_drawing_only_pixels() {
     );
     let (x, y) = about.unwrap();
     assert_eq!(
-        result.hit_map.region_at(x as f64, y as f64),
+        result.hit_map.region_at(f64::from(x), f64::from(y)),
         Some(HelpOverlayRegion::Row(Action::OpenAbout)),
         "another paint must not replace the owned result"
     );
@@ -443,8 +444,8 @@ fn small_palette_surface_and_shadow_fit_the_screen() {
         let (x, y, panel_width, panel_height) =
             ui::command_palette_visual_geometry(&input, width, height).unwrap();
         assert!(x >= 0.0 && y >= 0.0);
-        assert!(x + panel_width <= width as f64);
-        assert!(y + panel_height <= height as f64);
+        assert!(x + panel_width <= f64::from(width));
+        assert!(y + panel_height <= f64::from(height));
         let (mut surface, ctx) = surface_with_context(width as i32, height as i32);
         ui::render_command_palette(&ctx, &input, width, height);
         drop(ctx);

@@ -172,14 +172,14 @@ pub(crate) fn compute_status_hud_layout_with_resources(
     // Unconditional backstop: even a mandatory cluster that still overflows
     // never widens the pill past the budget. Rendering clips content to the
     // pill and hit rects are clamped inside it below.
-    let max_pill_width = screen_width as f64 * STATUS_BAR_MAX_WIDTH_FRACTION;
+    let max_pill_width = f64::from(screen_width) * STATUS_BAR_MAX_WIDTH_FRACTION;
     measurement.pill_width = measurement.pill_width.min(max_pill_width);
     let line_metrics = cluster_line_metrics(&pieces, sep_extents);
 
     let (pill_x, pill_y) = pill_origin(
         position,
-        screen_width as f64,
-        screen_height as f64,
+        f64::from(screen_width),
+        f64::from(screen_height),
         measurement.pill_width,
         measurement.pill_height,
     );

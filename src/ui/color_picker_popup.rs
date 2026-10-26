@@ -105,8 +105,8 @@ pub(crate) fn color_picker_popup_visual_geometry_with_engine(
             tooltip,
             anchor_x,
             anchor_y,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(screen_width),
+            f64::from(screen_height),
         )
     {
         bounds = union_bounds(
@@ -177,7 +177,7 @@ pub(crate) fn render_color_picker_popup_with_engine(
 
     // Dim background
     ctx.set_source_rgba(0.0, 0.0, 0.0, OVERLAY_DIM_MEDIUM);
-    ctx.rectangle(0.0, 0.0, screen_width as f64, screen_height as f64);
+    ctx.rectangle(0.0, 0.0, f64::from(screen_width), f64::from(screen_height));
     let _ = ctx.fill();
 
     // Panel background
@@ -421,8 +421,8 @@ pub(crate) fn render_color_picker_popup_with_engine(
             tooltip,
             anchor_x,
             anchor_y,
-            screen_width as f64,
-            screen_height as f64,
+            f64::from(screen_width),
+            f64::from(screen_height),
         );
     }
 

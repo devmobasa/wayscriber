@@ -196,7 +196,7 @@ pub(super) fn mouse_tool_preview_damage_rect(
     width: u32,
     height: u32,
 ) -> Option<Rect> {
-    let bounds = tool_preview_bubble(thickness, pos.0, pos.1, width as f64, height as f64);
+    let bounds = tool_preview_bubble(thickness, pos.0, pos.1, f64::from(width), f64::from(height));
     effect_rect(bounds, width, height)
 }
 

@@ -268,13 +268,13 @@ fn rect_to_extents(
     logical: pango::Rectangle,
     baseline: f64,
 ) -> UiTextExtents {
-    let scale = pango::SCALE as f64;
+    let scale = f64::from(pango::SCALE);
     UiTextExtents {
-        x_bearing: rect.x() as f64 / scale,
-        y_bearing: rect.y() as f64 / scale - baseline,
-        width: rect.width() as f64 / scale,
-        height: rect.height() as f64 / scale,
-        x_advance: logical.width() as f64 / scale,
+        x_bearing: f64::from(rect.x()) / scale,
+        y_bearing: f64::from(rect.y()) / scale - baseline,
+        width: f64::from(rect.width()) / scale,
+        height: f64::from(rect.height()) / scale,
+        x_advance: f64::from(logical.width()) / scale,
         y_advance: 0.0,
     }
 }
@@ -306,18 +306,18 @@ fn pango_style(slant: cairo::FontSlant) -> pango::Style {
 }
 
 fn to_pango_units(value: f64) -> i32 {
-    let scaled = (value * pango::SCALE as f64).round();
-    scaled.clamp(i32::MIN as f64, i32::MAX as f64) as i32
+    let scaled = (value * f64::from(pango::SCALE)).round();
+    scaled.clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
 fn to_pango_units_f64(value: f64) -> f64 {
-    let scaled = value * pango::SCALE as f64;
-    scaled.clamp(i32::MIN as f64, i32::MAX as f64)
+    let scaled = value * f64::from(pango::SCALE);
+    scaled.clamp(f64::from(i32::MIN), f64::from(i32::MAX))
 }
 
 fn layout_metrics(layout: &pango::Layout) -> (pango::Rectangle, pango::Rectangle, f64) {
     let (ink_rect, logical_rect) = layout.extents();
-    let baseline = layout.baseline() as f64 / pango::SCALE as f64;
+    let baseline = f64::from(layout.baseline()) / f64::from(pango::SCALE);
     (ink_rect, logical_rect, baseline)
 }
 

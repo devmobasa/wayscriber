@@ -63,9 +63,10 @@ impl InputState {
         dx: i32,
         dy: i32,
     ) -> (f64, f64, f64, f64) {
-        let w = bounds.width as f64;
-        let h = bounds.height as f64;
-        let (new_w, new_h) = Self::compute_resized_dimensions(handle, w, h, dx as f64, dy as f64);
+        let w = f64::from(bounds.width);
+        let h = f64::from(bounds.height);
+        let (new_w, new_h) =
+            Self::compute_resized_dimensions(handle, w, h, f64::from(dx), f64::from(dy));
         let (anchor_x, anchor_y) = Self::anchor_for_handle(handle, bounds);
         (new_w / w, new_h / h, anchor_x, anchor_y)
     }
@@ -111,10 +112,10 @@ impl InputState {
     }
 
     fn anchor_for_handle(handle: SelectionHandle, bounds: &Rect) -> (f64, f64) {
-        let x = bounds.x as f64;
-        let y = bounds.y as f64;
-        let w = bounds.width as f64;
-        let h = bounds.height as f64;
+        let x = f64::from(bounds.x);
+        let y = f64::from(bounds.y);
+        let w = f64::from(bounds.width);
+        let h = f64::from(bounds.height);
         match handle {
             SelectionHandle::TopLeft => (x + w, y + h),
             SelectionHandle::TopRight => (x, y + h),

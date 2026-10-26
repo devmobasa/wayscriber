@@ -157,10 +157,10 @@ pub(crate) fn bounding_box_for_arrow_with(
     let (label_tip_x, label_tip_y, label_tail_x, label_tail_y) =
         arrow_label_ends(x1, y1, x2, y2, head_at_end, style);
 
-    let mut min_x = tip_x.min(tail_x) as f64;
-    let mut max_x = tip_x.max(tail_x) as f64;
-    let mut min_y = tip_y.min(tail_y) as f64;
-    let mut max_y = tip_y.max(tail_y) as f64;
+    let mut min_x = f64::from(tip_x.min(tail_x));
+    let mut max_x = f64::from(tip_x.max(tail_x));
+    let mut min_y = f64::from(tip_y.min(tail_y));
+    let mut max_y = f64::from(tip_y.max(tail_y));
 
     if let Some(skeleton) = util::calculate_arrow_skeleton(
         tip_x,
@@ -203,8 +203,8 @@ pub(crate) fn bounding_box_for_arrow_with(
             label.size,
             &label.font_descriptor,
         ) {
-            min_x = min_x.min(layout.bounds.x as f64);
-            min_y = min_y.min(layout.bounds.y as f64);
+            min_x = min_x.min(f64::from(layout.bounds.x));
+            min_y = min_y.min(f64::from(layout.bounds.y));
             max_x = max_x.max((i64::from(layout.bounds.x) + i64::from(layout.bounds.width)) as f64);
             max_y =
                 max_y.max((i64::from(layout.bounds.y) + i64::from(layout.bounds.height)) as f64);

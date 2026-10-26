@@ -155,10 +155,10 @@ pub fn render_selection_halo_with_measurer(
         Shape::BlurRect { .. } => {
             if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 3.0;
-                let x = bounds.x as f64 - padding;
-                let y = bounds.y as f64 - padding;
-                let w = bounds.width as f64 + padding * 2.0;
-                let h = bounds.height as f64 + padding * 2.0;
+                let x = f64::from(bounds.x) - padding;
+                let y = f64::from(bounds.y) - padding;
+                let w = f64::from(bounds.width) + padding * 2.0;
+                let h = f64::from(bounds.height) + padding * 2.0;
                 ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a * 0.5);
                 ctx.rectangle(x, y, w, h);
                 let _ = ctx.fill();
@@ -182,8 +182,8 @@ pub fn render_selection_halo_with_measurer(
             };
             render_click_highlight(
                 ctx,
-                *x as f64,
-                *y as f64,
+                f64::from(*x),
+                f64::from(*y),
                 halo_radius,
                 outline + outline_width,
                 fill,
@@ -198,10 +198,10 @@ pub fn render_selection_halo_with_measurer(
         Shape::Text { .. } | Shape::Image { .. } => {
             if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 4.0;
-                let x = bounds.x as f64 - padding;
-                let y = bounds.y as f64 - padding;
-                let w = bounds.width as f64 + padding * 2.0;
-                let h = bounds.height as f64 + padding * 2.0;
+                let x = f64::from(bounds.x) - padding;
+                let y = f64::from(bounds.y) - padding;
+                let w = f64::from(bounds.width) + padding * 2.0;
+                let h = f64::from(bounds.height) + padding * 2.0;
                 ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a * 0.6);
                 ctx.rectangle(x, y, w, h);
                 let _ = ctx.fill();
@@ -214,10 +214,10 @@ pub fn render_selection_halo_with_measurer(
         Shape::StickyNote { .. } => {
             if let Some(bounds) = drawn.bounding_box_with(measurer) {
                 let padding = 4.0;
-                let x = bounds.x as f64 - padding;
-                let y = bounds.y as f64 - padding;
-                let w = bounds.width as f64 + padding * 2.0;
-                let h = bounds.height as f64 + padding * 2.0;
+                let x = f64::from(bounds.x) - padding;
+                let y = f64::from(bounds.y) - padding;
+                let w = f64::from(bounds.width) + padding * 2.0;
+                let h = f64::from(bounds.height) + padding * 2.0;
                 ctx.set_source_rgba(glow.r, glow.g, glow.b, glow.a * 0.6);
                 ctx.rectangle(x, y, w, h);
                 let _ = ctx.fill();
@@ -235,10 +235,10 @@ pub fn render_selection_halo_with_measurer(
 pub fn render_selection_handles(ctx: &cairo::Context, bounds: &Rect) {
     let _ = ctx.save();
 
-    let x = bounds.x as f64;
-    let y = bounds.y as f64;
-    let w = bounds.width as f64;
-    let h = bounds.height as f64;
+    let x = f64::from(bounds.x);
+    let y = f64::from(bounds.y);
+    let w = f64::from(bounds.width);
+    let h = f64::from(bounds.height);
 
     // Draw dashed bounding box
     ctx.set_source_rgba(SELECTION_COLOR.r, SELECTION_COLOR.g, SELECTION_COLOR.b, 0.6);

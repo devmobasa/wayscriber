@@ -78,10 +78,10 @@ fn arrow_axis(
     arrow_length: f64,
     arrow_angle: f64,
 ) -> Option<ArrowAxis> {
-    let tip_x = tip_x as f64;
-    let tip_y = tip_y as f64;
-    let tail_x = tail_x as f64;
-    let tail_y = tail_y as f64;
+    let tip_x = f64::from(tip_x);
+    let tip_y = f64::from(tip_y);
+    let tail_x = f64::from(tail_x);
+    let tail_y = f64::from(tail_y);
 
     let dir_x = tail_x - tip_x;
     let dir_y = tail_y - tip_y;

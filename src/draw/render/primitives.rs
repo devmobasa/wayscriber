@@ -17,8 +17,8 @@ pub(super) fn render_line(
     ctx.set_line_width(thick);
     ctx.set_line_cap(cairo::LineCap::Round);
 
-    ctx.move_to(x1 as f64, y1 as f64);
-    ctx.line_to(x2 as f64, y2 as f64);
+    ctx.move_to(f64::from(x1), f64::from(y1));
+    ctx.line_to(f64::from(x2), f64::from(y2));
     let _ = ctx.stroke();
 }
 
@@ -78,8 +78,8 @@ pub(super) fn render_ellipse(
     ctx.set_line_width(thick);
 
     ctx.save().ok();
-    ctx.translate(cx as f64, cy as f64);
-    ctx.scale(rx as f64, ry as f64);
+    ctx.translate(f64::from(cx), f64::from(cy));
+    ctx.scale(f64::from(rx), f64::from(ry));
     ctx.new_sub_path();
     ctx.arc(0.0, 0.0, 1.0, 0.0, 2.0 * consts::PI);
     fill_path(ctx, fill);
@@ -107,9 +107,9 @@ pub(super) fn render_polygon(
     ctx.set_line_width(thick);
     ctx.set_line_cap(cairo::LineCap::Round);
     ctx.set_line_join(cairo::LineJoin::Round);
-    ctx.move_to(points[0].0 as f64, points[0].1 as f64);
+    ctx.move_to(f64::from(points[0].0), f64::from(points[0].1));
     for &(x, y) in &points[1..] {
-        ctx.line_to(x as f64, y as f64);
+        ctx.line_to(f64::from(x), f64::from(y));
     }
     ctx.close_path();
     fill_path(ctx, fill);
@@ -136,9 +136,9 @@ pub(crate) fn render_polygon_preview(
     ctx.set_line_width(thick);
     ctx.set_line_cap(cairo::LineCap::Butt);
     ctx.set_line_join(cairo::LineJoin::Round);
-    ctx.move_to(points[0].0 as f64, points[0].1 as f64);
+    ctx.move_to(f64::from(points[0].0), f64::from(points[0].1));
     for &(x, y) in &points[1..] {
-        ctx.line_to(x as f64, y as f64);
+        ctx.line_to(f64::from(x), f64::from(y));
     }
     if shape::has_minimum_distinct_points(points) {
         ctx.close_path();

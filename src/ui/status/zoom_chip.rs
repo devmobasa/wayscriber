@@ -370,8 +370,8 @@ pub(crate) fn compute_zoom_chip_layout_with_engine(
     let status_bar_avoid_top =
         bottom_right_status_bar_avoid_top(input_state, screen_width, screen_height);
     let (pill_x, pill_y) = chip_origin(
-        screen_width as f64,
-        screen_height as f64,
+        f64::from(screen_width),
+        f64::from(screen_height),
         pill_width,
         pill_height,
         status_bar_avoid_top,
@@ -498,8 +498,8 @@ fn bottom_right_status_bar_avoid_top(
     }
     const EDGE_EPS: f64 = 1.0;
     let inset = ZOOM_CHIP_EDGE_INSET;
-    let sw = screen_width as f64;
-    let sh = screen_height as f64;
+    let sw = f64::from(screen_width);
+    let sh = f64::from(screen_height);
     let right_aligned = ((layout.pill_x + layout.pill_width) - (sw - inset)).abs() <= EDGE_EPS;
     let bottom_anchored = ((layout.pill_y + layout.pill_height) - (sh - inset)).abs() <= EDGE_EPS;
     // `bounds.1` is the top of the union of the pill and any badges stacked
@@ -751,14 +751,16 @@ mod tests {
         let layout = compute_zoom_chip_layout(&state, &style, w, h).expect("layout");
 
         assert!(
-            (layout.pill_x + layout.pill_width - (w as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6
+            (layout.pill_x + layout.pill_width - (f64::from(w) - ZOOM_CHIP_EDGE_INSET)).abs()
+                < 1e-6
         );
         assert!(
-            (layout.pill_y + layout.pill_height - (h as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6
+            (layout.pill_y + layout.pill_height - (f64::from(h) - ZOOM_CHIP_EDGE_INSET)).abs()
+                < 1e-6
         );
         assert!(layout.pill_x >= 0.0 && layout.pill_y >= 0.0);
-        assert!(layout.pill_x + layout.pill_width <= w as f64 + 1e-6);
-        assert!(layout.pill_y + layout.pill_height <= h as f64 + 1e-6);
+        assert!(layout.pill_x + layout.pill_width <= f64::from(w) + 1e-6);
+        assert!(layout.pill_y + layout.pill_height <= f64::from(h) + 1e-6);
     }
 
     /// The percentage tracks the live scale even at rest (100%), and reflects
@@ -1111,7 +1113,7 @@ mod tests {
 
         // Chip stays right-anchored one inset in from the right edge...
         assert!(
-            (chip.pill_x + chip.pill_width - (w as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
+            (chip.pill_x + chip.pill_width - (f64::from(w) - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
             "chip stays right-anchored"
         );
         // ...and its bottom edge clears the top of the whole status footprint.
@@ -1143,7 +1145,7 @@ mod tests {
 
         let chip = compute_zoom_chip_layout(&state, &style, w, h).expect("chip layout");
         assert!(
-            (chip.pill_y + chip.pill_height - (h as f64 - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
+            (chip.pill_y + chip.pill_height - (f64::from(h) - ZOOM_CHIP_EDGE_INSET)).abs() < 1e-6,
             "chip stays flush to the bottom with a bottom-left status bar"
         );
     }

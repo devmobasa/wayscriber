@@ -32,7 +32,7 @@ fn scale_size(size: (u32, u32), scale: f64) -> (u32, u32) {
         1.0
     };
     (
-        (size.0 as f64 * scale).ceil() as u32,
-        (size.1 as f64 * scale).ceil() as u32,
+        (f64::from(size.0) * scale).ceil() as u32,
+        (f64::from(size.1) * scale).ceil() as u32,
     )
 }

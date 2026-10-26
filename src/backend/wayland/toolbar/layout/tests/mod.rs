@@ -62,11 +62,13 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
 
     // Slightly narrow: the non-essential presets island yields first, before
     // any tool or utility is dropped (M7-C2).
-    snapshot.top_viewport_max = Some(full_width as f64 - 60.0);
+    snapshot.top_viewport_max = Some(f64::from(full_width) - 60.0);
     let degraded = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(degraded.drop_presets);
     assert!(degraded.dropped_tools.is_empty() && degraded.dropped_utilities.is_empty());
-    assert!(top_size(&UiTextEngine::default(), &snapshot).0 as f64 <= full_width as f64 - 60.0);
+    assert!(
+        f64::from(top_size(&UiTextEngine::default(), &snapshot).0) <= f64::from(full_width) - 60.0
+    );
 
     // Very narrow: droppable items move into the overflow menu; the protected
     // core (Pen, Eraser, Undo/Redo, Clear) stays. Colors and presets have
@@ -75,9 +77,14 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
     let tight = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
     assert!(tight.drop_presets);
     assert!(!tight.dropped_utilities.is_empty());
-    assert!(top_size(&UiTextEngine::default(), &snapshot).0 as f64 <= 700.0);
+    assert!(f64::from(top_size(&UiTextEngine::default(), &snapshot).0) <= 700.0);
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     for id in [
         "top.tool.pen",
         "top.tool.eraser",
@@ -96,7 +103,12 @@ fn narrow_viewports_drop_presets_then_overflow_items() {
     // Opening the overflow reveals Clear first, then the dropped items.
     snapshot.top_overflow_open = true;
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let overflow_ids: Vec<&str> = tree
         .nodes()
         .iter()
@@ -147,7 +159,12 @@ fn overflow_contains_only_visible_items_and_is_structural() {
 
     snapshot.top_overflow_open = true;
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     assert!(tree.node_by_id(&"top.chrome.overflow".into()).is_some());
     assert!(
         tree.node_by_id(&"top.overflow.top.utility.screenshot".into())
@@ -197,7 +214,7 @@ fn compact_top_strip_respects_budget_without_the_old_floor() {
     // The protected core (Pen, Eraser, history, and the never-dropped chrome
     // island including Exit) bounds how narrow the compact strip can get.
     for budget in [376, 340, 320] {
-        snapshot.top_viewport_max = Some(budget as f64);
+        snapshot.top_viewport_max = Some(f64::from(budget));
         assert!(
             top_size(&UiTextEngine::default(), &snapshot).0 <= budget,
             "planned width {} exceeds {budget}",
@@ -254,7 +271,12 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
 
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert!(h > 58, "open popover grows the surface: {h}");
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
 
     // The grid renders inside popover chrome with a caret.
     let panel = tree
@@ -293,7 +315,12 @@ fn shapes_popover_hosts_the_relocated_tool_options() {
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(h, 104);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     assert!(tree.node_by_id(&"top.utility.fill".into()).is_none());
 }
 
@@ -312,7 +339,12 @@ fn highlight_ring_row_grows_the_bar_only_while_active() {
     // The highlight tool has no style properties, so the pill yields and
     // only the ring lane grows the 58px band.
     assert!(h > 58, "ring row grows the bar: {h}");
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     assert!(
         tree.node_by_id(&"top.island.style".into()).is_none(),
         "no style pill while the highlight tool is active"
@@ -337,7 +369,12 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
     );
     let snapshot = snapshot_from_state(&state);
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring row");
@@ -355,7 +392,7 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
     state.test_set_toolbar_items(items);
     let mut snapshot = snapshot_from_state(&state);
     snapshot.top_viewport_max = (480..=1120).rev().find_map(|budget| {
-        snapshot.top_viewport_max = Some(budget as f64);
+        snapshot.top_viewport_max = Some(f64::from(budget));
         let plan = top::plan_top_strip(&UiTextEngine::default(), &snapshot);
         let has_dropped_items =
             !plan.dropped_tools.is_empty() || !plan.dropped_utilities.is_empty();
@@ -363,14 +400,19 @@ fn highlight_ring_and_top_popovers_use_separate_lanes() {
             && !plan
                 .dropped_utilities
                 .contains(&TopUtilityButton::Highlight))
-        .then_some(budget as f64)
+        .then_some(f64::from(budget))
     });
     assert!(
         snapshot.top_viewport_max.is_some(),
         "overflow budget retaining highlight"
     );
     let (w, h) = top_size(&UiTextEngine::default(), &snapshot);
-    let tree = top::build_top_view(&UiTextEngine::default(), &snapshot, w as f64, h as f64);
+    let tree = top::build_top_view(
+        &UiTextEngine::default(),
+        &snapshot,
+        f64::from(w),
+        f64::from(h),
+    );
     let ring = tree
         .node_by_id(&"top.utility.highlight-ring".into())
         .expect("ring row");
@@ -400,12 +442,12 @@ fn top_size_scales_with_toolbar_scale() {
     let scaled_size = top_size(&UiTextEngine::default(), &snapshot);
     assert_eq!(
         scaled_size.0,
-        (base_size.0 as f64 * 1.5).ceil() as u32,
+        (f64::from(base_size.0) * 1.5).ceil() as u32,
         "Width should scale by 1.5x"
     );
     assert_eq!(
         scaled_size.1,
-        (base_size.1 as f64 * 1.5).ceil() as u32,
+        (f64::from(base_size.1) * 1.5).ceil() as u32,
         "Height should scale by 1.5x"
     );
 
@@ -519,7 +561,7 @@ fn advanced_inline_shapes_yield_before_arrow_and_line() {
     let advanced_shapes = [Tool::Spotlight, Tool::Blur, Tool::Ellipse, Tool::Rect];
     let mut saw_arrow_drop = false;
     for budget in (500..advanced_width).step_by(20) {
-        advanced.top_viewport_max = Some(budget as f64);
+        advanced.top_viewport_max = Some(f64::from(budget));
         let plan = top::plan_top_strip(&engine, &advanced);
         if plan.dropped_tools.contains(&Tool::Arrow) {
             saw_arrow_drop = true;

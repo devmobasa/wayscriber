@@ -85,7 +85,7 @@ impl CommandPaletteRowAction {
 
 impl CommandPaletteGeometry {
     pub(crate) fn local_point(self, x: i32, y: i32) -> (f64, f64) {
-        (x as f64 - self.x, y as f64 - self.y)
+        (f64::from(x) - self.x, f64::from(y) - self.y)
     }
 
     pub(crate) fn contains_local(self, local_x: f64, local_y: f64) -> bool {
@@ -149,7 +149,7 @@ impl CommandPaletteGeometry {
 }
 
 pub(crate) fn command_palette_visible_count(total_items: usize, screen_height: u32) -> usize {
-    let available = (screen_height as f64
+    let available = (f64::from(screen_height)
         - 2.0 * COMMAND_PALETTE_HORIZONTAL_MARGIN
         - command_palette_height(0))
     .max(0.0);
@@ -234,7 +234,7 @@ impl InputState {
 
         let requested_width = required_inner_width + COMMAND_PALETTE_PADDING * 2.0;
         let max_available =
-            (screen_width as f64 - COMMAND_PALETTE_HORIZONTAL_MARGIN * 2.0).max(0.0);
+            (f64::from(screen_width) - COMMAND_PALETTE_HORIZONTAL_MARGIN * 2.0).max(0.0);
         requested_width.clamp(
             COMMAND_PALETTE_MIN_WIDTH.min(max_available),
             COMMAND_PALETTE_MAX_WIDTH.min(max_available),
@@ -286,17 +286,19 @@ fn command_palette_geometry_for_width(
     screen_height: u32,
     total_items: usize,
 ) -> CommandPaletteGeometry {
-    let x = (screen_width as f64 - width) / 2.0;
+    let x = (f64::from(screen_width) - width) / 2.0;
     let visible_count = command_palette_visible_count(total_items, screen_height);
     let content_rows = if total_items == 0 {
         command_palette_visible_count(2, screen_height)
     } else {
         visible_count
     };
-    let height = command_palette_height(content_rows).min(screen_height as f64);
-    let margin = COMMAND_PALETTE_HORIZONTAL_MARGIN.min((screen_height as f64 - height) / 2.0);
-    let y = (screen_height as f64 * COMMAND_PALETTE_TOP_RATIO)
-        .clamp(margin, (screen_height as f64 - height - margin).max(margin));
+    let height = command_palette_height(content_rows).min(f64::from(screen_height));
+    let margin = COMMAND_PALETTE_HORIZONTAL_MARGIN.min((f64::from(screen_height) - height) / 2.0);
+    let y = (f64::from(screen_height) * COMMAND_PALETTE_TOP_RATIO).clamp(
+        margin,
+        (f64::from(screen_height) - height - margin).max(margin),
+    );
 
     let input_top = COMMAND_PALETTE_PADDING;
     let input_bottom = input_top + COMMAND_PALETTE_INPUT_HEIGHT;
@@ -341,14 +343,14 @@ mod tests {
     fn viewport_bounds_include_every_row_and_its_hit_target() {
         for (width, height) in [(800, 480), (1024, 600), (1280, 720), (240, 320), (80, 80)] {
             let geometry = command_palette_geometry_for_width(
-                (width as f64 - 24.0).max(0.0),
+                (f64::from(width) - 24.0).max(0.0),
                 width,
                 height,
                 100,
             );
             assert!(geometry.x >= 0.0 && geometry.y >= 0.0);
-            assert!(geometry.x + geometry.width <= width as f64);
-            assert!(geometry.y + geometry.height <= height as f64);
+            assert!(geometry.x + geometry.width <= f64::from(width));
+            assert!(geometry.y + geometry.height <= f64::from(height));
             for row in 0..geometry.visible_count {
                 let bottom = geometry.items_top + (row + 1) as f64 * COMMAND_PALETTE_ITEM_HEIGHT;
                 assert!(bottom <= geometry.height - COMMAND_PALETTE_PADDING_BOTTOM);

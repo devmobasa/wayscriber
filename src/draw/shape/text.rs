@@ -37,7 +37,7 @@ pub(super) fn text_bounds_from_metrics(
     let base_y = y - metrics.baseline;
     let ink_max = metrics.ink_x + metrics.ink_width;
     let effective_max = if let Some(width) = wrap_width {
-        ink_max.max(width.max(1) as f64)
+        ink_max.max(f64::from(width.max(1)))
     } else {
         ink_max
     };
@@ -90,8 +90,8 @@ pub(crate) fn bounding_box_for_text_with(
 ) -> Option<Rect> {
     let metrics = text_layout_metrics(measurer, text, size, font_descriptor, wrap_width)?;
     text_bounds_from_metrics(
-        x as f64,
-        y as f64,
+        f64::from(x),
+        f64::from(y),
         &metrics,
         size,
         background_enabled,
@@ -175,7 +175,8 @@ pub(crate) fn sticky_note_text_layout_with_measurer(
     layout.set_text(text);
     if let Some(width) = wrap_width {
         let width = width.max(1);
-        let width_pango = (width as i64 * pango::SCALE as i64).min(i32::MAX as i64) as i32;
+        let width_pango =
+            (i64::from(width) * i64::from(pango::SCALE)).min(i64::from(i32::MAX)) as i32;
         layout.set_width(width_pango);
         layout.set_wrap(pango::WrapMode::WordChar);
     }
@@ -190,17 +191,17 @@ pub(crate) fn sticky_note_text_layout_with_measurer(
     } else {
         // Fallback: measure directly (shouldn't happen for non-empty text)
         let (ink_rect, logical_rect) = layout.extents();
-        let scale = pango::SCALE as f64;
-        let baseline = layout.baseline() as f64 / scale;
+        let scale = f64::from(pango::SCALE);
+        let baseline = f64::from(layout.baseline()) / scale;
         let measurement = TextMeasurement {
-            ink_x: ink_rect.x() as f64 / scale,
-            ink_y: ink_rect.y() as f64 / scale,
-            ink_width: ink_rect.width() as f64 / scale,
-            ink_height: ink_rect.height() as f64 / scale,
-            logical_x: logical_rect.x() as f64 / scale,
-            logical_y: logical_rect.y() as f64 / scale,
-            logical_width: logical_rect.width() as f64 / scale,
-            logical_height: logical_rect.height() as f64 / scale,
+            ink_x: f64::from(ink_rect.x()) / scale,
+            ink_y: f64::from(ink_rect.y()) / scale,
+            ink_width: f64::from(ink_rect.width()) / scale,
+            ink_height: f64::from(ink_rect.height()) / scale,
+            logical_x: f64::from(logical_rect.x()) / scale,
+            logical_y: f64::from(logical_rect.y()) / scale,
+            logical_width: f64::from(logical_rect.width()) / scale,
+            logical_height: f64::from(logical_rect.height()) / scale,
             baseline,
         };
 
@@ -260,8 +261,8 @@ fn bounding_box_for_sticky_note_layout(
     let font_desc_str = font_descriptor.to_pango_string(size);
     let measurement = measurer.measure(text, &font_desc_str, size, wrap_width)?;
 
-    let base_x = x as f64;
-    let base_y = y as f64 - measurement.baseline;
+    let base_x = f64::from(x);
+    let base_y = f64::from(y) - measurement.baseline;
     let content = measurement.content_extents(wrap_width);
     let layout = sticky_note_layout(
         base_x,

@@ -332,13 +332,17 @@ fn physical_axis_origin(
             .iter()
             .filter(|span| span.logical_start <= start && span.logical_end >= end)
             .map(|span| {
-                (end - start) as f64 * span.physical_length as f64 / span.logical_length() as f64
+                (end - start) as f64 * f64::from(span.physical_length)
+                    / span.logical_length() as f64
             })
             .reduce(f64::max)?;
         physical_origin += segment;
     }
 
-    if !physical_origin.is_finite() || physical_origin < 0.0 || physical_origin > u32::MAX as f64 {
+    if !physical_origin.is_finite()
+        || physical_origin < 0.0
+        || physical_origin > f64::from(u32::MAX)
+    {
         return None;
     }
     Some(physical_origin.round() as u32)

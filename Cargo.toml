@@ -32,6 +32,9 @@ undocumented_unsafe_blocks = "warn"
 unnecessary_safety_comment = "warn"
 unwrap_used = "warn"
 wildcard_imports = "warn"
+# Pedantic lints, adopted one at a time. Most of them have machine-applicable
+# fixes, so `cargo clippy --fix` can apply them.
+cast_lossless = "warn"
 
 [lints]
 workspace = true

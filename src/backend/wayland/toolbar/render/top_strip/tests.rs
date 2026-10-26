@@ -16,7 +16,7 @@ use crate::ui::toolbar::ToolbarBindingHints;
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, 2000 * density, 800 * density).unwrap();
-    surface.set_device_scale(density as f64, density as f64);
+    surface.set_device_scale(f64::from(density), f64::from(density));
     let ctx = cairo::Context::new(&surface).unwrap();
     paint(&ctx);
     drop(ctx);
@@ -105,7 +105,8 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
     for fade in [1.0, 0.45] {
         snapshot.top_fade = fade;
         let (width, height) = toolbar::top_size(&engine, &snapshot);
-        let tree = view::top::build_top_view(&engine, &snapshot, width as f64, height as f64);
+        let tree =
+            view::top::build_top_view(&engine, &snapshot, f64::from(width), f64::from(height));
         let planned_hits = tree.to_hit_regions();
         let hovered = planned_hits
             .iter()
@@ -122,8 +123,8 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
                 render_top_strip(
                     &engine,
                     ctx,
-                    width as f64,
-                    height as f64,
+                    f64::from(width),
+                    f64::from(height),
                     &snapshot,
                     &mut hits,
                     hover,
@@ -136,8 +137,8 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
                 render_top_strip(
                     &UiTextEngine::default(),
                     ctx,
-                    width as f64,
-                    height as f64,
+                    f64::from(width),
+                    f64::from(height),
                     &snapshot,
                     &mut fresh_hits,
                     hover,
@@ -162,8 +163,8 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
                     ctx,
                     &hits,
                     hover,
-                    width as f64,
-                    height as f64,
+                    f64::from(width),
+                    f64::from(height),
                     false,
                     start,
                 )
@@ -176,8 +177,8 @@ fn retained_top_strip_preserves_fade_hits_and_delayed_tooltips_across_targets() 
                     ctx,
                     &hits,
                     hover,
-                    width as f64,
-                    height as f64,
+                    f64::from(width),
+                    f64::from(height),
                     false,
                     Some(Instant::now() + Duration::from_secs(60)),
                 )
@@ -199,8 +200,8 @@ fn idle_hidden_strip_paints_nothing_but_keeps_its_hits() {
             render_top_strip(
                 &engine,
                 ctx,
-                width as f64,
-                height as f64,
+                f64::from(width),
+                f64::from(height),
                 snapshot,
                 hits,
                 None,

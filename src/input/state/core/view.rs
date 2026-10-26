@@ -148,8 +148,8 @@ impl ViewState {
         let scale = self.canvas_scale();
         let (origin_x, origin_y) = self.canvas_origin(board_offset);
         (
-            (origin_x + screen_x as f64 / scale).round() as i32,
-            (origin_y + screen_y as f64 / scale).round() as i32,
+            (origin_x + f64::from(screen_x) / scale).round() as i32,
+            (origin_y + f64::from(screen_y) / scale).round() as i32,
         )
     }
 
@@ -162,8 +162,8 @@ impl ViewState {
         let scale = self.canvas_scale();
         let (origin_x, origin_y) = self.canvas_origin(board_offset);
         (
-            ((canvas_x as f64 - origin_x) * scale).round() as i32,
-            ((canvas_y as f64 - origin_y) * scale).round() as i32,
+            ((f64::from(canvas_x) - origin_x) * scale).round() as i32,
+            ((f64::from(canvas_y) - origin_y) * scale).round() as i32,
         )
     }
 
@@ -174,10 +174,10 @@ impl ViewState {
     ) -> Option<Rect> {
         let scale = self.canvas_scale();
         let (origin_x, origin_y) = self.canvas_origin(board_offset);
-        let min_x = ((rect.x as f64 - origin_x) * scale).floor() as i32;
-        let min_y = ((rect.y as f64 - origin_y) * scale).floor() as i32;
-        let max_x = (((rect.x + rect.width) as f64 - origin_x) * scale).ceil() as i32;
-        let max_y = (((rect.y + rect.height) as f64 - origin_y) * scale).ceil() as i32;
+        let min_x = ((f64::from(rect.x) - origin_x) * scale).floor() as i32;
+        let min_y = ((f64::from(rect.y) - origin_y) * scale).floor() as i32;
+        let max_x = ((f64::from(rect.x + rect.width) - origin_x) * scale).ceil() as i32;
+        let max_y = ((f64::from(rect.y + rect.height) - origin_y) * scale).ceil() as i32;
         Rect::from_min_max(min_x, min_y, max_x, max_y)
     }
 

@@ -53,7 +53,7 @@ pub(crate) fn render_eraser_stroke(
 
     let build_path = |ctx: &cairo::Context| {
         if points.len() == 1 {
-            let (x, y) = (points[0].0 as f64, points[0].1 as f64);
+            let (x, y) = (f64::from(points[0].0), f64::from(points[0].1));
             let half = stroke_width / 2.0;
             match brush.kind {
                 EraserKind::Circle => ctx.arc(x, y, half, 0.0, consts::PI * 2.0),
@@ -63,9 +63,9 @@ pub(crate) fn render_eraser_stroke(
         }
 
         let (x0, y0) = points[0];
-        ctx.move_to(x0 as f64, y0 as f64);
+        ctx.move_to(f64::from(x0), f64::from(y0));
         for &(x, y) in &points[1..] {
-            ctx.line_to(x as f64, y as f64);
+            ctx.line_to(f64::from(x), f64::from(y));
         }
     };
 

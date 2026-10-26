@@ -139,7 +139,7 @@ impl WaylandState {
     /// the screen. Both inline and layer-shell placement use the pushed top
     /// base X, so budgeting must subtract that same position.
     fn top_strip_viewport_max(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
-        let screen_width = self.surface.width() as f64;
+        let screen_width = f64::from(self.surface.width());
         let scale = if snapshot.toolbar_scale.is_finite() {
             snapshot.toolbar_scale.clamp(0.5, 3.0)
         } else {
@@ -156,7 +156,7 @@ impl WaylandState {
     /// the live vertical drag offset, so opening a tall popover does not make
     /// the toolbar clamp back up the screen.
     fn top_popover_available_height(&self, snapshot: &ToolbarSnapshot) -> Option<f64> {
-        let screen_height = self.surface.height() as f64;
+        let screen_height = f64::from(self.surface.height());
         let scale = if snapshot.toolbar_scale.is_finite() {
             snapshot.toolbar_scale.clamp(0.5, 3.0)
         } else {

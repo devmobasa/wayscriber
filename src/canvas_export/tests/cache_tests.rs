@@ -387,7 +387,7 @@ fn mixed_image_and_wrapped_text_pages_reuse_measurement_across_output_scales() {
                 measurer,
                 &mut RenderCtx::new(&ctx, caches),
                 page,
-                scale as f64,
+                f64::from(scale),
             )
             .unwrap();
         }

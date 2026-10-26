@@ -92,8 +92,8 @@ pub(crate) fn arrow_label_layout_with(
     let (base_x, base_y, nx, ny) = if bend == 0.0 {
         // Straight shaft: the historical placement, one side of the chord.
         (
-            tail_x as f64 + ux * along,
-            tail_y as f64 + uy * along,
+            f64::from(tail_x) + ux * along,
+            f64::from(tail_y) + uy * along,
             -uy,
             ux,
         )
@@ -102,8 +102,8 @@ pub(crate) fn arrow_label_layout_with(
         let bulge = bend * len / 2.0;
         let side = bend.signum();
         (
-            tail_x as f64 + ux * along + left_x * bulge,
-            tail_y as f64 + uy * along + left_y * bulge,
+            f64::from(tail_x) + ux * along + left_x * bulge,
+            f64::from(tail_y) + uy * along + left_y * bulge,
             left_x * side,
             left_y * side,
         )

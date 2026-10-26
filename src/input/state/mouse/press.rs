@@ -346,8 +346,8 @@ impl InputState {
                 &preview.text,
                 &font,
                 self.style.text_wrap_width,
-                (canvas_x - *x) as f64,
-                (canvas_y - *y) as f64,
+                f64::from(canvas_x - *x),
+                f64::from(canvas_y - *y),
             ) else {
                 return;
             };

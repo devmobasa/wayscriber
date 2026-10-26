@@ -97,8 +97,8 @@ pub(super) fn draw_drag_handle(ctx: &cairo::Context, x: f64, y: f64, width: f64)
     constants::set_color(ctx, ICON_DRAG_HANDLE);
     for row in 0..3 {
         for col in 0..2 {
-            let cx = start_x + col as f64 * col_gap;
-            let cy = start_y + row as f64 * gap;
+            let cx = start_x + f64::from(col) * col_gap;
+            let cy = start_y + f64::from(row) * gap;
             ctx.arc(cx, cy, dot_radius, 0.0, PI * 2.0);
             let _ = ctx.fill();
         }

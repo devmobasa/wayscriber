@@ -123,16 +123,16 @@ pub fn draw_canvas_page_with_measurer(
     let ctx = render.cairo;
     let backdrop = ExportBackdrop::try_new(&page.backdrop)?;
     let source = CanvasExportRect {
-        x: page.origin_x as f64,
-        y: page.origin_y as f64,
-        width: page.viewport_width as f64,
-        height: page.viewport_height as f64,
+        x: f64::from(page.origin_x),
+        y: f64::from(page.origin_y),
+        width: f64::from(page.viewport_width),
+        height: f64::from(page.viewport_height),
     };
     let destination = CanvasExportRect {
         x: 0.0,
         y: 0.0,
-        width: page.viewport_width as f64,
-        height: page.viewport_height as f64,
+        width: f64::from(page.viewport_width),
+        height: f64::from(page.viewport_height),
     };
 
     let _ = ctx.save();

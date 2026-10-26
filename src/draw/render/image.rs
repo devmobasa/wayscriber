@@ -156,18 +156,18 @@ pub(super) fn render_image_shape(
         return;
     };
 
-    let width = w.saturating_abs().max(1) as f64;
-    let height = h.saturating_abs().max(1) as f64;
+    let width = f64::from(w.saturating_abs().max(1));
+    let height = f64::from(h.saturating_abs().max(1));
     let draw_x = if w < 0 { x + w } else { x };
     let draw_y = if h < 0 { y + h } else { y };
 
     let _ = ctx.save();
-    ctx.rectangle(draw_x as f64, draw_y as f64, width, height);
+    ctx.rectangle(f64::from(draw_x), f64::from(draw_y), width, height);
     ctx.clip();
-    ctx.translate(draw_x as f64, draw_y as f64);
+    ctx.translate(f64::from(draw_x), f64::from(draw_y));
     ctx.scale(
-        width / surface.width().max(1) as f64,
-        height / surface.height().max(1) as f64,
+        width / f64::from(surface.width().max(1)),
+        height / f64::from(surface.height().max(1)),
     );
     let _ = ctx.set_source_surface(surface.as_ref(), 0.0, 0.0);
     let _ = ctx.paint();
@@ -216,8 +216,9 @@ fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
             .zip(row_bytes.as_chunks_mut::<4>().0.iter_mut())
         {
             let [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
-            let premul =
-                |channel: u8| -> u8 { ((channel as u16 * a as u16 + 127) / 255).min(255) as u8 };
+            let premul = |channel: u8| -> u8 {
+                ((u16::from(channel) * u16::from(a) + 127) / 255).min(255) as u8
+            };
             let r = premul(r);
             let g = premul(g);
             let b = premul(b);
@@ -242,10 +243,10 @@ fn decode_surface(data: &EmbeddedImage) -> Option<(ImageSurface, usize)> {
 }
 
 fn render_missing_image_placeholder(ctx: &cairo::Context, x: i32, y: i32, w: i32, h: i32) {
-    let width = w.saturating_abs().max(1) as f64;
-    let height = h.saturating_abs().max(1) as f64;
-    let draw_x = if w < 0 { x + w } else { x } as f64;
-    let draw_y = if h < 0 { y + h } else { y } as f64;
+    let width = f64::from(w.saturating_abs().max(1));
+    let height = f64::from(h.saturating_abs().max(1));
+    let draw_x = f64::from(if w < 0 { x + w } else { x });
+    let draw_y = f64::from(if h < 0 { y + h } else { y });
 
     let _ = ctx.save();
     ctx.rectangle(draw_x, draw_y, width, height);

@@ -28,8 +28,8 @@ impl WaylandState {
         &mut self,
         snapshot: &ToolbarSnapshot,
     ) -> bool {
-        let width = self.surface.width() as f64;
-        let height = self.surface.height() as f64;
+        let width = f64::from(self.surface.width());
+        let height = f64::from(self.surface.height());
         if width == 0.0 || height == 0.0 {
             drag_log(|| {
                 format!(

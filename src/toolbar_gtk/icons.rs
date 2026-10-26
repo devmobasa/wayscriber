@@ -39,14 +39,14 @@ impl IconWidget {
         area.set_draw_func(move |area, ctx, width, height| {
             let color = area.color();
             ctx.set_source_rgba(
-                color.red() as f64,
-                color.green() as f64,
-                color.blue() as f64,
-                color.alpha() as f64,
+                f64::from(color.red()),
+                f64::from(color.green()),
+                f64::from(color.blue()),
+                f64::from(color.alpha()),
             );
-            let size = (width.min(height) as f64).max(1.0);
-            let x = (width as f64 - size) / 2.0;
-            let y = (height as f64 - size) / 2.0;
+            let size = f64::from(width.min(height)).max(1.0);
+            let x = (f64::from(width) - size) / 2.0;
+            let y = (f64::from(height) - size) / 2.0;
             (draw_cell.get())(ctx, x, y, size);
         });
         Self {

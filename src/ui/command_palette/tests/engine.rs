@@ -10,7 +10,7 @@ use super::*;
 fn pixels(density: i32, paint: impl FnOnce(&cairo::Context)) -> Vec<u8> {
     let mut surface =
         cairo::ImageSurface::create(cairo::Format::ARgb32, 800 * density, 600 * density).unwrap();
-    surface.set_device_scale(density as f64, density as f64);
+    surface.set_device_scale(f64::from(density), f64::from(density));
     let ctx = cairo::Context::new(&surface).unwrap();
     paint(&ctx);
     drop(ctx);
@@ -86,8 +86,8 @@ fn retained_palette_tooltip_geometry_contains_pixels_and_unicode_highlight_is_vi
         for (index, pixel) in actual.as_chunks::<4>().0.iter().enumerate() {
             if pixel.iter().any(|byte| *byte != 0) {
                 painted += 1;
-                let x = (index % (800 * density) as usize) as f64 / density as f64;
-                let y = (index / (800 * density) as usize) as f64 / density as f64;
+                let x = (index % (800 * density) as usize) as f64 / f64::from(density);
+                let y = (index / (800 * density) as usize) as f64 / f64::from(density);
                 assert!(x >= bounds.0 - 2.0 && x <= bounds.0 + bounds.2 + 2.0);
                 assert!(y >= bounds.1 - 2.0 && y <= bounds.1 + bounds.3 + 2.0);
             }

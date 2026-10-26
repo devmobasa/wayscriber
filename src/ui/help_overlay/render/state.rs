@@ -92,7 +92,7 @@ pub(super) fn build_overlay_layout(
     let metrics = RenderMetrics::from_style(style, screen_width, screen_height);
     let palette = RenderPalette::from_style(style);
 
-    let max_search_width = (screen_width as f64 * 0.9 - metrics.padding * 2.0).max(0.0);
+    let max_search_width = (f64::from(screen_width) * 0.9 - metrics.padding * 2.0).max(0.0);
     let nav_state = build_nav_state(
         engine,
         ctx,
@@ -221,8 +221,8 @@ pub(super) fn build_overlay_layout(
     let box_width = content_width + metrics.padding * 2.0;
     let box_height = inner_height + metrics.padding * 2.0;
 
-    let box_x = (screen_width as f64 - box_width) / 2.0;
-    let box_y = (screen_height as f64 - box_height) / 2.0;
+    let box_x = (f64::from(screen_width) - box_width) / 2.0;
+    let box_y = (f64::from(screen_height) - box_height) / 2.0;
 
     OverlayLayout {
         search_active,

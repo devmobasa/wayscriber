@@ -133,10 +133,10 @@ fn image_display_bounds(
     natural_width: u32,
     natural_height: u32,
 ) -> (i32, i32, i32, i32) {
-    let natural_width = natural_width.max(1) as f64;
-    let natural_height = natural_height.max(1) as f64;
-    let max_width = (request.visible_canvas_rect.width.max(1) as f64 * 0.7).max(1.0);
-    let max_height = (request.visible_canvas_rect.height.max(1) as f64 * 0.7).max(1.0);
+    let natural_width = f64::from(natural_width.max(1));
+    let natural_height = f64::from(natural_height.max(1));
+    let max_width = (f64::from(request.visible_canvas_rect.width.max(1)) * 0.7).max(1.0);
+    let max_height = (f64::from(request.visible_canvas_rect.height.max(1)) * 0.7).max(1.0);
     let scale = (max_width / natural_width)
         .min(max_height / natural_height)
         .min(1.0);

@@ -710,7 +710,7 @@ fn save_snapshot_keeps_depth_one_when_visible_payload_is_near_limit() {
         .len();
 
     assert!(
-        (visible_size as u128) * 100 >= (depth_one_size as u128) * 90,
+        u128::from(visible_size) * 100 >= u128::from(depth_one_size) * 90,
         "visible-only payload should be near the depth-one cap for this regression"
     );
     assert!(

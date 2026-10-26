@@ -266,7 +266,11 @@ impl WaylandState {
             }
             return Some(
                 layout
-                    .cursor_hint_at(mx as f64, my as f64, self.input_state.recent_colors().len())
+                    .cursor_hint_at(
+                        f64::from(mx),
+                        f64::from(my),
+                        self.input_state.recent_colors().len(),
+                    )
                     .icon(),
             );
         }
