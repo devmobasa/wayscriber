@@ -27,7 +27,7 @@ pub struct HitRegion {
 const ROW_HIT_LENGTH: f64 = MIN_HIT_TARGET * 3.0;
 
 /// Shared pointer-target predicate: true when (x, y) lands inside `rect`
-/// inflated to the minimum target size. Used by both the legacy HitRegion
+/// inflated to the minimum target size. Used by both the legacy `HitRegion`
 /// path and the view-engine tree so the two can never disagree.
 pub fn rect_contains_with_min_target(rect: (f64, f64, f64, f64), x: f64, y: f64) -> bool {
     let (rx, ry, rw, rh) = rect_with_min_target(rect);

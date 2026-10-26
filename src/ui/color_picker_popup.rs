@@ -40,7 +40,7 @@ const INDICATOR_OUTLINE: Rgba = (0.0, 0.0, 0.0, 0.4);
 /// `theme::toolbar::COLOR_SWATCH_HAIRLINE_DARK`.
 const SWATCH_BORDER_ON_DARK: Rgba = (0.5, 0.5, 0.5, 0.8);
 const SWATCH_BORDER_ON_LIGHT: Rgba = (0.2, 0.2, 0.2, 0.6);
-/// Validation-error red for the hex field (softer than DESTRUCTIVE_RGB).
+/// Validation-error red for the hex field (softer than `DESTRUCTIVE_RGB`).
 const HEX_INVALID_GLOW: Rgba = (0.9, 0.3, 0.3, 0.25);
 const HEX_INVALID_BORDER: Rgba = (0.9, 0.35, 0.3, 0.9);
 /// Hex input border when unfocused.

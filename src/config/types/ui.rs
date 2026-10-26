@@ -94,7 +94,7 @@ pub struct UiConfig {
     pub show_floating_badge: bool,
 
     /// Show the board/page badge even when the status bar is visible
-    /// (renamed from show_page_badge_with_status_bar for clarity)
+    /// (renamed from `show_page_badge_with_status_bar` for clarity)
     #[serde(
         default = "default_show_page_badge_with_status_bar",
         alias = "show_page_badge_with_status_bar"

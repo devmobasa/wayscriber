@@ -114,7 +114,7 @@ impl InputState {
     ///
     /// # Behavior
     /// - Left click while Idle: Starts drawing with the current tool (based on modifiers)
-    /// - Left click during TextInput: Updates text position
+    /// - Left click during `TextInput`: Updates text position
     /// - Right click: Cancels current action
     #[allow(dead_code)] // Retained for older callers that only have canvas coordinates.
     pub fn on_mouse_press(&mut self, button: MouseButton, x: i32, y: i32) {

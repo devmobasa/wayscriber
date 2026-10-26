@@ -125,7 +125,7 @@ fn menu_viewport_cap(snapshot: &ToolbarSnapshot, plan: &super::TopStripPlan) -> 
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
-/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// (`natural_height`, `viewport_height`), both in pre-scale spec units; `None`
 /// while no menu popover is open. Max scroll = (natural - viewport).max(0).
 pub(super) fn menu_scroll_bounds_planned(
     engine: &UiTextEngine,

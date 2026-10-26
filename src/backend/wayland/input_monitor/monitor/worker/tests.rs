@@ -123,7 +123,7 @@ fn default_keymap() -> Option<xkb::Keymap> {
     xkb::Keymap::new_from_names(&context, "", "", "", "", None, xkb::KEYMAP_COMPILE_NO_FLAGS)
 }
 
-/// evdev KEY_LEFTCTRL.
+/// evdev `KEY_LEFTCTRL`.
 const CTRL_KEYCODE: u32 = 29;
 
 /// A press/release pair is reported to xkb once per *keycode*, not once

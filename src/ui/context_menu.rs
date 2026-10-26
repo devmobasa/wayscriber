@@ -9,7 +9,7 @@ use super::constants::{
     RADIUS_PANEL, RADIUS_SM, SHADOW, TEXT_DISABLED, TEXT_HINT, TEXT_PRIMARY,
 };
 
-/// Footer hint text: slightly brighter than TEXT_TERTIARY so the key hints
+/// Footer hint text: slightly brighter than `TEXT_TERTIARY` so the key hints
 /// stay legible inside the menu (kept from pre-theme literals).
 const HINT_FOOTER_TEXT: Rgba = (0.65, 0.68, 0.75, 1.0);
 /// Accent bar on the parent row of an open submenu.

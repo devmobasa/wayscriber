@@ -2,7 +2,7 @@
 //! Sources: tag v0.9.25 and commit a2bb723a. The generator below was added to
 //! each archive as an integration test and run alone with
 //! `cargo test --locked --no-default-features -- --ignored --exact --test-threads=1`.
-//! COMPAT_FIXTURE_OUT selected an empty output directory. The v0.9.25 generator omits
+//! `COMPAT_FIXTURE_OUT` selected an empty output directory. The v0.9.25 generator omits
 //! BoardSnapshot.appearance because that revision does not have the field.
 //!
 //! Historical fixture generator:

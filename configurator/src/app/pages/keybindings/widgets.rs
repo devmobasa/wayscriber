@@ -77,7 +77,7 @@ pub(super) fn connect_clicked(
     });
 }
 
-/// GtkPopover widgets created with `set_parent` are not ordinary children.
+/// `GtkPopover` widgets created with `set_parent` are not ordinary children.
 /// If they are still attached when the parent is destroyed, GTK warns on
 /// finalize. Unparent in the destroy handler so shutdown stays quiet.
 pub(super) fn unparent_on_destroy(parent: &impl IsA<gtk::Widget>, popover: &gtk::Popover) {

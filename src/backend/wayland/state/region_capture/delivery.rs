@@ -211,7 +211,7 @@ impl WaylandState {
 
     /// Submit the whole displayed image and retire any in-flight drag owner.
     ///
-    /// Keeping this transaction on WaylandState leaves the keyboard protocol
+    /// Keeping this transaction on `WaylandState` leaves the keyboard protocol
     /// callback responsible only for translating Ctrl+A into one state action.
     pub(in crate::backend::wayland) fn submit_whole_region_capture(&mut self) {
         let Some(RegionSelectionFinalize::Selected { purpose, rect }) =

@@ -32,16 +32,16 @@ enum CellCoverage {
     Global,
 }
 
-/// Spatial grid for efficient hit-testing using ShapeId instead of indices.
+/// Spatial grid for efficient hit-testing using `ShapeId` instead of indices.
 ///
 /// This allows incremental updates when shapes are added, removed, or modified
 /// without needing to rebuild the entire grid.
 #[derive(Debug, Clone)]
 pub(in crate::input::state::core) struct SpatialGrid {
     cell_size: i32,
-    /// Maps cell coordinates to the ShapeIds contained in that cell.
+    /// Maps cell coordinates to the `ShapeIds` contained in that cell.
     cells: HashMap<(i32, i32), Vec<ShapeId>>,
-    /// Reverse mapping from ShapeId to the cells it occupies for efficient removal.
+    /// Reverse mapping from `ShapeId` to the cells it occupies for efficient removal.
     shape_cells: HashMap<ShapeId, Vec<(i32, i32)>>,
     /// Shapes kept as global candidates because their coverage is unsafe or
     /// oversized, or because the aggregate membership budget is exhausted.
@@ -199,7 +199,7 @@ impl SpatialGrid {
         }
     }
 
-    /// Queries for all ShapeIds in cells near the given point with tolerance-aware radius.
+    /// Queries for all `ShapeIds` in cells near the given point with tolerance-aware radius.
     ///
     /// The search radius is expanded based on tolerance to ensure shapes that could
     /// be hit within the tolerance distance are not missed.

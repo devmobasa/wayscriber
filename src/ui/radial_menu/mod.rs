@@ -665,7 +665,7 @@ fn draw_annular_sector(
 
 // ── Slice content resolution (ActionMeta registry) ──
 
-/// Short label of a compass slice, resolved through the ActionMeta registry
+/// Short label of a compass slice, resolved through the `ActionMeta` registry
 /// for action slices.
 fn slice_label(slice: &RadialSlice) -> &'static str {
     match slice.kind {

@@ -468,7 +468,7 @@ pub mod toolbar {
     /// Segmented control outer background
     pub const COLOR_SEGMENT_BG: Rgba = (0.15, 0.17, 0.22, 0.85);
     /// Active segment background: the accent at reduced alpha, deliberately
-    /// quieter than COLOR_ACCENT so segmented-control selection (Ico/Txt,
+    /// quieter than `COLOR_ACCENT` so segmented-control selection (Ico/Txt,
     /// Simple/Full) never competes with the active-tool highlight
     pub const COLOR_SEGMENT_ACTIVE: Rgba = rgba(ACCENT_RGB, 0.55);
     /// Active segment text color

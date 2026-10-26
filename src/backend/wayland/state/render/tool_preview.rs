@@ -315,7 +315,7 @@ mod tests {
         assert!(by + bubble_h <= 600.0, "clamped within bottom edge");
     }
 
-    /// Little-endian ARgb32 stores premultiplied BGRA in memory.
+    /// Little-endian `ARgb32` stores premultiplied BGRA in memory.
     fn has_strong_green_pixel(pixels: &[u8]) -> bool {
         pixels.as_chunks::<4>().0.iter().any(|px| {
             let (b, g, r, a) = (px[0], px[1], px[2], px[3]);

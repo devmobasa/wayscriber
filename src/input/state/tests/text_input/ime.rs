@@ -1,4 +1,4 @@
-//! IME (zwp_text_input_v3) composition state-machine tests. These queue
+//! IME (`zwp_text_input_v3`) composition state-machine tests. These queue
 //! composition events on `TextEditing`, apply each batch through the root
 //! `ime_apply_done` coordinator, and assert the caret-aware editor buffer and
 //! transient preedit follow the protocol's batch-then-done model.

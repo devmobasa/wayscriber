@@ -259,7 +259,7 @@ fn release_window_keyboard_focus(widget: &impl IsA<gtk4::Widget>) {
 /// Whether a focus-widget change should drop the toolbar window's keyboard
 /// mode. Entries keep it: the editable hex field needs the keys it captures.
 /// Focus inside a popover keeps it too, for a different reason: the popover
-/// is an xdg_popup holding a keyboard grab on its own surface. Dropping the
+/// is an `xdg_popup` holding a keyboard grab on its own surface. Dropping the
 /// parent layer surface's keyboard mode there makes the compositor pull
 /// keyboard focus from the grabbing popup between a click's press and
 /// release, and that broken grab stalls the release — a Settings checkbox

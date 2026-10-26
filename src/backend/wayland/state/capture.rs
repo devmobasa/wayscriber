@@ -157,7 +157,7 @@ impl WaylandState {
         self.exit_overlay_suppression(OverlaySuppression::DesktopBackdrop);
     }
 
-    /// Handles capture actions by delegating to the CaptureManager.
+    /// Handles capture actions by delegating to the `CaptureManager`.
     pub(in crate::backend::wayland) fn handle_capture_action(&mut self, action: Action) {
         if action.is_region_capture() {
             if let Some(opening_action) = self.capture.active_region_action() {

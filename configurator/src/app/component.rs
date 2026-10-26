@@ -40,7 +40,7 @@ fn load_app_stylesheet() {
     }
 }
 
-/// GApplication id. A valid dotted id is required by GLib; the window still
+/// `GApplication` id. A valid dotted id is required by GLib; the window still
 /// advertises this as its Wayland app-id, so compositor rules and the
 /// `.desktop` `StartupWMClass` must match it.
 const APP_ID: &str = "org.wayscriber.Configurator";

@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 use crate::ui::constants::{self, TEXT_TERTIARY, TEXT_WHITE};
 use crate::ui::theme::{ACCENT_RGB, Rgb};
 
-/// Delete-icon circle: softer than DESTRUCTIVE_RGB — the small filled disc
+/// Delete-icon circle: softer than `DESTRUCTIVE_RGB` — the small filled disc
 /// reads harsh at full saturation (kept from the pre-theme literal).
 const DELETE_ICON_RGB: Rgb = (0.85, 0.2, 0.2);
 /// Rename-icon circle: neutral gray with no matching theme token.

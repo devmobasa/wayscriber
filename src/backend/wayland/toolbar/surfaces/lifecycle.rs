@@ -56,7 +56,7 @@ impl ToolbarSurface {
         self.configured = false;
     }
 
-    /// Resize an already-mapped surface in place via layer_surface.set_size
+    /// Resize an already-mapped surface in place via `layer_surface.set_size`
     /// instead of destroy/recreate, so size changes (shape picker, drawer,
     /// contextual sections) don't flicker. Rendering pauses until the
     /// compositor acks with a new configure.

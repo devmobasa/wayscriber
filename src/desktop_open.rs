@@ -75,7 +75,7 @@ pub(crate) fn open(invocation: &DesktopOpenInvocation) -> Result<()> {
 }
 
 /// Spawn a desktop opener without blocking the Wayland or tray callback that
-/// requested it. The broker still authorizes the argv; DetachedAfterExec keeps
+/// requested it. The broker still authorizes the argv; `DetachedAfterExec` keeps
 /// the launched application alive after this process exits.
 ///
 /// Callers that own the process broker must join the returned worker before

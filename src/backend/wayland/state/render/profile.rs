@@ -9,7 +9,7 @@ pub(super) enum ProfileMode {
     CanvasAndUi,
 }
 
-/// The selected profile is a frame value; reusable baseline storage stays in RenderRuntime.
+/// The selected profile is a frame value; reusable baseline storage stays in `RenderRuntime`.
 #[derive(Debug)]
 pub(super) struct FrameProfile {
     profile: Option<RenderColorProfile>,

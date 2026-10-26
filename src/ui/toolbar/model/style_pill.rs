@@ -152,12 +152,12 @@ pub(crate) enum StylePillControl {
     EraserModeSegment,
     /// Docked selection property rendered as a compact cycle button that
     /// shows the entry's value; clicking steps the property forward
-    /// through the properties apply machinery (Color, Fill, ArrowHead,
-    /// TextBackground).
+    /// through the properties apply machinery (Color, Fill, `ArrowHead`,
+    /// `TextBackground`).
     SelectionCycle(SelectionPropertyKind),
     /// Docked numeric selection property rendered as a −/value/+ stepper;
     /// the halves step the property through the properties apply
-    /// machinery (Thickness, FontSize, ArrowLength, ArrowAngle). The
+    /// machinery (Thickness, `FontSize`, `ArrowLength`, `ArrowAngle`). The
     /// machinery is relative (direction steps), so the pill uses steppers
     /// where the tool states use sliders.
     SelectionStepper(SelectionPropertyKind),

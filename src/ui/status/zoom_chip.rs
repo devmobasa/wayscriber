@@ -11,8 +11,8 @@
 //! The zoom-out/in marks are drawn as bold vector +/- strokes (not circled
 //! glyphs), sized to the `NN%` digits and using the same adaptive chip color.
 //! Buttons dispatch through the shared zoom action path:
-//! minus = ZoomOut, plus = ZoomIn, `Reset` = ResetZoom (back to 100%), and — only
-//! while zoom is active — a compact `Lock` toggle = ToggleZoomLock. The `NN%`
+//! minus = `ZoomOut`, plus = `ZoomIn`, `Reset` = `ResetZoom` (back to 100%), and — only
+//! while zoom is active — a compact `Lock` toggle = `ToggleZoomLock`. The `NN%`
 //! readout is a passive display (it consumes clicks but triggers nothing), so
 //! no drag ever starts on the canvas beneath the chip.
 
@@ -78,13 +78,13 @@ fn zoom_lock_label() -> &'static str {
 /// Interactive surface a zoom chip button activates on click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoomChipButtonKind {
-    /// Bold vector minus mark — dispatches ZoomOut.
+    /// Bold vector minus mark — dispatches `ZoomOut`.
     Out,
-    /// Bold vector plus mark — dispatches ZoomIn.
+    /// Bold vector plus mark — dispatches `ZoomIn`.
     In,
-    /// `Reset` — dispatches ResetZoom (back to 100%).
+    /// `Reset` — dispatches `ResetZoom` (back to 100%).
     Reset,
-    /// `Lock` — dispatches ToggleZoomLock (present only while zoomed).
+    /// `Lock` — dispatches `ToggleZoomLock` (present only while zoomed).
     Lock,
 }
 
@@ -1031,7 +1031,7 @@ mod tests {
 
     /// Reconciliation invariant (M8): outside Focus Mode, exactly one zoom-%
     /// indicator shows while zoomed in every
-    /// {show_zoom_actions}×{show_zoom_chip}×{show_status_bar} combination —
+    /// `show_zoom_actions` × `show_zoom_chip` × `show_status_bar` combination —
     /// never zero (the regression), never two. The chip and the status-HUD ZOOM
     /// badge come from their real layouts; the passive top-corner badge follows
     /// the backend render gate (`zoom_active && !show_status_bar &&

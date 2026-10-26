@@ -10,7 +10,7 @@ impl ToolbarIntent {
     }
 }
 
-/// Translate a backend intent into the UI-facing ToolbarEvent. Snapshot is
+/// Translate a backend intent into the UI-facing `ToolbarEvent`. Snapshot is
 /// available for future context-sensitive mapping.
 pub fn intent_to_event(intent: ToolbarIntent, _snapshot: Option<&ToolbarSnapshot>) -> ToolbarEvent {
     let _ = _snapshot;

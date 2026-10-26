@@ -2500,7 +2500,7 @@ enabled = true
 
 /// The historical `full` alias for the regular mode table must keep its
 /// authored spelling on an unrelated save, and the retired nested field must
-/// classify under the path serde_ignored actually emits.
+/// classify under the path `serde_ignored` actually emits.
 #[test]
 fn retired_full_alias_show_settings_section_is_diagnosed_and_spelling_preserved() {
     let temp = TempConfig::new("retired-full-alias");

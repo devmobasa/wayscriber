@@ -357,7 +357,7 @@ pub fn top_extra_height(engine: &UiTextEngine, snapshot: &ToolbarSnapshot) -> f6
 }
 
 /// Scroll bounds for the open Canvas/Session/Settings popover as
-/// (natural_height, viewport_height), both in pre-scale spec units; `None`
+/// (`natural_height`, `viewport_height`), both in pre-scale spec units; `None`
 /// while no menu popover is open. The wheel path and scrollbar drag use these
 /// same bounds.
 pub fn top_popover_scroll_bounds(

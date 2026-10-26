@@ -1,4 +1,4 @@
-//! Color picker popup state methods for InputState.
+//! Color picker popup state methods for `InputState`.
 
 use crate::draw::TextMeasurer;
 use std::borrow::Cow;
