@@ -52,7 +52,7 @@ impl SeatHandler for WaylandState {
                         self.pointer.attach_pointer(pointer);
                     }
                     Err(err) => {
-                        warn!("Pointer initialized without theme: {}", err);
+                        warn!("Pointer initialized without theme: {err}");
                         if self.protocol.seat_mut().get_pointer(qh, &seat).is_ok() {
                             debug!("Pointer initialized without theme fallback");
                         }
@@ -141,7 +141,7 @@ impl WaylandState {
                     release_keyboard(&replaced);
                 }
             }
-            Err(err) => warn!("Keyboard initialization failed: {}", err),
+            Err(err) => warn!("Keyboard initialization failed: {err}"),
         }
     }
 
@@ -161,7 +161,7 @@ impl WaylandState {
                     release_touch(&replaced);
                 }
             }
-            Err(err) => warn!("Touch initialization failed: {}", err),
+            Err(err) => warn!("Touch initialization failed: {err}"),
         }
     }
 

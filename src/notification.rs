@@ -119,7 +119,7 @@ mod real {
         runtime_handle.spawn(async move {
             let icon_ref = icon.as_deref();
             if let Err(e) = send_notification(&summary, &body, icon_ref).await {
-                log::warn!("Failed to send notification: {}", e);
+                log::warn!("Failed to send notification: {e}");
             }
         });
     }
@@ -136,7 +136,7 @@ mod real {
             if let Err(e) =
                 send_notification_with_timeout(&summary, &body, icon_ref, expire_timeout_ms).await
             {
-                log::warn!("Failed to send notification: {}", e);
+                log::warn!("Failed to send notification: {e}");
             }
         });
     }

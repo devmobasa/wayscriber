@@ -624,7 +624,7 @@ fn image_serialization_uses_base64_bytes() {
             assert_eq!(data.mime_type, "image/jpeg");
             assert_eq!(data.bytes.as_ref(), [1, 2, 3, 4]);
         }
-        other => panic!("expected image shape, got {:?}", other),
+        other => panic!("expected image shape, got {other:?}"),
     }
 }
 

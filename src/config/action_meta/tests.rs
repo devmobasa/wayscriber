@@ -328,8 +328,8 @@ fn assert_actions_have_flag(
             continue;
         }
         let meta =
-            action_meta(*action).unwrap_or_else(|| panic!("missing ActionMeta for {:?}", action));
-        assert!(check(meta), "Action {:?} missing {}", action, flag_name);
+            action_meta(*action).unwrap_or_else(|| panic!("missing ActionMeta for {action:?}"));
+        assert!(check(meta), "Action {action:?} missing {flag_name}");
     }
 }
 
@@ -387,9 +387,7 @@ fn command_palette_actions_match_expected_contract() {
 
     assert!(
         unexpected.is_empty() && missing.is_empty(),
-        "command palette contract changed; unexpected: {:?}; missing: {:?}",
-        unexpected,
-        missing
+        "command palette contract changed; unexpected: {unexpected:?}; missing: {missing:?}"
     );
 }
 

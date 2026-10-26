@@ -84,7 +84,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         println!("  Persist history    : {}", inspection.persist_history);
         if inspection.persist_history {
             match inspection.history_limit {
-                Some(limit) => println!("    Max persisted undo depth: {}", limit),
+                Some(limit) => println!("    Max persisted undo depth: {limit}"),
                 None => println!("    Max persisted undo depth: follows runtime limit"),
             }
         } else {
@@ -97,21 +97,21 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
             inspection.session_path.display()
         );
         if let Some(identity) = &inspection.active_identity {
-            println!("    Output identity: {}", identity);
+            println!("    Output identity: {identity}");
         }
         if inspection.exists {
             if let Some(size) = inspection.size_bytes {
-                println!("    Size     : {} bytes", size);
+                println!("    Size     : {size} bytes");
             }
             if let Some(ts) = inspection
                 .modified
                 .and_then(|m| time_utils::format_system_time(m, "%Y-%m-%d %H:%M:%S"))
             {
-                println!("    Modified : {}", ts);
+                println!("    Modified : {ts}");
             }
             println!("    Compressed: {}", inspection.compressed);
             if let Some(version) = inspection.file_version {
-                println!("    File version: {}", version);
+                println!("    File version: {version}");
             }
             if let Some(counts) = inspection.frame_counts {
                 println!(
@@ -139,7 +139,7 @@ pub(crate) fn run_session_cli_commands(cli: &Cli) -> anyhow::Result<()> {
         println!("  Backup file       : {}", inspection.backup_path.display());
         if inspection.backup_exists {
             if let Some(size) = inspection.backup_size_bytes {
-                println!("    Size     : {} bytes", size);
+                println!("    Size     : {size} bytes");
             }
         } else {
             println!("    (not found)");

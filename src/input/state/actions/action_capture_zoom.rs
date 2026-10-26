@@ -30,7 +30,7 @@ impl InputState {
                 // Capture actions are handled externally by WaylandState
                 // since they require access to CaptureManager
                 // Store the action for later retrieval
-                log::debug!("Capture action {:?} pending for backend", action);
+                log::debug!("Capture action {action:?} pending for backend");
                 self.set_pending_backend_action(PendingBackendAction::Screenshot(action));
 
                 // Native region selection needs the compositor-synced Shift
@@ -44,7 +44,7 @@ impl InputState {
             Action::ExportCanvasFile
             | Action::ExportCanvasClipboard
             | Action::ExportCanvasClipboardAndFile => {
-                log::debug!("Canvas export action {:?} pending for backend", action);
+                log::debug!("Canvas export action {action:?} pending for backend");
                 self.set_pending_backend_action(PendingBackendAction::CanvasExport(action));
 
                 // Clear modifiers to prevent them from being "stuck" after capture
@@ -53,7 +53,7 @@ impl InputState {
                 true
             }
             Action::ExportBoardPdfFile | Action::ExportAllBoardsPdfFile => {
-                log::debug!("Board PDF export action {:?} pending for backend", action);
+                log::debug!("Board PDF export action {action:?} pending for backend");
                 self.set_pending_backend_action(PendingBackendAction::BoardPdfExport(action));
 
                 // Clear modifiers to prevent them from being "stuck" after capture

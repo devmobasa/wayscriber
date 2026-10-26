@@ -64,8 +64,7 @@ impl WaylandState {
             }
             OutputTransitionStart::KeepPending => {
                 log::debug!(
-                    "Keeping existing pending output transition for physical output {:?}",
-                    physical_output_identity
+                    "Keeping existing pending output transition for physical output {physical_output_identity:?}"
                 );
             }
             OutputTransitionStart::DeferForInteraction => {

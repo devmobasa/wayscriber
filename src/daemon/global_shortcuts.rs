@@ -118,8 +118,7 @@ pub(super) fn start_global_shortcuts_listener(
                 Ok(runtime) => runtime,
                 Err(err) => {
                     warn!(
-                        "Global shortcuts portal listener disabled: failed to create Tokio runtime: {}",
-                        err
+                        "Global shortcuts portal listener disabled: failed to create Tokio runtime: {err}"
                     );
                     return;
                 }
@@ -130,12 +129,9 @@ pub(super) fn start_global_shortcuts_listener(
                     run_listener(visibility, preferred_trigger, portal_app_id, shutdown_rx).await
                 {
                     if listener_quit_flag.load(Ordering::Acquire) {
-                        info!(
-                            "Global shortcuts portal listener stopped during shutdown: {}",
-                            err
-                        );
+                        info!("Global shortcuts portal listener stopped during shutdown: {err}");
                     } else {
-                        warn!("Global shortcuts portal listener disabled: {}", err);
+                        warn!("Global shortcuts portal listener disabled: {err}");
                     }
                 }
             });
@@ -253,8 +249,7 @@ async fn run_listener(
     .await?;
 
     info!(
-        "Global shortcuts portal listener ready (app_id '{}', shortcut id '{}', preferred trigger '{}')",
-        portal_app_id, TOGGLE_SHORTCUT_ID, preferred_trigger
+        "Global shortcuts portal listener ready (app_id '{portal_app_id}', shortcut id '{TOGGLE_SHORTCUT_ID}', preferred trigger '{preferred_trigger}')"
     );
 
     let mut activated_stream = await_portal_operation(
@@ -283,8 +278,7 @@ async fn run_listener(
                     let option_keys: Vec<&str> =
                         args.options.keys().map(|key| key.as_str()).collect();
                     warn!(
-                        "Global shortcut activated without activation_token; focus may require manual click (options keys: {:?})",
-                        option_keys
+                        "Global shortcut activated without activation_token; focus may require manual click (options keys: {option_keys:?})"
                     );
                 }
                 visibility
@@ -303,19 +297,15 @@ async fn run_listener(
 fn log_global_shortcuts_version(version: zbus::Result<u32>) {
     match version {
         Ok(version) => {
-            debug!("GlobalShortcuts portal interface version {}", version);
+            debug!("GlobalShortcuts portal interface version {version}");
             if version < 2 {
                 warn!(
-                    "GlobalShortcuts portal version {} lacks reliable activation token support; overlay focus may require notification click",
-                    version
+                    "GlobalShortcuts portal version {version} lacks reliable activation token support; overlay focus may require notification click"
                 );
             }
         }
         Err(err) => {
-            warn!(
-                "Failed to read GlobalShortcuts portal interface version: {}",
-                err
-            );
+            warn!("Failed to read GlobalShortcuts portal interface version: {err}");
         }
     }
 }
@@ -398,8 +388,8 @@ async fn register_host_portal_app_id(connection: &Connection, app_id: &str) -> R
     registry
         .register(app_id, HashMap::new())
         .await
-        .with_context(|| format!("host portal app-id registration failed for '{}'", app_id))?;
-    debug!("Registered host portal app-id '{}'", app_id);
+        .with_context(|| format!("host portal app-id registration failed for '{app_id}'"))?;
+    debug!("Registered host portal app-id '{app_id}'");
     Ok(())
 }
 
@@ -435,8 +425,7 @@ async fn create_global_shortcuts_session(
     let (response, results) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
         return Err(anyhow!(
-            "GlobalShortcuts.CreateSession denied by portal (response code {})",
-            response
+            "GlobalShortcuts.CreateSession denied by portal (response code {response})"
         ));
     }
 
@@ -474,7 +463,7 @@ async fn bind_toggle_shortcut(
     );
 
     let session_path = zbus::zvariant::ObjectPath::try_from(session_handle.as_str())
-        .map_err(|err| anyhow!("invalid GlobalShortcuts session path: {}", err))?;
+        .map_err(|err| anyhow!("invalid GlobalShortcuts session path: {err}"))?;
 
     let request_path = await_portal_operation(
         proxy.bind_shortcuts(session_path, shortcuts, "", bind_options),
@@ -487,8 +476,7 @@ async fn bind_toggle_shortcut(
     let (response, _) = wait_for_request_response(connection, request_path, shutdown).await?;
     if response != 0 {
         return Err(anyhow!(
-            "GlobalShortcuts.BindShortcuts denied by portal (response code {})",
-            response
+            "GlobalShortcuts.BindShortcuts denied by portal (response code {response})"
         ));
     }
 
@@ -549,9 +537,9 @@ async fn wait_for_request_response(
 fn parse_object_path(value: &OwnedValue) -> Result<OwnedObjectPath> {
     let path: &str = value
         .downcast_ref()
-        .map_err(|err| anyhow!("session_handle is not a string/object-path: {}", err))?;
+        .map_err(|err| anyhow!("session_handle is not a string/object-path: {err}"))?;
     OwnedObjectPath::try_from(path.to_string())
-        .map_err(|err| anyhow!("invalid object path string '{}': {}", path, err))
+        .map_err(|err| anyhow!("invalid object path string '{path}': {err}"))
 }
 
 #[cfg(feature = "portal")]

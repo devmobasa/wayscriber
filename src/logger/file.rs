@@ -61,7 +61,7 @@ pub(super) struct LogFileTarget {
 impl LogFileTarget {
     fn path_for_date(&self, date: &str) -> PathBuf {
         if self.treat_as_dir {
-            return self.base.join(format!("wayscriber-{}.log", date));
+            return self.base.join(format!("wayscriber-{date}.log"));
         }
         if !self.append_date {
             return self.base.clone();
@@ -155,7 +155,7 @@ impl DailyFileWriter {
         let (path, size) = match self.select_log_path(&date) {
             Ok(result) => result,
             Err(err) => {
-                eprintln!("Failed to resolve log file for {}: {}", date, err);
+                eprintln!("Failed to resolve log file for {date}: {err}");
                 self.error_date = Some(date);
                 return;
             }

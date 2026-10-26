@@ -131,15 +131,12 @@ fn normalize_background(background: &mut BoardBackgroundConfig, id: &str) {
     match background {
         BoardBackgroundConfig::Transparent(value) => {
             if value.to_lowercase() != "transparent" {
-                warn!(
-                    "Board '{}' background '{}' invalid; using transparent",
-                    id, value
-                );
+                warn!("Board '{id}' background '{value}' invalid; using transparent");
                 *value = "transparent".to_string();
             }
         }
         BoardBackgroundConfig::Color(color) => {
-            clamp_color(color, &format!("boards.items[{}].background", id));
+            clamp_color(color, &format!("boards.items[{id}].background"));
         }
     }
 }

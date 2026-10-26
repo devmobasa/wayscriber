@@ -137,7 +137,7 @@ impl WaylandState {
             self.finish_main_surface_drag(event);
             return;
         }
-        debug!("Button {} released", button);
+        debug!("Button {button} released");
         if self.zoom.active && button == BTN_MIDDLE {
             if self.zoom.panning {
                 self.zoom.stop_pan();

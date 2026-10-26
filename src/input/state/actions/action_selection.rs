@@ -93,7 +93,7 @@ impl InputState {
             Action::CopySelection => {
                 let copied = self.copy_selection();
                 if copied > 0 {
-                    info!("Copied selection ({} shape(s))", copied);
+                    info!("Copied selection ({copied} shape(s))");
                 } else if self.has_selection() {
                     self.push_toast(
                         ToastPriority::Info,
@@ -192,7 +192,7 @@ impl InputState {
         };
         if self.translate_selection_with_undo_with(measurer, dx, dy) {
             self.selection_interaction.note_axis(axis);
-            info!("Moved selection {} by {} px", direction, step);
+            info!("Moved selection {direction} by {step} px");
         } else if self.has_selection() {
             self.selection_interaction.note_axis(axis);
         }

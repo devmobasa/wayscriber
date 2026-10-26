@@ -380,10 +380,7 @@ impl CanvasLayerCache {
         cache.text_halo_enabled = text_halo_enabled;
         cache.board_key = board_key;
         cache.valid = true;
-        debug!(
-            "canvas layer cache: baked {}x{} logical at ({}, {})",
-            bake_w, bake_h, world_x, world_y
-        );
+        debug!("canvas layer cache: baked {bake_w}x{bake_h} logical at ({world_x}, {world_y})");
         true
     }
 }

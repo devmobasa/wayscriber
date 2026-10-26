@@ -12,5 +12,5 @@ pub async fn capture_via_portal_bytes(capture_type: CaptureType) -> Result<Vec<u
 
     task::spawn_blocking(move || read_image_from_uri(&uri))
         .await
-        .map_err(|e| CaptureError::ImageError(format!("Portal reader task failed: {}", e)))?
+        .map_err(|e| CaptureError::ImageError(format!("Portal reader task failed: {e}")))?
 }

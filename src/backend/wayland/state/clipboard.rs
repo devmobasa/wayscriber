@@ -259,7 +259,7 @@ impl WaylandState {
                 self.start_system_clipboard_read(request);
             }
             PasteAction::StaleCompletion { request_id } => {
-                log::debug!("Ignoring stale clipboard paste completion {}", request_id);
+                log::debug!("Ignoring stale clipboard paste completion {request_id}");
             }
             PasteAction::ApplyPrivateSelection { request, shapes } => {
                 let pasted = self.input_state.paste_clipboard_shapes_from_request_with(

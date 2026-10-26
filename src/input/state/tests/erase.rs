@@ -152,11 +152,7 @@ fn erase_stroke_samples_randomized_crossings() {
             ],
         );
 
-        assert!(
-            erased,
-            "stroke eraser should remove line at angle {}",
-            angle
-        );
+        assert!(erased, "stroke eraser should remove line at angle {angle}");
         assert!(state.boards.active_frame().shape(line_id).is_none());
     }
 }

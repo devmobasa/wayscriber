@@ -53,10 +53,10 @@ fn try_acquire_daemon_lock() -> Result<Option<File>> {
 
 fn clear_stale_daemon_state() {
     if let Err(err) = clear_daemon_pid_file() {
-        warn!("Failed to clear stale daemon pid file: {}", err);
+        warn!("Failed to clear stale daemon pid file: {err}");
     }
     if let Err(err) = clear_daemon_toggle_request_file() {
-        warn!("Failed to clear stale daemon command file: {}", err);
+        warn!("Failed to clear stale daemon command file: {err}");
     }
 }
 
@@ -95,10 +95,7 @@ pub(super) fn clear_stale_daemon_state_if_matches(expected: &DaemonRuntimeInfo) 
     let Some(_lock_file) = (match try_acquire_daemon_lock() {
         Ok(lock_file) => lock_file,
         Err(err) => {
-            warn!(
-                "Failed to inspect daemon lock before stale cleanup: {}",
-                err
-            );
+            warn!("Failed to inspect daemon lock before stale cleanup: {err}");
             return;
         }
     }) else {
@@ -108,7 +105,7 @@ pub(super) fn clear_stale_daemon_state_if_matches(expected: &DaemonRuntimeInfo) 
     match read_daemon_runtime_file_if_exists() {
         Ok(Some(current)) if &current == expected => clear_stale_daemon_state(),
         Ok(_) => {}
-        Err(err) => warn!("Failed to inspect daemon pid before stale cleanup: {}", err),
+        Err(err) => warn!("Failed to inspect daemon pid before stale cleanup: {err}"),
     }
 }
 
@@ -136,7 +133,7 @@ pub(super) fn signal_daemon_pid(pid: u32) -> Result<()> {
     {
         let pid = i32::try_from(pid).context("daemon pid does not fit into i32")?;
         if pid <= 0 {
-            return Err(anyhow!("invalid daemon pid {}", pid));
+            return Err(anyhow!("invalid daemon pid {pid}"));
         }
 
         // SAFETY: `pid` has been checked to be a positive Unix process id and

@@ -85,7 +85,7 @@ pub(super) fn load(backend_exit_mode: ExitAfterCaptureMode) -> LoadedConfig {
             )
         }
         Err(e) => {
-            warn!("Failed to load config: {}. Using defaults.", e);
+            warn!("Failed to load config: {e}. Using defaults.");
             (
                 Config::default(),
                 ConfigSource::Default,

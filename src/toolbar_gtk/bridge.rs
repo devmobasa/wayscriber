@@ -516,8 +516,7 @@ impl Drop for GtkToolbarBridge {
             }
             ThreadShutdownOutcome::TimedOut => {
                 log::warn!(
-                    "GTK toolbar thread did not stop within {:?}; detaching it and leaving it running until process exit",
-                    GTK_THREAD_SHUTDOWN_TIMEOUT
+                    "GTK toolbar thread did not stop within {GTK_THREAD_SHUTDOWN_TIMEOUT:?}; detaching it and leaving it running until process exit"
                 );
             }
         }

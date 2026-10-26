@@ -153,9 +153,8 @@ fn collect_marks(path: &Path, source: &str, reading: &mut Reading) {
                         .any(|(file, allowed)| path == Path::new(file) && argument == *allowed);
                     if !exempt {
                         reading.failures.push(format!(
-                            "{site}: `{}{argument})` is not a literal the guard can read; \
-                             write the string at the call",
-                            mark
+                            "{site}: `{mark}{argument})` is not a literal the guard can read; \
+                             write the string at the call"
                         ));
                     }
                 }

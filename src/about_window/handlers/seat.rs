@@ -32,7 +32,7 @@ impl SeatHandler for AboutWindowState {
                     self.themed_pointer = Some(pointer);
                 }
                 Err(err) => {
-                    warn!("Pointer initialized without theme: {}", err);
+                    warn!("Pointer initialized without theme: {err}");
                     let _ = self.seat_state.get_pointer(qh, &seat);
                 }
             }

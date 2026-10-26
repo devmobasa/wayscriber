@@ -72,7 +72,7 @@ fn session_options_for(
         match session::options_from_config(&config.session, config_dir, display_env.as_deref()) {
             Ok(opts) => Some(opts),
             Err(err) => {
-                warn!("Session persistence disabled: {}", err);
+                warn!("Session persistence disabled: {err}");
                 None
             }
         }
@@ -90,8 +90,7 @@ fn session_options_for(
             if let Some(options) = session_options.as_mut() {
                 options.force_resume_persistence();
                 info!(
-                    "Session resume forced on via {} (persisting all boards, history, tool state)",
-                    RESUME_SESSION_ENV
+                    "Session resume forced on via {RESUME_SESSION_ENV} (persisting all boards, history, tool state)"
                 );
             }
         }
@@ -101,15 +100,14 @@ fn session_options_for(
                 .is_some_and(session::SessionOptions::is_named_file)
             {
                 info!(
-                    "Ignoring {}=off because a named session file requires persistence for this run",
-                    RESUME_SESSION_ENV
+                    "Ignoring {RESUME_SESSION_ENV}=off because a named session file requires persistence for this run"
                 );
                 if let Some(options) = session_options.as_mut() {
                     options.force_resume_persistence();
                 }
             } else {
                 if session_options.is_some() {
-                    info!("Session resume disabled via {}=off", RESUME_SESSION_ENV);
+                    info!("Session resume disabled via {RESUME_SESSION_ENV}=off");
                 }
                 session_options = None;
             }

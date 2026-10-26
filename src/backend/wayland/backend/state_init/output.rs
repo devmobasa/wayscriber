@@ -18,10 +18,7 @@ pub(super) fn resolve(config: &Config) -> OutputPreferences {
         .ok()
         .or_else(|| config.ui.preferred_output.clone());
     if let Some(ref output) = preferred_output_identity {
-        info!(
-            "Preferring xdg fullscreen on output '{}' (env or config override)",
-            output
-        );
+        info!("Preferring xdg fullscreen on output '{output}' (env or config override)");
     }
 
     let mut xdg_fullscreen = env::var(XDG_FULLSCREEN_ENV)

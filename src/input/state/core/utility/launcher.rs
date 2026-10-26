@@ -57,7 +57,7 @@ impl InputState {
         let path = match Config::config_path() {
             Ok(p) => p,
             Err(err) => {
-                log::error!("Unable to resolve config path: {}", err);
+                log::error!("Unable to resolve config path: {err}");
                 self.push_toast(
                     ToastPriority::Critical,
                     "launcher",

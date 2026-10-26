@@ -448,7 +448,7 @@ mod tests {
                 .spawn(|| {
                     logger.log(
                         &Record::builder()
-                            .args(format_args!("{}", PanicsWhileFormatting))
+                            .args(format_args!("{PanicsWhileFormatting}"))
                             .level(Level::Warn)
                             .target("wayscriber::daemon")
                             .build(),

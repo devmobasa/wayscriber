@@ -190,7 +190,7 @@ pub(super) fn build_overlay_layout(
             &[&note_text_base, &BULLET, &page_label, &BULLET],
         )
     } else {
-        format!("{}  {}  {}", note_text_base, BULLET, page_label)
+        format!("{note_text_base}  {BULLET}  {page_label}")
     };
     let note_width = text_extents_for_with_engine(
         engine,

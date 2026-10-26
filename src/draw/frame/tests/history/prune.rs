@@ -54,7 +54,7 @@ fn prune_history_for_removed_ids_prunes_shapes_and_actions() {
             assert_eq!(shapes.len(), 1);
             assert_eq!(shapes[0].1.id, 1);
         }
-        other => panic!("expected create action, got {:?}", other),
+        other => panic!("expected create action, got {other:?}"),
     }
 }
 
@@ -118,6 +118,6 @@ fn prune_history_against_shapes_drops_actions_for_missing_ids() {
         UndoAction::Modify { shape_id, .. } => {
             assert_eq!(*shape_id, id_existing);
         }
-        other => panic!("expected modify action, got {:?}", other),
+        other => panic!("expected modify action, got {other:?}"),
     }
 }

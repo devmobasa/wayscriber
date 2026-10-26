@@ -152,12 +152,12 @@ impl ColorSpec {
                 Ok(color) => color,
                 Err(ConfigHexColorError::MissingHash) => {
                     util::name_to_color(name).unwrap_or_else(|| {
-                        warn!("Unknown color '{}', using red", name);
+                        warn!("Unknown color '{name}', using red");
                         PALETTE_RED
                     })
                 }
                 Err(err) => {
-                    warn!("Invalid hex color '{}': {:?}; using red", name, err);
+                    warn!("Invalid hex color '{name}': {err:?}; using red");
                     PALETTE_RED
                 }
             },

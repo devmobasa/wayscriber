@@ -19,7 +19,7 @@ pub(super) fn resolve_display_id(display_id: Option<&str>) -> String {
 
     match env::var(WAYLAND_DISPLAY_ENV) {
         Ok(value) => {
-            log::info!("Session display id from {WAYLAND_DISPLAY_ENV}='{}'", value);
+            log::info!("Session display id from {WAYLAND_DISPLAY_ENV}='{value}'");
             sanitize_identifier(&value)
         }
         Err(_) => {

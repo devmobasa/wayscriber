@@ -62,10 +62,7 @@ pub(super) fn defer_pending_autosave_for_interaction(
 
     let delay = runtime_session::interaction_defer_interval();
     session.defer_autosave(now, delay);
-    log::debug!(
-        "Deferring autosave for {:?} while an input interaction is active",
-        delay
-    );
+    log::debug!("Deferring autosave for {delay:?} while an input interaction is active");
     true
 }
 

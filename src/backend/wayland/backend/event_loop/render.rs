@@ -134,7 +134,7 @@ pub(super) fn maybe_render(
                 let render_end = Instant::now();
                 let render_duration = render_end.saturating_duration_since(render_start);
                 if render_duration > Duration::from_millis(5) {
-                    debug!("Render took {:?}", render_duration);
+                    debug!("Render took {render_duration:?}");
                 }
 
                 // Reset failure counter and record render time.

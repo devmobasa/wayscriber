@@ -553,7 +553,7 @@ async fn test_perform_capture_save_failure() {
         .unwrap_err();
     match err {
         CaptureError::SaveError(_) => {}
-        other => panic!("expected SaveError, got {:?}", other),
+        other => panic!("expected SaveError, got {other:?}"),
     }
     assert_eq!(*saver_handle.calls.lock().unwrap(), 1);
 }

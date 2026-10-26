@@ -148,7 +148,7 @@ impl PaletteRecentsStore {
         let contents = match toml::to_string_pretty(&file) {
             Ok(contents) => contents,
             Err(err) => {
-                warn!("Failed to serialize palette recents: {}", err);
+                warn!("Failed to serialize palette recents: {err}");
                 return false;
             }
         };
@@ -182,7 +182,7 @@ fn parse_recents(raw: &str) -> Vec<Action> {
     let file: PaletteRecentsFile = match toml::from_str(raw) {
         Ok(file) => file,
         Err(err) => {
-            warn!("Failed to parse palette recents: {}", err);
+            warn!("Failed to parse palette recents: {err}");
             return Vec::new();
         }
     };

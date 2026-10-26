@@ -96,7 +96,7 @@ const DBUS_ERROR_ACCESS_DENIED: &str = "org.freedesktop.DBus.Error.AccessDenied"
 /// # Returns
 /// The URI path to the captured screenshot file
 pub async fn capture_via_portal(capture_type: CaptureType) -> Result<String, CaptureError> {
-    log::debug!("Initiating portal screenshot capture: {:?}", capture_type);
+    log::debug!("Initiating portal screenshot capture: {capture_type:?}");
 
     // Connect to session bus
     let connection = Connection::session()
@@ -165,7 +165,7 @@ async fn capture_once(
         PORTAL_OPTION_HANDLE_TOKEN_KEY.to_string(),
         handle_token.into(),
     );
-    log::debug!("Calling portal screenshot with options: {:?}", options);
+    log::debug!("Calling portal screenshot with options: {options:?}");
 
     // Portal backends may complete non-interactive screenshots before the
     // Screenshot method reply reaches us. Subscribe at the predicted request
@@ -191,7 +191,7 @@ async fn capture_once(
     .await?
     .map_err(map_portal_call_error)?;
 
-    log::info!("Screenshot request created: {:?}", returned_path);
+    log::info!("Screenshot request created: {returned_path:?}");
 
     log::debug!("Waiting for Response signal...");
 
@@ -235,7 +235,7 @@ async fn capture_once(
     .ok_or_else(|| CaptureError::InvalidResponse("No Response signal received".to_string()))?;
 
     let args = response_signal.args().map_err(|e| {
-        CaptureError::InvalidResponse(format!("Failed to parse response args: {}", e))
+        CaptureError::InvalidResponse(format!("Failed to parse response args: {e}"))
     })?;
 
     log::debug!(
@@ -365,9 +365,9 @@ fn parse_response(
             })?;
 
             // Extract string from OwnedValue.
-            let uri_str: &str = uri_value.downcast_ref().map_err(|e| {
-                CaptureError::InvalidResponse(format!("URI is not a string: {}", e))
-            })?;
+            let uri_str: &str = uri_value
+                .downcast_ref()
+                .map_err(|e| CaptureError::InvalidResponse(format!("URI is not a string: {e}")))?;
 
             log::info!("Screenshot captured successfully");
             Ok(uri_str.to_string())
@@ -379,7 +379,7 @@ fn parse_response(
             ))
         }
         code => {
-            log::error!("Screenshot failed with code {}", code);
+            log::error!("Screenshot failed with code {code}");
             Err(CaptureError::PortalResponse(code))
         }
     }

@@ -56,7 +56,7 @@ impl WaylandState {
             top_hover_local,
             self.toolbar_chrome.inline_hover_start(),
         ) {
-            log::warn!("Failed to render inline top toolbar: {}", err);
+            log::warn!("Failed to render inline top toolbar: {err}");
         }
         let _ = ctx.restore();
         for hit in &mut hits {

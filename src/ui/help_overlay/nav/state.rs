@@ -52,7 +52,7 @@ pub(crate) fn build_nav_state(
     } else {
         nav_title.to_string()
     };
-    let nav_separator = format!("   {}   ", BULLET);
+    let nav_separator = format!("   {BULLET}   ");
     let nav_secondary_segments: Vec<(String, [f64; 4])> = if search_active {
         vec![
             ("Esc".to_string(), nav_key_color),
@@ -122,7 +122,7 @@ pub(crate) fn build_nav_state(
             cairo::FontWeight::Normal,
             max_query_width,
         );
-        Some(format!("{}{}", prefix, query_display))
+        Some(format!("{prefix}{query_display}"))
     } else {
         None
     };

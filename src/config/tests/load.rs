@@ -529,8 +529,7 @@ fn explicit_empty_cycle_records_legacy_f2_intent_without_a_startup_notice() {
         fs::write(
             primary_dir.join("config.toml"),
             format!(
-                "config_revision = {}\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ncycle_toolbar_display = []\n",
-                CURRENT_CONFIG_REVISION
+                "config_revision = {CURRENT_CONFIG_REVISION}\n\n[keybindings]\ntoggle_toolbar = ['F2', 'F9']\ncycle_toolbar_display = []\n"
             ),
         )
         .unwrap();

@@ -42,7 +42,7 @@ impl WaylandState {
             && !self.zoom.is_in_progress()
             && let Err(err) = self.start_zoom_capture(false)
         {
-            warn!("Zoom capture failed to start: {}", err);
+            warn!("Zoom capture failed to start: {err}");
             self.zoom.deactivate(&mut self.input_state);
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
             self.cancel_screen_modals_if_source_changed();
@@ -92,7 +92,7 @@ impl WaylandState {
                 } else if self.zoom.active
                     && let Err(err) = self.start_zoom_capture(true)
                 {
-                    warn!("Zoom capture refresh failed: {}", err);
+                    warn!("Zoom capture refresh failed: {err}");
                 }
             }
         }
@@ -192,7 +192,7 @@ impl WaylandState {
             && !board_zoom
             && let Err(err) = self.start_zoom_capture(false)
         {
-            warn!("Zoom capture failed to start: {}", err);
+            warn!("Zoom capture failed to start: {err}");
             self.zoom.deactivate(&mut self.input_state);
             self.exit_overlay_suppression(OverlaySuppression::Zoom);
             self.cancel_screen_modals_if_source_changed();

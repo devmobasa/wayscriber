@@ -59,7 +59,7 @@ pub(super) fn dispatch_events(
         |state| route_woken_sources(state, signals),
         animation_timeout,
     )
-    .map_err(|e| anyhow::anyhow!("Wayland event queue error: {}", e))
+    .map_err(|e| anyhow::anyhow!("Wayland event queue error: {e}"))
 }
 
 #[cfg(test)]

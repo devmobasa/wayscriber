@@ -24,10 +24,10 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
                 state.tablet.pad_groups.push(pad_group);
             }
             Event::Path { path } => {
-                debug!("Tablet pad path: {}", path);
+                debug!("Tablet pad path: {path}");
             }
             Event::Buttons { buttons } => {
-                debug!("Tablet pad button count: {}", buttons);
+                debug!("Tablet pad button count: {buttons}");
             }
             Event::Done => {
                 debug!("Tablet pad description complete");
@@ -37,10 +37,7 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
                 button,
                 state,
             } => {
-                debug!(
-                    "Tablet pad button event: index {} -> {:?} @ {}",
-                    button, state, time
-                );
+                debug!("Tablet pad button event: index {button} -> {state:?} @ {time}");
             }
             Event::Enter {
                 serial,
@@ -77,7 +74,7 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
         match opcode {
             EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),
             _ => {
-                warn!("Ignoring unknown tablet pad child opcode {}", opcode);
+                warn!("Ignoring unknown tablet pad child opcode {opcode}");
                 Arc::new(IgnoredObjectData)
             }
         }

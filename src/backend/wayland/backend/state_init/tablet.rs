@@ -27,7 +27,7 @@ pub(super) fn bind_tablet_manager(
                 Some(manager)
             }
             Err(err) => {
-                warn!("Tablet protocol not available: {}", err);
+                warn!("Tablet protocol not available: {err}");
                 None
             }
         }

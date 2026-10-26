@@ -377,7 +377,7 @@ impl ksni::Tray for WayscriberTray {
     fn watcher_offline(&self, reason: ksni::OfflineReason) -> bool {
         let reason_text = format!("{reason:?}");
         if self.tray_status.set_watcher_offline(reason_text.clone()) {
-            warn!("StatusNotifierWatcher is offline: {}", reason_text);
+            warn!("StatusNotifierWatcher is offline: {reason_text}");
         }
         true
     }

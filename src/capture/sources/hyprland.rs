@@ -81,7 +81,7 @@ pub async fn capture_full_screen_hyprland() -> Result<Vec<u8>, CaptureError> {
     })
     .await
     .map_err(|e| {
-        CaptureError::ImageError(format!("Full screen capture task failed to join: {}", e))
+        CaptureError::ImageError(format!("Full screen capture task failed to join: {e}"))
     })?
 }
 
@@ -108,11 +108,11 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         }
 
         let json: Value = serde_json::from_slice(&output.stdout).map_err(|e| {
-            CaptureError::InvalidResponse(format!("Failed to parse hyprctl output: {}", e))
+            CaptureError::InvalidResponse(format!("Failed to parse hyprctl output: {e}"))
         })?;
         let geometry = active_window_geometry(&json)?;
 
-        log::debug!("Capturing active window via grim: {}", geometry);
+        log::debug!("Capturing active window via grim: {geometry}");
         let arguments = grim_geometry_arguments(&geometry);
         let grim_output = run_helper(
             HelperKind::Grim,
@@ -139,7 +139,7 @@ pub async fn capture_active_window_hyprland() -> Result<Vec<u8>, CaptureError> {
         Ok(grim_output.stdout)
     })
     .await
-    .map_err(|e| CaptureError::ImageError(format!("Hyprland capture task failed to join: {}", e)))?
+    .map_err(|e| CaptureError::ImageError(format!("Hyprland capture task failed to join: {e}")))?
 }
 
 /// Capture a user-selected region using `slurp` + `grim` (Hyprland/wlroots fast path).
@@ -167,7 +167,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
         }
 
         let geometry_output = String::from_utf8(output.stdout)
-            .map_err(|e| CaptureError::InvalidResponse(format!("Invalid slurp output: {}", e)))?;
+            .map_err(|e| CaptureError::InvalidResponse(format!("Invalid slurp output: {e}")))?;
 
         let geometry = geometry_output.trim();
         if geometry.is_empty() {
@@ -176,7 +176,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
             ));
         }
 
-        log::debug!("Capturing region via grim: {}", geometry);
+        log::debug!("Capturing region via grim: {geometry}");
         let arguments = grim_geometry_arguments(geometry);
         let grim_output = run_helper(
             HelperKind::Grim,
@@ -203,9 +203,7 @@ pub async fn capture_selection_hyprland() -> Result<Vec<u8>, CaptureError> {
         Ok(grim_output.stdout)
     })
     .await
-    .map_err(|e| {
-        CaptureError::ImageError(format!("Selection capture task failed to join: {}", e))
-    })?
+    .map_err(|e| CaptureError::ImageError(format!("Selection capture task failed to join: {e}")))?
 }
 
 /// Build the `grim -g` region for the window described by `hyprctl activewindow -j`.

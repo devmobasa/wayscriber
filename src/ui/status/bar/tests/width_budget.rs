@@ -250,12 +250,10 @@ fn pill_width_never_exceeds_max_fraction_of_screen() {
                 screen_height,
                 position
             );
-            assert!(layout.pill_x >= 0.0, "pill off-screen at {:?}", position);
+            assert!(layout.pill_x >= 0.0, "pill off-screen at {position:?}");
             assert!(
                 layout.pill_x + layout.pill_width <= f64::from(screen_width) + 1e-6,
-                "pill runs off a {}px screen at {:?}",
-                screen_width,
-                position
+                "pill runs off a {screen_width}px screen at {position:?}"
             );
             for segment in &layout.segments {
                 assert!(
@@ -284,8 +282,7 @@ fn measured_pill_width_stays_within_budget_for_realistic_cluster() {
         let max_pill_width = f64::from(screen_width) * STATUS_BAR_MAX_WIDTH_FRACTION;
         assert!(
             !measurement.overflow,
-            "cluster {} should fit {}px screen",
-            CLUSTER_WIDTH, screen_width
+            "cluster {CLUSTER_WIDTH} should fit {screen_width}px screen"
         );
         assert!(
             measurement.pill_width <= max_pill_width + 1e-6,
@@ -337,7 +334,7 @@ fn width_budget_degrades_board_label_then_drops_help() {
     // help chip is dropped, yet the cap still holds.
     let narrow = compute_status_hud_layout(&state, StatusPosition::BottomLeft, &style, 400, 300)
         .expect("narrow layout");
-    assert_eq!(first_text(&narrow), format!("Board {}/{}", index, count));
+    assert_eq!(first_text(&narrow), format!("Board {index}/{count}"));
     assert!(
         !narrow
             .segments

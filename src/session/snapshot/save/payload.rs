@@ -263,8 +263,7 @@ fn fitting_history_payload(
             let max_depth = max_depth.min(history_depth);
             if max_depth < 2 {
                 debug!(
-                    "Autosave history fallback capped at depth {}; skipping deeper history-depth scan",
-                    max_depth
+                    "Autosave history fallback capped at depth {max_depth}; skipping deeper history-depth scan"
                 );
                 return Ok(None);
             }

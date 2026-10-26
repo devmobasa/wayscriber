@@ -87,7 +87,7 @@ fn list_mime_types_with_runner(
     runner: &impl ClipboardCommandRunner,
 ) -> Result<Vec<String>, ClipboardReadError> {
     let output = runner.list_types().map_err(|err| {
-        ClipboardReadError::Unavailable(format!("Failed to spawn wl-paste: {}", err))
+        ClipboardReadError::Unavailable(format!("Failed to spawn wl-paste: {err}"))
     })?;
 
     if !output.timed_out && output.status == 0 {
@@ -110,8 +110,7 @@ fn list_mime_types_with_runner(
             ))
         } else {
             Err(ClipboardReadError::Other(format!(
-                "wl-paste --list-types failed: {}",
-                stderr
+                "wl-paste --list-types failed: {stderr}"
             )))
         }
     }
@@ -213,9 +212,9 @@ fn read_limited<R: Read>(mut reader: R, limit: usize) -> Result<Vec<u8>, Clipboa
     let mut data = Vec::new();
     let mut buffer = [0u8; 8192];
     loop {
-        let read = reader.read(&mut buffer).map_err(|err| {
-            ClipboardReadError::Other(format!("Failed to read clipboard: {}", err))
-        })?;
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|err| ClipboardReadError::Other(format!("Failed to read clipboard: {err}")))?;
         if read == 0 {
             break;
         }
@@ -242,9 +241,9 @@ fn read_prefix<R: Read>(
             });
         }
 
-        let read = reader.read(&mut buffer).map_err(|err| {
-            ClipboardReadError::Other(format!("Failed to read clipboard: {}", err))
-        })?;
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|err| ClipboardReadError::Other(format!("Failed to read clipboard: {err}")))?;
         if read == 0 {
             break;
         }

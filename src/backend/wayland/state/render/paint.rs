@@ -160,12 +160,11 @@ impl WaylandState {
                 .is_some_and(|purpose| purpose.is_capture())
         {
             debug!(
-                "Region picker frame: logical={}x{}, physical={}x{}, scale={}, cairo_draw={:?}",
-                width, height, phys_width, phys_height, scale, draw_duration
+                "Region picker frame: logical={width}x{height}, physical={phys_width}x{phys_height}, scale={scale}, cairo_draw={draw_duration:?}"
             );
         }
         if draw_duration > Duration::from_millis(2) {
-            debug!("Cairo draw took {:?}", draw_duration);
+            debug!("Cairo draw took {draw_duration:?}");
         }
 
         Ok(())

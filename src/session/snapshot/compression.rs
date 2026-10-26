@@ -72,7 +72,7 @@ pub(super) fn temp_path(target: &Path) -> Result<PathBuf> {
     let mut counter = 0u32;
     while candidate.exists() {
         counter += 1;
-        candidate = target.with_extension(format!("json.tmp{}", counter));
+        candidate = target.with_extension(format!("json.tmp{counter}"));
     }
     Ok(candidate)
 }

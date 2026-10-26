@@ -117,7 +117,7 @@ pub(in crate::backend::wayland) fn resolve_selection_clipboard_publish(
     let copied = match panic::catch_unwind(|| system::publish_selection_clipboard(payload_json)) {
         Ok(Ok(())) => true,
         Ok(Err(err)) => {
-            log::warn!("Selection clipboard publish failed: {}", err);
+            log::warn!("Selection clipboard publish failed: {err}");
             false
         }
         Err(_) => {
@@ -152,11 +152,7 @@ pub(in crate::backend::wayland) fn resolve_system_clipboard() -> ClipboardPasteR
     let Some(mime_type) = image::choose_supported_mime(&offered) else {
         return ClipboardPasteResult::NoSupportedMime { offered };
     };
-    log::info!(
-        "Selected clipboard MIME type '{}' from offered {:?}",
-        mime_type,
-        offered
-    );
+    log::info!("Selected clipboard MIME type '{mime_type}' from offered {offered:?}");
     let limit = if mime_type == WAYSCRIBER_SELECTION_MIME {
         MAX_CLIPBOARD_SELECTION_BYTES
     } else {
@@ -282,7 +278,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             },
         ),
         ClipboardPasteResult::ClipboardUnavailable(err) => {
-            log::warn!("Clipboard unavailable: {}", err);
+            log::warn!("Clipboard unavailable: {err}");
             TransferPlan::action(PasteAction::TryFreshLocalFallbackOrWarn {
                 request,
                 missing_warning: TransferWarning::ClipboardUnavailable,
@@ -290,7 +286,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             })
         }
         ClipboardPasteResult::NoSupportedMime { offered } => {
-            log::debug!("Unsupported clipboard MIME types: {:?}", offered);
+            log::debug!("Unsupported clipboard MIME types: {offered:?}");
             TransferPlan::with_effects(
                 supersede_request_generation(&request),
                 PasteAction::ShowWarning {
@@ -325,7 +321,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             },
         ),
         ClipboardPasteResult::DecodeFailed(err) => {
-            log::warn!("Clipboard image decode failed: {}", err);
+            log::warn!("Clipboard image decode failed: {err}");
             TransferPlan::with_effects(
                 supersede_request_generation(&request),
                 PasteAction::ShowWarning {
@@ -343,7 +339,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             })
         }
         ClipboardPasteResult::ClipboardError(err) => {
-            log::warn!("Clipboard paste error: {}", err);
+            log::warn!("Clipboard paste error: {err}");
             TransferPlan::action(PasteAction::TryFreshLocalFallbackOrWarn {
                 request,
                 missing_warning: TransferWarning::ClipboardError,
@@ -351,7 +347,7 @@ pub(in crate::backend::wayland) fn plan_paste_completion(
             })
         }
         ClipboardPasteResult::MalformedPrivateSelection(err) => {
-            log::warn!("Malformed Wayscriber clipboard payload: {}", err);
+            log::warn!("Malformed Wayscriber clipboard payload: {err}");
             TransferPlan::with_effects(
                 supersede_request_generation(&request),
                 PasteAction::ShowWarning {

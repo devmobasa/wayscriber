@@ -63,7 +63,7 @@ impl WaylandState {
                 });
             }
             Err(err) => {
-                warn!("Failed to lock pointer for toolbar drag: {}", err);
+                warn!("Failed to lock pointer for toolbar drag: {err}");
                 return;
             }
         }
@@ -90,7 +90,7 @@ impl WaylandState {
                 drag_log(|| "relative pointer bound for drag");
             }
             Err(err) => {
-                warn!("Failed to obtain relative pointer for drag: {}", err);
+                warn!("Failed to obtain relative pointer for drag: {err}");
                 // Abort lock if relative pointer is unavailable; fall back to absolute path.
                 self.unlock_pointer();
             }

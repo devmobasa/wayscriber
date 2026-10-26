@@ -123,10 +123,7 @@ impl WaylandState {
     fn handle_stylus_proximity_in(&mut self, proxy: &ZwpTabletToolV2, surface: WlSurface) {
         let tool_id = proxy.id();
         let tool_type = self.tablet.tool_types.get(&tool_id).copied();
-        debug!(
-            "Tablet proximity in: tool {:?}, type: {:?}",
-            tool_id, tool_type
-        );
+        debug!("Tablet proximity in: tool {tool_id:?}, type: {tool_type:?}");
         let routed = self.route_input(&surface, (0.0, 0.0));
         let on_overlay = routed.surface == InputSurface::Canvas;
         let on_toolbar = routed.surface == InputSurface::Toolbar;
@@ -171,10 +168,7 @@ impl WaylandState {
     fn handle_stylus_proximity_out(&mut self, proxy: &ZwpTabletToolV2) {
         let tool_id = proxy.id();
         let tool_type = self.tablet.tool_types.get(&tool_id).copied();
-        debug!(
-            "Tablet proximity out: tool {:?}, type: {:?}",
-            tool_id, tool_type
-        );
+        debug!("Tablet proximity out: tool {tool_id:?}, type: {tool_type:?}");
         self.commit_pending_stylus_frame();
         self.cancel_region_selection_from(RegionInputSource::Stylus);
         self.take_retired_stylus_contact();
@@ -211,10 +205,7 @@ impl WaylandState {
             .set_tool_override_with(self.render.text_measurer(), restored_tool);
         self.tablet.auto_switched_to_eraser = false;
         self.tablet.pre_eraser_tool_override = None;
-        info!(
-            "Restored previous tool after eraser proximity out: {:?}",
-            restored_tool
-        );
+        info!("Restored previous tool after eraser proximity out: {restored_tool:?}");
     }
 
     fn handle_stylus_down(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
@@ -521,7 +512,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 use crate::backend::wayland::TabletToolType;
                 let physical_type = TabletToolType::from(tool_type);
                 let tool_id = _proxy.id();
-                debug!("Tablet tool type: {:?} -> {:?}", tool_id, physical_type);
+                debug!("Tablet tool type: {tool_id:?} -> {physical_type:?}");
                 state.tablet.tool_types.insert(tool_id, physical_type);
 
                 // Note: We don't switch tools here - this event comes during initial
@@ -548,7 +539,7 @@ impl Dispatch<ZwpTabletToolV2, ()> for WaylandState {
                 debug!("Tablet frame event");
             }
             other => {
-                debug!("Unhandled tablet tool event: {:?}", other);
+                debug!("Unhandled tablet tool event: {other:?}");
             }
         }
     }

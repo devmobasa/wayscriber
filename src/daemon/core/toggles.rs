@@ -125,17 +125,14 @@ impl Daemon {
             Ok(spawned_overlay) => {
                 *suppress_overlay_action_signal |= spawned_overlay;
                 if let Err(err) = write_daemon_toggle_command_success(command) {
-                    warn!("Failed to write daemon toggle response: {}", err);
+                    warn!("Failed to write daemon toggle response: {err}");
                 }
             }
             Err(err) => {
                 let message = format!("{err:#}");
-                warn!("Toggle overlay failed: {}", message);
+                warn!("Toggle overlay failed: {message}");
                 if let Err(response_err) = write_daemon_toggle_command_error(command, &message) {
-                    warn!(
-                        "Failed to write daemon toggle error response: {}",
-                        response_err
-                    );
+                    warn!("Failed to write daemon toggle error response: {response_err}");
                 }
             }
         }

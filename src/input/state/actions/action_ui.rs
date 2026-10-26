@@ -282,7 +282,7 @@ impl InputState {
         } else {
             let message = tr("Input HUD disabled");
             self.push_toast(ToastPriority::Info, "ui", Toast::info(message));
-            info!("{}", message);
+            info!("{message}");
         }
     }
 

@@ -288,7 +288,7 @@ async fn test_capture_manager_with_dependencies() {
             assert!(result.saved_path.is_none());
             assert!(result.copied_to_clipboard);
         }
-        other => panic!("Expected success outcome, got {:?}", other),
+        other => panic!("Expected success outcome, got {other:?}"),
     }
     assert_eq!(*clipboard_calls.lock().unwrap(), 1);
 }

@@ -234,9 +234,9 @@ impl WaylandState {
             }
 
             if let Err(err) = ctx.set_source_surface(&surface, 0.0, 0.0) {
-                warn!("Failed to set frozen background surface: {}", err);
+                warn!("Failed to set frozen background surface: {err}");
             } else if let Err(err) = ctx.paint() {
-                warn!("Failed to paint frozen background: {}", err);
+                warn!("Failed to paint frozen background: {err}");
             }
             let _ = ctx.restore();
 

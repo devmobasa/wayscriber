@@ -94,14 +94,11 @@ impl WindowHandler for WaylandState {
         self.refresh_active_output_label();
 
         if self.surface.update_dimensions(width, height) {
-            info!("xdg window configured: {}x{}", width, height);
+            info!("xdg window configured: {width}x{height}");
             self.buffer_damage
                 .mark_all_full(FullDamageReason::SurfaceResized);
         } else {
-            debug!(
-                "xdg window configure acknowledged without size change ({}x{})",
-                width, height
-            );
+            debug!("xdg window configure acknowledged without size change ({width}x{height})");
         }
 
         self.surface.set_configured(true);

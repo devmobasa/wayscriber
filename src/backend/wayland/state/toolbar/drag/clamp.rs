@@ -32,10 +32,7 @@ impl WaylandState {
         let height = f64::from(self.surface.height());
         if width == 0.0 || height == 0.0 {
             drag_log(|| {
-                format!(
-                    "skip clamp: surface not configured (width={}, height={})",
-                    width, height
-                )
+                format!("skip clamp: surface not configured (width={width}, height={height})")
             });
             return false;
         }

@@ -69,8 +69,7 @@ pub(crate) fn read_clipboard_text_via_command() -> Result<String, ClipboardTextE
             ))
         } else {
             Err(ClipboardTextError::Other(format!(
-                "wl-paste exited unsuccessfully: {}",
-                stderr
+                "wl-paste exited unsuccessfully: {stderr}"
             )))
         }
     }

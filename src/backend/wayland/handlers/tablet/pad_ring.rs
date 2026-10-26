@@ -16,16 +16,16 @@ impl Dispatch<ZwpTabletPadRingV2, ()> for WaylandState {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_ring_v2::Event;
         match event {
             Event::Source { source } => {
-                debug!("Tablet pad ring source: {:?}", source);
+                debug!("Tablet pad ring source: {source:?}");
             }
             Event::Angle { degrees } => {
-                debug!("Tablet pad ring angle: {:?}", degrees);
+                debug!("Tablet pad ring angle: {degrees:?}");
             }
             Event::Stop => {
                 debug!("Tablet pad ring interaction stopped");
             }
             Event::Frame { time } => {
-                debug!("Tablet pad ring frame @ {}", time);
+                debug!("Tablet pad ring frame @ {time}");
             }
             _ => {}
         }

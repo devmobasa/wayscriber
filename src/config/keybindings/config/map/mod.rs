@@ -175,8 +175,7 @@ impl<'maps> BindingInserter<'maps> {
             return Ok(());
         }
         Err(format!(
-            "Duplicate keybinding '{}' assigned to both {:?} and {:?}",
-            binding_str, existing_action, action
+            "Duplicate keybinding '{binding_str}' assigned to both {existing_action:?} and {action:?}"
         ))
     }
 

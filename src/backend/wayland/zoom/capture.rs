@@ -224,7 +224,7 @@ impl ZoomState {
                     "capture.preflight component=zoom phase=screencopy-buffer width={width} height={height} stride={stride} format={format:?}"
                 );
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
-                    warn!("Failed to prepare zoom buffer: {}", err);
+                    warn!("Failed to prepare zoom buffer: {err}");
                     self.fail_capture(input_state, false, err.to_string());
                 }
             }
@@ -233,7 +233,7 @@ impl ZoomState {
             }
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
-                    warn!("Failed to issue zoom copy: {}", err);
+                    warn!("Failed to issue zoom copy: {err}");
                     self.fail_capture(input_state, false, err.to_string());
                 }
             }
@@ -257,7 +257,7 @@ impl ZoomState {
                         return;
                     }
                     Err(err) => {
-                        warn!("Zoom capture ready handling failed: {}", err);
+                        warn!("Zoom capture ready handling failed: {err}");
                         self.fail_capture(input_state, false, err.to_string());
                         return;
                     }
@@ -307,7 +307,7 @@ impl ZoomState {
         let format = match format {
             WEnum::Value(fmt) => fmt,
             WEnum::Unknown(raw) => {
-                anyhow::bail!("Unknown wl_shm format {}", raw);
+                anyhow::bail!("Unknown wl_shm format {raw}");
             }
         };
 

@@ -44,16 +44,14 @@ pub(super) fn inspect_path(
     }
     if before.len() > MAX_RUNTIME_UI_FILE_BYTES {
         return Err(RuntimeStateInspectionError::new(format!(
-            "runtime-state file exceeds the {} byte limit",
-            MAX_RUNTIME_UI_FILE_BYTES
+            "runtime-state file exceeds the {MAX_RUNTIME_UI_FILE_BYTES} byte limit"
         )));
     }
 
     let bytes = read_bounded(&resolved_path, &mut file)?;
     if bytes.len() as u64 > MAX_RUNTIME_UI_FILE_BYTES {
         return Err(RuntimeStateInspectionError::new(format!(
-            "runtime-state file exceeds the {} byte limit",
-            MAX_RUNTIME_UI_FILE_BYTES
+            "runtime-state file exceeds the {MAX_RUNTIME_UI_FILE_BYTES} byte limit"
         )));
     }
     file.seek(SeekFrom::Start(0))
@@ -128,8 +126,7 @@ pub(super) fn inspect_pinned(
     }
     if before.len() > MAX_RUNTIME_UI_FILE_BYTES {
         return Err(RuntimeStateInspectionError::new(format!(
-            "runtime-state file exceeds the {} byte limit",
-            MAX_RUNTIME_UI_FILE_BYTES
+            "runtime-state file exceeds the {MAX_RUNTIME_UI_FILE_BYTES} byte limit"
         )));
     }
 
@@ -291,8 +288,7 @@ fn read_bounded(path: &Path, file: &mut File) -> Result<Vec<u8>, RuntimeStateIns
         .map_err(|error| inspection_error(path, &error))?;
     if bytes.len() as u64 > MAX_RUNTIME_UI_FILE_BYTES {
         return Err(RuntimeStateInspectionError::new(format!(
-            "runtime-state file exceeds the {} byte limit",
-            MAX_RUNTIME_UI_FILE_BYTES
+            "runtime-state file exceeds the {MAX_RUNTIME_UI_FILE_BYTES} byte limit"
         )));
     }
     Ok(bytes)

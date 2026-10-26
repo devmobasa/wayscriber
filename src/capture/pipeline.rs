@@ -121,7 +121,7 @@ pub(crate) async fn perform_capture(
     let image_data = match dependencies.source.capture(request.capture_type).await {
         Ok(data) => data,
         Err(CaptureError::Cancelled(reason)) => {
-            log::info!("Capture cancelled: {}", reason);
+            log::info!("Capture cancelled: {reason}");
             return Err(CaptureError::Cancelled(reason));
         }
         Err(err) => return Err(err),
@@ -161,7 +161,7 @@ pub(crate) async fn perform_capture(
                     {
                         Ok(path) => Some(path),
                         Err(err) => {
-                            log::warn!("Failed to save screenshot: {}", err);
+                            log::warn!("Failed to save screenshot: {err}");
                             save_error = Some(err);
                             None
                         }
@@ -240,7 +240,7 @@ pub(crate) async fn deliver_image(
                 {
                     Ok(path) => Some(path),
                     Err(err) => {
-                        log::warn!("Failed to save delivered image: {}", err);
+                        log::warn!("Failed to save delivered image: {err}");
                         save_error = Some(err);
                         None
                     }
@@ -329,7 +329,7 @@ pub(crate) async fn render_and_deliver_document(
     let render = request.render;
     let document = task::spawn_blocking(render)
         .await
-        .map_err(|e| CaptureError::ImageError(format!("Render task failed: {}", e)))??;
+        .map_err(|e| CaptureError::ImageError(format!("Render task failed: {e}")))??;
     deliver_document(
         DocumentDeliveryRequest {
             document,
@@ -410,7 +410,7 @@ async fn save_bytes(
 ) -> Result<PathBuf, CaptureError> {
     task::spawn_blocking(move || saver.save(&bytes, &config))
         .await
-        .map_err(|e| CaptureError::ImageError(format!("Save task failed: {}", e)))?
+        .map_err(|e| CaptureError::ImageError(format!("Save task failed: {e}")))?
 }
 
 async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec<u8>) -> bool {
@@ -422,14 +422,14 @@ async fn copy_to_clipboard(clipboard: Arc<dyn CaptureClipboard>, image_data: Vec
         )
     })
     .await
-    .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {}", e)))
+    .map_err(|e| CaptureError::ClipboardError(format!("Clipboard task failed: {e}")))
     {
         Ok(Ok(())) => {
             log::info!("Successfully copied to clipboard");
             true
         }
         Ok(Err(e)) | Err(e) => {
-            log::error!("Failed to copy to clipboard: {}", e);
+            log::error!("Failed to copy to clipboard: {e}");
             false
         }
     }

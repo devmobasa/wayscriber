@@ -31,7 +31,7 @@ pub(super) fn decode_clipboard_uri_list(
         let path = match file_uri::decode_file_uri(&uri) {
             Ok(path) => path,
             Err(err) => {
-                log::debug!("Ignoring unsupported clipboard file URI '{}': {}", uri, err);
+                log::debug!("Ignoring unsupported clipboard file URI '{uri}': {err}");
                 continue;
             }
         };

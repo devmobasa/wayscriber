@@ -65,8 +65,7 @@ fn bind_shell_globals(
             let session_env =
                 env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_else(|_| "unknown".into());
             warn!(
-                "Layer shell not available: {} (desktop='{}', session='{}'); toolbars will be disabled and xdg fallback may not cover docks/panels.",
-                err, desktop_env, session_env
+                "Layer shell not available: {err} (desktop='{desktop_env}', session='{session_env}'); toolbars will be disabled and xdg fallback may not cover docks/panels."
             );
             None
         }
@@ -77,7 +76,7 @@ fn bind_shell_globals(
             Some(shell)
         }
         Err(err) => {
-            warn!("xdg-shell not available: {}", err);
+            warn!("xdg-shell not available: {err}");
             None
         }
     };
@@ -87,7 +86,7 @@ fn bind_shell_globals(
             Some(state)
         }
         Err(err) => {
-            debug!("xdg-activation not available: {}", err);
+            debug!("xdg-activation not available: {err}");
             None
         }
     };
@@ -117,8 +116,7 @@ fn bind_capture_globals(
         }
         Err(err) => {
             warn!(
-                "zwlr_screencopy_manager_v1 not available; frozen mode may use portal fallback: {}",
-                err
+                "zwlr_screencopy_manager_v1 not available; frozen mode may use portal fallback: {err}"
             );
             None
         }
@@ -156,10 +154,7 @@ fn bind_text_input_manager(
             Some(manager)
         }
         Err(err) => {
-            debug!(
-                "zwp_text_input_manager_v3 not available; IME disabled: {}",
-                err
-            );
+            debug!("zwp_text_input_manager_v3 not available; IME disabled: {err}");
             None
         }
     }

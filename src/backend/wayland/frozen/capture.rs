@@ -270,7 +270,7 @@ impl FrozenState {
                 stride,
             } => {
                 if let Err(err) = self.on_buffer(format, width, height, stride) {
-                    warn!("Failed to prepare screencopy buffer: {}", err);
+                    warn!("Failed to prepare screencopy buffer: {err}");
                     return self.fail_wlr_capture();
                 }
             }
@@ -280,7 +280,7 @@ impl FrozenState {
             }
             FrameEvent::BufferDone => {
                 if let Err(err) = self.on_buffer_done() {
-                    warn!("Failed to issue screencopy copy: {}", err);
+                    warn!("Failed to issue screencopy copy: {err}");
                     return self.fail_wlr_capture();
                 }
             }
@@ -305,7 +305,7 @@ impl FrozenState {
                     self.finish_stale_direct_capture(input_state);
                 }
                 Err(err) => {
-                    warn!("Frozen capture ready handling failed: {}", err);
+                    warn!("Frozen capture ready handling failed: {err}");
                     // `on_ready` owns and destroys the completed WLR attempt,
                     // including error paths, so only the fallback decision
                     // remains here.
@@ -352,7 +352,7 @@ impl FrozenState {
         let format = match format {
             WEnum::Value(fmt) => fmt,
             WEnum::Unknown(raw) => {
-                anyhow::bail!("Unknown wl_shm format {}", raw);
+                anyhow::bail!("Unknown wl_shm format {raw}");
             }
         };
 

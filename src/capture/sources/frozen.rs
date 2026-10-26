@@ -8,7 +8,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
     let decoder = png::Decoder::new(Cursor::new(data));
     let mut reader = decoder
         .read_info()
-        .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
+        .map_err(|e| CaptureError::ImageError(format!("Decode error: {e}")))?;
 
     let output_size = reader
         .output_buffer_size()
@@ -16,7 +16,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
     let mut buf = vec![0; output_size];
     let info = reader
         .next_frame(&mut buf)
-        .map_err(|e| CaptureError::ImageError(format!("Decode error: {}", e)))?;
+        .map_err(|e| CaptureError::ImageError(format!("Decode error: {e}")))?;
 
     let mut argb = Vec::with_capacity((info.width * info.height * 4) as usize);
     let iter: Box<dyn Iterator<Item = (u8, u8, u8, u8)>> = match info.color_type {
@@ -34,8 +34,7 @@ pub fn decode_image_to_argb(data: &[u8]) -> Result<(Vec<u8>, u32, u32), CaptureE
         )),
         other => {
             return Err(CaptureError::ImageError(format!(
-                "Unsupported PNG color type: {:?}",
-                other
+                "Unsupported PNG color type: {other:?}"
             )));
         }
     };
