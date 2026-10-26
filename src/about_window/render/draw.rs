@@ -87,23 +87,22 @@ fn backdrop(ctx: &cairo::Context, plan: &Plan, theme: &Theme) {
 fn header(engine: &UiTextEngine, ctx: &cairo::Context, frame: &Frame<'_>, theme: &Theme) {
     let plan = frame.plan;
 
-    match frame.icon {
-        Some(icon) => draw_icon(ctx, icon, plan.icon),
-        None => {
-            // A themed monogram beats an empty gap when the PNG cannot be
-            // decoded.
-            fill_rounded_rect(ctx, plan.icon, CARD_RADIUS, theme.accent);
-            let style = style(20.0, cairo::FontWeight::Bold);
-            let x = plan.icon.0 + (plan.icon.2 - advance(engine, style, "W")) / 2.0;
-            label(
-                engine,
-                ctx,
-                style,
-                (x, plan.icon.1 + plan.icon.3 * 0.72),
-                (1.0, 1.0, 1.0, 1.0),
-                "W",
-            );
-        }
+    if let Some(icon) = frame.icon {
+        draw_icon(ctx, icon, plan.icon);
+    } else {
+        // A themed monogram beats an empty gap when the PNG cannot be
+        // decoded.
+        fill_rounded_rect(ctx, plan.icon, CARD_RADIUS, theme.accent);
+        let style = style(20.0, cairo::FontWeight::Bold);
+        let x = plan.icon.0 + (plan.icon.2 - advance(engine, style, "W")) / 2.0;
+        label(
+            engine,
+            ctx,
+            style,
+            (x, plan.icon.1 + plan.icon.3 * 0.72),
+            (1.0, 1.0, 1.0, 1.0),
+            "W",
+        );
     }
 
     label(

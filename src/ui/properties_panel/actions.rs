@@ -127,16 +127,13 @@ fn draw_preset_chip(
 
     ctx.new_path();
     ctx.arc(left + dot, cy, dot, 0.0, consts::TAU);
-    match color {
-        Some(color) => {
-            set_color(ctx, (color.r, color.g, color.b, color.a.max(0.35)));
-            let _ = ctx.fill();
-        }
-        None => {
-            set_color(ctx, ink);
-            ctx.set_line_width(1.0);
-            let _ = ctx.stroke();
-        }
+    if let Some(color) = color {
+        set_color(ctx, (color.r, color.g, color.b, color.a.max(0.35)));
+        let _ = ctx.fill();
+    } else {
+        set_color(ctx, ink);
+        ctx.set_line_width(1.0);
+        let _ = ctx.stroke();
     }
     set_color(ctx, ink);
     engine.draw_baseline(

@@ -360,21 +360,20 @@ impl RuntimeUiStateController {
         path_effect: RuntimeStateFailurePathEffect,
         failed_replacement: Option<&HeldReplacementStage>,
     ) -> PersistenceIncidentId {
-        let barrier = match self.active_barrier.as_ref() {
-            Some(barrier) => barrier.id,
-            None => {
-                let id = ControllerBarrierId(self.next_barrier_id);
-                self.next_barrier_id = self
-                    .next_barrier_id
-                    .checked_add(1)
-                    .expect("barrier id exhausted");
-                self.active_barrier = Some(ActiveControllerBarrier {
-                    id,
-                    operation: ControllerBarrierOperation::PersistenceFailureRecovery,
-                    phase: ControllerBarrierPhase::Inspecting,
-                });
-                id
-            }
+        let barrier = if let Some(barrier) = self.active_barrier.as_ref() {
+            barrier.id
+        } else {
+            let id = ControllerBarrierId(self.next_barrier_id);
+            self.next_barrier_id = self
+                .next_barrier_id
+                .checked_add(1)
+                .expect("barrier id exhausted");
+            self.active_barrier = Some(ActiveControllerBarrier {
+                id,
+                operation: ControllerBarrierOperation::PersistenceFailureRecovery,
+                phase: ControllerBarrierPhase::Inspecting,
+            });
+            id
         };
         let id = PersistenceIncidentId(
             allocate_counter(&mut self.next_incident_id).expect("incident id exhausted"),

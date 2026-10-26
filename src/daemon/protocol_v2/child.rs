@@ -336,13 +336,14 @@ impl OverlayChildOwner {
     /// its identity is still held, then clears its proofs and releases it.
     fn retire(&mut self, status: i32) -> OverlayExit {
         let session = match (self.generation(), self.owned.as_ref()) {
-            (Some(generation), Some(owned)) => match owned.process_start_ticks {
-                Some(ticks) => take_final_session_report(generation, owned.display_pid, ticks),
-                None => {
+            (Some(generation), Some(owned)) => {
+                if let Some(ticks) = owned.process_start_ticks {
+                    take_final_session_report(generation, owned.display_pid, ticks)
+                } else {
                     discard_session_report(generation);
                     None
                 }
-            },
+            }
             _ => None,
         };
         if let Some(generation) = self.generation.take() {

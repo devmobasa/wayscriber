@@ -145,12 +145,11 @@ fn classify_event_nodes(dir: &Path) -> EventNodeAccess {
     };
     let mut access = EventNodeAccess::None;
     for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => {
-                access = access.include(NodePathAccess::Unknown);
-                continue;
-            }
+        let entry = if let Ok(entry) = entry {
+            entry
+        } else {
+            access = access.include(NodePathAccess::Unknown);
+            continue;
         };
         if !entry
             .file_name()

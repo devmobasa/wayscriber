@@ -310,19 +310,18 @@ impl CanvasLayerCache {
             bake_ctx.translate(-f64::from(world_x), -f64::from(world_y));
 
             let paper = match background.filter(|_| grid.kind != BoardGridKind::None) {
-                Some(color) => match BoardPaper::for_context(color, grid, &bake_ctx) {
-                    Ok(paper) => {
+                Some(color) => {
+                    if let Ok(paper) = BoardPaper::for_context(color, grid, &bake_ctx) {
                         if paper.paint(&bake_ctx).is_err() {
                             cache.clear();
                             return false;
                         }
                         Some(paper)
-                    }
-                    Err(_) => {
+                    } else {
                         cache.clear();
                         return false;
                     }
-                },
+                }
                 None => None,
             };
 

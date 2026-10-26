@@ -100,30 +100,27 @@ impl CommandOwner {
         let mut references = BTreeMap::new();
         let mut duplicate_orders = BTreeSet::new();
         for entry in read_dir_bounded(&queue_dir(&self.root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
-            let name = match entry.file_name().into_string() {
-                Ok(name) => name,
-                Err(_) => {
-                    quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
-                    continue;
-                }
+            let name = if let Ok(name) = entry.file_name().into_string() {
+                name
+            } else {
+                quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
+                continue;
             };
             if name.starts_with('.') {
                 continue;
             }
-            let (order, identity) = match parse_queue_name(&name) {
-                Ok(parsed) => parsed,
-                Err(_) => {
-                    quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
-                    continue;
-                }
+            let (order, identity) = if let Ok(parsed) = parse_queue_name(&name) {
+                parsed
+            } else {
+                quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
+                continue;
             };
             let reference: QueueReference =
-                match read_record(&entry.path(), MAX_QUEUE_REFERENCE_BYTES) {
-                    Ok(reference) => reference,
-                    Err(_) => {
-                        quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
-                        continue;
-                    }
+                if let Ok(reference) = read_record(&entry.path(), MAX_QUEUE_REFERENCE_BYTES) {
+                    reference
+                } else {
+                    quarantine_entry(&self.root, &entry.path(), QuarantineKind::Queue)?;
+                    continue;
                 };
             if validate_reference(&reference, order, &identity, &self.daemon_token).is_err() {
                 if reference.command_identity == identity {
@@ -201,14 +198,13 @@ impl CommandOwner {
         if !try_lock_until(&decision_lock, libc::LOCK_EX, retry_deadline)? {
             return Ok(None);
         }
-        let mut control = match read_control(&path) {
-            Ok(control) => control,
-            Err(_) => {
-                unlock(&decision_lock)?;
-                quarantine_entry(&self.root, &reference_path, QuarantineKind::Queue)?;
-                quarantine_entry(&self.root, &path, QuarantineKind::Control)?;
-                return Ok(None);
-            }
+        let mut control = if let Ok(control) = read_control(&path) {
+            control
+        } else {
+            unlock(&decision_lock)?;
+            quarantine_entry(&self.root, &reference_path, QuarantineKind::Queue)?;
+            quarantine_entry(&self.root, &path, QuarantineKind::Control)?;
+            return Ok(None);
         };
         if control.identity != reference.command_identity
             || control.queue_order != reference.queue_order

@@ -268,16 +268,15 @@ async fn within_deadline<T>(
     step: impl Future<Output = T>,
     close: impl Future<Output = ()>,
 ) -> Result<T, CaptureError> {
-    match time::timeout_at(deadline, step).await {
-        Ok(value) => Ok(value),
-        Err(_) => {
-            log::warn!(
-                "Screenshot portal did not answer within {}s; closing the request",
-                limit.as_secs()
-            );
-            close.await;
-            Err(CaptureError::PortalTimeout(limit))
-        }
+    if let Ok(value) = time::timeout_at(deadline, step).await {
+        Ok(value)
+    } else {
+        log::warn!(
+            "Screenshot portal did not answer within {}s; closing the request",
+            limit.as_secs()
+        );
+        close.await;
+        Err(CaptureError::PortalTimeout(limit))
     }
 }
 

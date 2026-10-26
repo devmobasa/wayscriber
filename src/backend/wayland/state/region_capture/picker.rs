@@ -206,23 +206,20 @@ impl WaylandState {
                 }
             }
             RegionPickerEntry::AutoFreeze => {
-                match self
+                if let Ok(acquisition) = self
                     .acquisition
                     .request(ScreenAcquisitionOwner::RegionCapture)
                 {
-                    Ok(acquisition) => {
-                        self.set_pending_frozen_screen_region(purpose, generation, acquisition);
-                    }
-                    Err(_) => {
-                        self.cancel_region_capture_ui_and_lifecycle();
-                        self.input_state.push_toast(
-                            ToastPriority::Info,
-                            TOAST_SOURCE,
-                            Toast::warning(tr(
-                                "Capture is already preparing another overlay operation.",
-                            )),
-                        );
-                    }
+                    self.set_pending_frozen_screen_region(purpose, generation, acquisition);
+                } else {
+                    self.cancel_region_capture_ui_and_lifecycle();
+                    self.input_state.push_toast(
+                        ToastPriority::Info,
+                        TOAST_SOURCE,
+                        Toast::warning(tr(
+                            "Capture is already preparing another overlay operation.",
+                        )),
+                    );
                 }
             }
             RegionPickerEntry::Legacy => self.handoff_region_capture_to_legacy(),

@@ -25,13 +25,12 @@ pub(super) fn handle_color_picker_popup_release(state: &mut InputState, x: i32, 
         return true;
     }
 
-    let layout = match state.color_picker_popup_layout() {
-        Some(layout) => layout,
-        None => {
-            // No layout, close popup
-            state.close_color_picker_popup(true);
-            return true;
-        }
+    let layout = if let Some(layout) = state.color_picker_popup_layout() {
+        layout
+    } else {
+        // No layout, close popup
+        state.close_color_picker_popup(true);
+        return true;
     };
 
     // Popup actions use a same-button press/release contract. A press that

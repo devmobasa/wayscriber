@@ -414,27 +414,24 @@ pub(super) fn draw_switch(
 
     let knob = radius - 3.0;
     let (_, cy) = rect.center();
-    match on {
-        Some(on) => {
-            let cx = if on {
-                rect.right() - 3.0 - knob
-            } else {
-                rect.x + 3.0 + knob
-            };
-            ctx.arc(cx, cy, knob, 0.0, TAU);
-            set_color(
-                ctx,
-                state.fade(if on { TEXT_WHITE } else { TEXT_SECONDARY }),
-            );
-            let _ = ctx.fill();
-        }
+    if let Some(on) = on {
+        let cx = if on {
+            rect.right() - 3.0 - knob
+        } else {
+            rect.x + 3.0 + knob
+        };
+        ctx.arc(cx, cy, knob, 0.0, TAU);
+        set_color(
+            ctx,
+            state.fade(if on { TEXT_WHITE } else { TEXT_SECONDARY }),
+        );
+        let _ = ctx.fill();
+    } else {
         // Mixed: a bar in the middle, neither on nor off.
-        None => {
-            let (cx, _) = rect.center();
-            set_color(ctx, state.fade(TEXT_WHITE));
-            draw_rounded_rect(ctx, cx - 7.0, cy - 2.0, 14.0, 4.0, 2.0);
-            let _ = ctx.fill();
-        }
+        let (cx, _) = rect.center();
+        set_color(ctx, state.fade(TEXT_WHITE));
+        draw_rounded_rect(ctx, cx - 7.0, cy - 2.0, 14.0, 4.0, 2.0);
+        let _ = ctx.fill();
     }
 }
 

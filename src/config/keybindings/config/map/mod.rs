@@ -50,24 +50,21 @@ struct ConflictLog {
 
 impl ConflictLog {
     fn record(&mut self, binding: &Shortcut, first: Action, next: Action) {
-        match self.positions.get(binding) {
-            Some(&position) => {
-                let actions = &mut self.entries[position].actions;
-                if !actions.contains(&next) {
-                    actions.push(next);
-                }
+        if let Some(&position) = self.positions.get(binding) {
+            let actions = &mut self.entries[position].actions;
+            if !actions.contains(&next) {
+                actions.push(next);
             }
-            None => {
-                self.positions.insert(binding.clone(), self.entries.len());
-                let mut actions = vec![first];
-                if next != first {
-                    actions.push(next);
-                }
-                self.entries.push(KeybindingConflict {
-                    binding: binding.clone(),
-                    actions,
-                });
+        } else {
+            self.positions.insert(binding.clone(), self.entries.len());
+            let mut actions = vec![first];
+            if next != first {
+                actions.push(next);
             }
+            self.entries.push(KeybindingConflict {
+                binding: binding.clone(),
+                actions,
+            });
         }
     }
 }

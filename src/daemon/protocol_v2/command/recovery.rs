@@ -28,22 +28,20 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
             quarantine_entry(root, &path, QuarantineKind::Control)?;
             continue;
         }
-        let decision_lock = match open_lock(&path.join("decision.lock"), false) {
-            Ok(lock) => lock,
-            Err(_) => {
-                quarantine_entry(root, &path, QuarantineKind::Control)?;
-                continue;
-            }
+        let decision_lock = if let Ok(lock) = open_lock(&path.join("decision.lock"), false) {
+            lock
+        } else {
+            quarantine_entry(root, &path, QuarantineKind::Control)?;
+            continue;
         };
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
         lock_until(&decision_lock, libc::LOCK_EX, deadline)?;
-        let mut control = match read_control(&path) {
-            Ok(control) => control,
-            Err(_) => {
-                unlock(&decision_lock)?;
-                quarantine_entry(root, &path, QuarantineKind::Control)?;
-                continue;
-            }
+        let mut control = if let Ok(control) = read_control(&path) {
+            control
+        } else {
+            unlock(&decision_lock)?;
+            quarantine_entry(root, &path, QuarantineKind::Control)?;
+            continue;
         };
         if control.target_daemon_token == daemon_token || control.response.is_some() {
             unlock(&decision_lock)?;
@@ -123,31 +121,28 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
     }
 
     for entry in read_dir_bounded(&queue_dir(root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
-        let name = match entry.file_name().into_string() {
-            Ok(name) => name,
-            Err(_) => {
-                quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
-                continue;
-            }
+        let name = if let Ok(name) = entry.file_name().into_string() {
+            name
+        } else {
+            quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
+            continue;
         };
         if name.starts_with('.') {
             continue;
         }
-        let (_order, identity) = match parse_queue_name(&name) {
-            Ok(parsed) => parsed,
-            Err(_) => {
+        let (_order, identity) = if let Ok(parsed) = parse_queue_name(&name) {
+            parsed
+        } else {
+            quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
+            continue;
+        };
+        let reference: QueueReference =
+            if let Ok(reference) = read_record(&entry.path(), MAX_QUEUE_REFERENCE_BYTES) {
+                reference
+            } else {
                 quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
                 continue;
-            }
-        };
-        let reference: QueueReference = match read_record(&entry.path(), MAX_QUEUE_REFERENCE_BYTES)
-        {
-            Ok(reference) => reference,
-            Err(_) => {
-                quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
-                continue;
-            }
-        };
+            };
         if reference.command_identity != identity {
             quarantine_entry(root, &entry.path(), QuarantineKind::Queue)?;
             continue;

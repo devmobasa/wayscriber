@@ -421,17 +421,16 @@ impl ConfigEditWorker {
         if finished.is_some() {
             self.handed_over.pop_front();
         }
-        let completion = match finished {
-            Some(completion) => completion,
+        let completion = if let Some(completion) = finished {
+            completion
+        } else {
             // No worker, or none left: nothing older can still arrive, so the
             // edits it never took come back as failed writes, oldest first.
-            None => {
-                let edit = self.staged.pop_front()?;
-                let reason = self.stop_reason();
-                ConfigEditCompletion {
-                    edit,
-                    result: Err(anyhow!("{reason}")),
-                }
+            let edit = self.staged.pop_front()?;
+            let reason = self.stop_reason();
+            ConfigEditCompletion {
+                edit,
+                result: Err(anyhow!("{reason}")),
             }
         };
         self.retire_projection(&completion);

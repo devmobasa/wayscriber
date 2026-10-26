@@ -97,15 +97,12 @@ impl TextEditorPopover {
 
     pub(super) fn refresh(&self, open: bool, text: &str, parse_error: Option<&str>) {
         set_text_blocked(&self.entry, &self.entry_handler, text);
-        match parse_error {
-            Some(message) => {
-                set_label(&self.error, message);
-                self.error.set_visible(true);
-            }
-            None => {
-                set_label(&self.error, "");
-                self.error.set_visible(false);
-            }
+        if let Some(message) = parse_error {
+            set_label(&self.error, message);
+            self.error.set_visible(true);
+        } else {
+            set_label(&self.error, "");
+            self.error.set_visible(false);
         }
         if open {
             if !self.popover.is_visible() {

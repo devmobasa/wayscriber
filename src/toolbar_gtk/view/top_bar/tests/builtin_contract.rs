@@ -87,20 +87,17 @@ fn assert_builtin_node_kind(node: &TopToolbarWidgetKind, expected: &SemanticCont
             ..
         } => {
             assert_eq!(*active, expected.active);
-            match expected.icon {
-                // A filled slot carries the saved tool glyph; an empty slot
-                // has no glyph and shows its 1-based number label.
-                Some(icon) => {
-                    let glyph = glyph.as_ref().expect("filled preset slot has a glyph");
-                    assert!(ptr::fn_addr_eq(
-                        glyph.0,
-                        toolbar_icons::top_toolbar_icon_painter(icon)
-                    ));
-                }
-                None => {
-                    assert!(glyph.is_none(), "empty preset slot has no glyph");
-                    assert_eq!(*label, expected.label);
-                }
+            // A filled slot carries the saved tool glyph; an empty slot
+            // has no glyph and shows its 1-based number label.
+            if let Some(icon) = expected.icon {
+                let glyph = glyph.as_ref().expect("filled preset slot has a glyph");
+                assert!(ptr::fn_addr_eq(
+                    glyph.0,
+                    toolbar_icons::top_toolbar_icon_painter(icon)
+                ));
+            } else {
+                assert!(glyph.is_none(), "empty preset slot has no glyph");
+                assert_eq!(*label, expected.label);
             }
         }
         W::MicroChip { glyph, .. } => {

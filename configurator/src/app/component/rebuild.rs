@@ -185,23 +185,19 @@ pub(super) fn restore(widgets: &AppWidgets, state: ViewState) {
                 if let (Some(editable), Some(caret)) =
                     (widget.downcast_ref::<gtk::Editable>(), caret)
                 {
-                    match caret.selection {
-                        // `select_region` puts the caret on its second
-                        // argument, and the bounds come back ordered: a
-                        // selection made backwards keeps its active end
-                        // where the caret was.
-                        Some((start, end)) => {
-                            let (anchor, active) = if caret.position == start {
-                                (end, start)
-                            } else {
-                                (start, end)
-                            };
-                            editable.select_region(anchor, active);
-                        }
-                        None => {
-                            editable.select_region(caret.position, caret.position);
-                            editable.set_position(caret.position);
-                        }
+                    // `select_region` puts the caret on its second argument,
+                    // and the bounds come back ordered: a selection made
+                    // backwards keeps its active end where the caret was.
+                    if let Some((start, end)) = caret.selection {
+                        let (anchor, active) = if caret.position == start {
+                            (end, start)
+                        } else {
+                            (start, end)
+                        };
+                        editable.select_region(anchor, active);
+                    } else {
+                        editable.select_region(caret.position, caret.position);
+                        editable.set_position(caret.position);
                     }
                 }
             }

@@ -71,12 +71,11 @@ impl Dispatch<ZwpTabletPadV2, ()> for WaylandState {
 
     fn event_created_child(opcode: u16, qhandle: &QueueHandle<Self>) -> Arc<dyn ObjectData> {
         use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_pad_v2::EVT_GROUP_OPCODE;
-        match opcode {
-            EVT_GROUP_OPCODE => qhandle.make_data::<ZwpTabletPadGroupV2, _>(()),
-            _ => {
-                warn!("Ignoring unknown tablet pad child opcode {opcode}");
-                Arc::new(IgnoredObjectData)
-            }
+        if opcode == EVT_GROUP_OPCODE {
+            qhandle.make_data::<ZwpTabletPadGroupV2, _>(())
+        } else {
+            warn!("Ignoring unknown tablet pad child opcode {opcode}");
+            Arc::new(IgnoredObjectData)
         }
     }
 }

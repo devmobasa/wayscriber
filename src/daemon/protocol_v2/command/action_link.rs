@@ -295,17 +295,17 @@ fn finish_command_action_inner(
         unlock(&decision)?;
         bail!("command action claim no longer matches");
     }
-    let (effect_id, effect_kind) = match &control.decision {
-        CommandDecision::Committed {
-            effect_id,
-            effect_kind,
-            effect_status: EffectStatus::Authorized,
-            ..
-        } => (effect_id.clone(), *effect_kind),
-        _ => {
-            unlock(&decision)?;
-            bail!("command action effect is not authorized");
-        }
+    let (effect_id, effect_kind) = if let CommandDecision::Committed {
+        effect_id,
+        effect_kind,
+        effect_status: EffectStatus::Authorized,
+        ..
+    } = &control.decision
+    {
+        (effect_id.clone(), *effect_kind)
+    } else {
+        unlock(&decision)?;
+        bail!("command action effect is not authorized");
     };
     let reason = bounded_reason(
         reason.unwrap_or("action handler proved no effect"),

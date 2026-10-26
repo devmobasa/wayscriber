@@ -182,30 +182,29 @@ impl FeedbackPublisher {
                         break;
                     }
                 }
-                match replacement {
-                    Some(index) => state.queue[index] = feedback,
-                    None => {
-                        // A boundary may have consumed a slot by reclaiming a
-                        // move from an older segment. Reclaim another move and
-                        // append this one after the boundary instead of moving
-                        // it across ordered feedback or failing the bridge.
-                        let reclaim = state
-                            .queue
-                            .iter()
-                            .position(|queued| queued.move_kind() == Some(kind))
-                            .or_else(|| {
-                                state
-                                    .queue
-                                    .iter()
-                                    .position(|queued| queued.move_kind().is_some())
-                            });
-                        if let Some(index) = reclaim {
-                            state.queue.remove(index);
-                            state.queue.push_back(feedback);
-                        } else {
-                            state.accepting = false;
-                            overflowed = true;
-                        }
+                if let Some(index) = replacement {
+                    state.queue[index] = feedback;
+                } else {
+                    // A boundary may have consumed a slot by reclaiming a
+                    // move from an older segment. Reclaim another move and
+                    // append this one after the boundary instead of moving
+                    // it across ordered feedback or failing the bridge.
+                    let reclaim = state
+                        .queue
+                        .iter()
+                        .position(|queued| queued.move_kind() == Some(kind))
+                        .or_else(|| {
+                            state
+                                .queue
+                                .iter()
+                                .position(|queued| queued.move_kind().is_some())
+                        });
+                    if let Some(index) = reclaim {
+                        state.queue.remove(index);
+                        state.queue.push_back(feedback);
+                    } else {
+                        state.accepting = false;
+                        overflowed = true;
                     }
                 }
             } else {
