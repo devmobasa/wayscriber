@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber"
-version = "0.9.27"
+version = "0.9.28"
 dependencies = [
  "anyhow",
  "cairo-rs",
@@ -1935,7 +1935,7 @@ dependencies = [
 
 [[package]]
 name = "wayscriber-configurator"
-version = "0.9.27"
+version = "0.9.28"
 dependencies = [
  "gtk4",
  "libadwaita",

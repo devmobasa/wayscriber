@@ -1,6 +1,6 @@
 [package]
 name = "wayscriber"
-version = "0.9.27"
+version = "0.9.28"
 edition = "2024"
 rust-version = "1.99.1"
 description = "Screen annotation tool for Wayland compositors"
