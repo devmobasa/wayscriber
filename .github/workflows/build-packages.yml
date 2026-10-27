@@ -36,7 +36,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies package
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.98.1
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Install nfpm
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-nfpm

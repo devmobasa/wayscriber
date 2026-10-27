@@ -1,7 +1,7 @@
 # wayscriber
 
 [![许可证](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.98.1%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-orange.svg)](https://www.rust-lang.org/)
 
 [English](README.md) · **简体中文**
 
@@ -581,7 +581,7 @@ sudo dnf install ./wayscriber-configurator-x86_64.rpm
 
 ### 从源码构建
 
-需要 Rust 1.98.1 或更新版本。如果尚未安装 `rustup`，请先安装它（也会安装 `cargo`），随后在当前 shell 中加载 Cargo：
+需要 Rust 1.99.1 或更新版本。如果尚未安装 `rustup`，请先安装它（也会安装 `cargo`），随后在当前 shell 中加载 Cargo：
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -594,12 +594,12 @@ source "$HOME/.cargo/env"
 ```bash
 git clone https://github.com/devmobasa/wayscriber.git
 cd wayscriber
-rustup toolchain install 1.98.1 --component clippy --component rustfmt
+rustup toolchain install 1.99.1 --component clippy --component rustfmt
 cargo --version
 ```
 
 
-仓库的 `rust-toolchain.toml` 会在此检出目录中选择 Rust 1.98.1。如果此前为目录设置了旧版覆盖，请在该目录执行 `rustup override unset`，让工具链文件生效。
+仓库的 `rust-toolchain.toml` 会在此检出目录中选择 Rust 1.99.1。如果此前为目录设置了旧版覆盖，请在该目录执行 `rustup override unset`，让工具链文件生效。
 
 **依赖：**
 

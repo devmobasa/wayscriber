@@ -42,7 +42,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci prepare-gtk4-layer-shell --library-mode both
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.98.1
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: clippy, rustfmt
 
@@ -103,7 +103,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci prepare-gtk4-layer-shell --library-mode both
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.98.1
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: clippy, rustfmt
 
