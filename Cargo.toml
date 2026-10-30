@@ -94,7 +94,7 @@ serde_ignored = "0.1"
 schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
 # Safe wrappers for the kernel interfaces that the std library does not cover.
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "stdio", "termios", "thread", "time"] }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "thread", "time"] }
 # Kernel random bytes for portal handle tokens and daemon protocol identifiers.
 getrandom = { version = "0.4", features = ["std"] }
 # Securely created, self-deleting temporary files for the OCR engine handoff.

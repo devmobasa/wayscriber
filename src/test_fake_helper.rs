@@ -15,6 +15,8 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io, process};
 
+use rustix::process as rustix_process;
+
 use anyhow::{Context, Result};
 
 use crate::durable_io;
@@ -124,8 +126,7 @@ fn play(arguments: &[OsString]) -> Result<()> {
     let report: Vec<u8> = match role {
         Role::Exit => return Ok(()),
         Role::ReportProcessGroup => {
-            // SAFETY: getpgrp has no preconditions and cannot fail.
-            let leader = unsafe { libc::getpgrp() } == process::id() as libc::pid_t;
+            let leader = rustix_process::getpgrp().as_raw_pid() == process::id() as libc::pid_t;
             if leader {
                 "process-group-leader"
             } else {

@@ -633,7 +633,6 @@ mod tests {
 
         drop(ownership);
 
-        // SAFETY: signal zero only probes the test-owned provider after teardown.
-        assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
+        assert!(rustix_process::test_kill_process(Pid::from_raw(pid).unwrap()).is_err());
     }
 }
