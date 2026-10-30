@@ -1,14 +1,18 @@
 use std::ffi::{CString, OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(target_os = "linux")]
+use rustix::fs::RenameFlags;
+use rustix::fs::{self as rustix_fs, AtFlags, Mode, OFlags};
+use rustix::io::Errno;
 
 use crate::runtime_ui_state::{RuntimeStateFileIdentity, RuntimeStateResolvedParent};
 
@@ -62,8 +66,8 @@ impl PinnedParent {
         })
     }
 
-    fn fd(&self) -> libc::c_int {
-        self.inner.file.as_raw_fd()
+    fn fd(&self) -> BorrowedFd<'_> {
+        self.inner.file.as_fd()
     }
 
     fn sync(&self) -> io::Result<()> {
@@ -77,7 +81,7 @@ impl PinnedParent {
             return Ok(self.inner.observed_path.clone());
         }
 
-        let proc_path = PathBuf::from(format!("/proc/self/fd/{}", self.fd()));
+        let proc_path = PathBuf::from(format!("/proc/self/fd/{}", self.fd().as_raw_fd()));
         let current = fs::read_link(proc_path)?;
         if !fs::metadata(&current)
             .is_ok_and(|metadata| file_identity(&metadata) == self.inner.identity)
@@ -100,15 +104,13 @@ pub(super) struct PinnedPath {
 impl PinnedPath {
     pub(super) fn open_read(&self) -> io::Result<File> {
         let leaf = os_str_c_string(&self.leaf)?;
-        // SAFETY: the parent fd and CString remain valid for the duration of the call.
-        let fd = unsafe {
-            libc::openat(
-                self.parent.fd(),
-                leaf.as_ptr(),
-                libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW | libc::O_NONBLOCK,
-            )
-        };
-        file_from_fd(fd)
+        let fd = rustix_fs::openat(
+            self.parent.fd(),
+            &leaf,
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+            Mode::empty(),
+        )?;
+        Ok(File::from(fd))
     }
 
     pub(super) fn reported_path(&self) -> io::Result<PathBuf> {
@@ -119,40 +121,23 @@ impl PinnedPath {
         self.parent.sync()
     }
 
-    fn create_new(&self, mode: libc::mode_t) -> io::Result<File> {
+    fn create_new(&self, mode: Mode) -> io::Result<File> {
         let leaf = os_str_c_string(&self.leaf)?;
-        // SAFETY: the parent fd and CString remain valid for the duration of the call.
-        let fd = unsafe {
-            libc::openat(
-                self.parent.fd(),
-                leaf.as_ptr(),
-                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC | libc::O_NOFOLLOW,
-                mode,
-            )
-        };
-        file_from_fd(fd)
+        let fd = rustix_fs::openat(
+            self.parent.fd(),
+            &leaf,
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+            mode,
+        )?;
+        Ok(File::from(fd))
     }
 
     fn exists_nofollow(&self) -> io::Result<bool> {
         let leaf = os_str_c_string(&self.leaf)?;
-        let mut stat = MaybeUninit::<libc::stat>::uninit();
-        // SAFETY: the pointers are valid and stat points to writable storage.
-        let result = unsafe {
-            libc::fstatat(
-                self.parent.fd(),
-                leaf.as_ptr(),
-                stat.as_mut_ptr(),
-                libc::AT_SYMLINK_NOFOLLOW,
-            )
-        };
-        if result == 0 {
-            return Ok(true);
-        }
-        let error = io::Error::last_os_error();
-        if error.kind() == io::ErrorKind::NotFound {
-            Ok(false)
-        } else {
-            Err(error)
+        match rustix_fs::statat(self.parent.fd(), &leaf, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(_) => Ok(true),
+            Err(Errno::NOENT) => Ok(false),
+            Err(errno) => Err(errno.into()),
         }
     }
 }
@@ -184,18 +169,20 @@ impl Drop for CleanupPath {
 }
 
 pub(super) fn create_synced_temp(path: &PinnedPath, bytes: &[u8]) -> io::Result<CleanupPath> {
-    let path = create_unique_sibling(path, "tmp", |candidate| match candidate.create_new(0o600) {
-        Ok(mut file) => {
-            let result = file.write_all(bytes).and_then(|()| file.sync_all());
-            drop(file);
-            if let Err(error) = result {
-                let _ = remove_file(candidate);
-                return Err(error);
+    let path = create_unique_sibling(path, "tmp", |candidate| {
+        match candidate.create_new(Mode::RUSR | Mode::WUSR) {
+            Ok(mut file) => {
+                let result = file.write_all(bytes).and_then(|()| file.sync_all());
+                drop(file);
+                if let Err(error) = result {
+                    let _ = remove_file(candidate);
+                    return Err(error);
+                }
+                Ok(true)
             }
-            Ok(true)
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+            Err(error) => Err(error),
         }
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
-        Err(error) => Err(error),
     })?;
     Ok(CleanupPath::new(path))
 }
@@ -236,21 +223,14 @@ pub(super) fn rename_noreplace(source: &PinnedPath, destination: &PinnedPath) ->
     {
         let source_leaf = os_str_c_string(&source.leaf)?;
         let destination_leaf = os_str_c_string(&destination.leaf)?;
-        // SAFETY: both parent fds and CStrings remain valid for the call.
-        let result = unsafe {
-            libc::renameat2(
-                source.parent.fd(),
-                source_leaf.as_ptr(),
-                destination.parent.fd(),
-                destination_leaf.as_ptr(),
-                libc::RENAME_NOREPLACE,
-            )
-        };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        rustix_fs::renameat_with(
+            source.parent.fd(),
+            &source_leaf,
+            destination.parent.fd(),
+            &destination_leaf,
+            RenameFlags::NOREPLACE,
+        )
+        .map_err(io::Error::from)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -264,13 +244,7 @@ pub(super) fn rename_noreplace(source: &PinnedPath, destination: &PinnedPath) ->
 
 pub(super) fn remove_file(path: &PinnedPath) -> io::Result<()> {
     let leaf = os_str_c_string(&path.leaf)?;
-    // SAFETY: the parent fd and CString remain valid for the duration of the call.
-    let result = unsafe { libc::unlinkat(path.parent.fd(), leaf.as_ptr(), 0) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    rustix_fs::unlinkat(path.parent.fd(), &leaf, AtFlags::empty()).map_err(io::Error::from)
 }
 
 fn validate_leaf(leaf: &OsStr) -> io::Result<()> {
@@ -286,14 +260,6 @@ fn validate_leaf(leaf: &OsStr) -> io::Result<()> {
 fn os_str_c_string(value: &OsStr) -> io::Result<CString> {
     CString::new(value.as_bytes())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL byte"))
-}
-
-fn file_from_fd(fd: libc::c_int) -> io::Result<File> {
-    if fd < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: openat returned a new owned descriptor on success.
-    Ok(unsafe { File::from_raw_fd(fd) })
 }
 
 fn file_identity(metadata: &fs::Metadata) -> RuntimeStateFileIdentity {

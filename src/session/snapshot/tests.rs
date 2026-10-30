@@ -22,19 +22,15 @@ use crate::draw::frame::{MAX_COMPOUND_DEPTH, ShapeSnapshot, UndoAction};
 use crate::draw::{ArrowStyle, Color, FontDescriptor, Frame, Shape};
 use crate::input::EraserMode;
 use crate::session::options::{CompressionMode, SessionOptions};
-use crate::test_temp::tempdir;
+use crate::test_temp::{make_fifo, tempdir};
 use crate::time_utils::now_rfc3339;
-#[cfg(unix)]
-use std::ffi::CString;
 use std::fs::{File, Permissions};
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
-use std::{fs, io, thread};
+use std::{fs, thread};
 
 fn sample_frame() -> Frame {
     let mut frame = Frame::new();
@@ -279,20 +275,6 @@ fn write_contentless_session(path: &Path) {
         serde_json::to_vec_pretty(&contentless_session_file()).expect("contentless session json"),
     )
     .expect("contentless session write");
-}
-
-#[cfg(unix)]
-pub(super) fn make_fifo(path: &Path) {
-    let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
-    // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
-    let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
-    assert_eq!(
-        result,
-        0,
-        "mkfifo {} failed: {}",
-        path.display(),
-        io::Error::last_os_error()
-    );
 }
 
 pub(super) fn set_modified(path: &Path, modified: SystemTime) {

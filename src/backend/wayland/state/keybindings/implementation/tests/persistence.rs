@@ -1,3 +1,5 @@
+use rustix::process as rustix_process;
+
 use crate::config::ConfigDocument;
 use crate::{config, test_temp};
 
@@ -387,8 +389,7 @@ fn a_read_only_config_fails_the_write_and_leaves_the_file_alone() {
     fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o755)).expect("restore dir");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("restore file");
 
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    if unsafe { libc::geteuid() } == 0 {
+    if rustix_process::geteuid().is_root() {
         // Root ignores these modes; the scenario cannot be staged.
         return;
     }
