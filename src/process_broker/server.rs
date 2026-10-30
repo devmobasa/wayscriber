@@ -4,13 +4,11 @@ use std::os::unix::process::CommandExt;
 use std::process::{Child, ExitCode, Stdio};
 use std::thread::Builder;
 use std::time::Duration;
-use std::{env, io};
+use std::{env, io, mem};
 
 use anyhow::{Context, Result, anyhow, bail};
 use rustix::event::{self, PollFd, PollFlags};
 use rustix::io::{self as rustix_io, Errno, FdFlags};
-use rustix::net::SocketType;
-use rustix::net::sockopt;
 use rustix::process::{self as rustix_process, Pid, Signal};
 
 use crate::daemon::protocol_v2::ProtocolId;
@@ -38,21 +36,22 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
         .parse::<RawFd>()
         .ok()?;
     let token = env::var(BROKER_TOKEN_ENV).ok()?;
-    if fd != BROKER_FD || shutdown_fd != BROKER_SHUTDOWN_FD || !canonical_lower_hex(&token, 64) {
+    if fd != BROKER_FD
+        || shutdown_fd != BROKER_SHUTDOWN_FD
+        || !canonical_lower_hex(&token, 64)
+        || validate_broker_socket(fd).is_err()
+        || validate_broker_socket(shutdown_fd).is_err()
+    {
         return Some(ExitCode::from(126));
     }
-    // SAFETY: the fixed numbers are never -1, the socket checks below reject a
-    // number that is not an open broker channel before anything else uses it,
-    // and nothing in this process closes those channels before it exits.
+    // SAFETY: both numbers were just checked to be open broker sockets, and
+    // nothing in this process closes them before it exits.
     let (fd, shutdown_fd) = unsafe {
         (
             BorrowedFd::borrow_raw(fd),
             BorrowedFd::borrow_raw(shutdown_fd),
         )
     };
-    if validate_broker_socket(fd).is_err() || validate_broker_socket(shutdown_fd).is_err() {
-        return Some(ExitCode::from(126));
-    }
     // Restore CLOEXEC before any runtime helper can inherit broker internals.
     for descriptor in [fd, shutdown_fd] {
         if rustix_io::fcntl_setfd(descriptor, FdFlags::CLOEXEC).is_err() {
@@ -71,8 +70,25 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
     })
 }
 
-fn validate_broker_socket(fd: BorrowedFd<'_>) -> io::Result<()> {
-    if sockopt::socket_type(fd)? != SocketType::SEQPACKET {
+fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
+    let mut socket_type = 0_i32;
+    let mut length = mem::size_of::<i32>() as libc::socklen_t;
+    // SAFETY: the output slots are valid for getsockopt, which also rejects a
+    // number that is not an open descriptor. A borrowed descriptor cannot be
+    // used here because it requires the number to be open already.
+    if unsafe {
+        libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_TYPE,
+            (&raw mut socket_type).cast(),
+            &raw mut length,
+        )
+    } != 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    if socket_type != libc::SOCK_SEQPACKET {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "broker descriptor is not SOCK_SEQPACKET",
@@ -542,7 +558,7 @@ fn canonical_lower_hex(value: &str, length: usize) -> bool {
 mod tests {
     use std::process::Command;
 
-    use rustix::net::{self, AddressFamily, SendFlags, SocketFlags};
+    use rustix::net::{self, AddressFamily, SendFlags, SocketFlags, SocketType};
 
     use super::*;
 

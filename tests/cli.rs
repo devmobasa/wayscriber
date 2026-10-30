@@ -343,6 +343,19 @@ fn clustered_help_and_version_exit_zero_without_runtime_startup() {
         .stdout_starts_with("wayscriber ");
 }
 
+#[cfg(unix)]
+#[test]
+fn internal_broker_entry_rejects_descriptors_that_are_not_broker_sockets() {
+    run_command(
+        wayscriber_cmd()
+            .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_FD", "3")
+            .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_SHUTDOWN_FD", "4")
+            .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_TOKEN", "a".repeat(64)),
+    )
+    .failure()
+    .code(126);
+}
+
 #[test]
 fn invalid_arguments_exit_two() {
     for (args, diagnostic) in [
