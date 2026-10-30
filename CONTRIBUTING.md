@@ -125,6 +125,16 @@ cargo test session::
 cargo test -p wayscriber-configurator
 ```
 
+For a fast run of the whole suite, use [cargo-nextest](https://nexte.st/), which the Nix shell
+includes. It gives each test its own process, so it can run in parallel despite the native font
+race that keeps the local CI entry point serial:
+
+```bash
+cargo nextest run --workspace --all-features
+```
+
+It skips doctests and the isolated render tests, so it does not replace that entry point.
+
 Before submitting a broad or cross-package change, run the local CI entry point:
 
 ```bash

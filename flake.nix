@@ -33,6 +33,7 @@
         developmentInputs = with pkgs; [
           rustToolchain
           cargo-deny
+          cargo-nextest
           util-linux
           pkg-config
           cairo
