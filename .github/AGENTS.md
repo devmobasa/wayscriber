@@ -17,6 +17,7 @@
   prefill for binaries that can never be updated retroactively.
 - Keep Linux system dependencies aligned with real build needs for Wayland, Cairo, Pango, GTK4/libadwaita, D-Bus, packaging, and Nix checks.
 - `deny.toml` is the dependency policy and the `dependency-policy` job enforces it. Advisories report without blocking, so a new advisory cannot fail an unrelated pull request; bans, licenses, and sources block.
+- `dependabot.yml` proposes weekly Cargo and GitHub Actions updates. Its zbus major-version ignore is coupled to the advisory ignores in `deny.toml`.
 - Do not weaken release checks or skip package layout/version validation without a documented reason.
 
 ## Coupled Changes

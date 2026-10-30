@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      compatible:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # ksni, which the tray feature needs, still requires zbus 5. Remove this
+      # with the matching advisory ignores in deny.toml.
+      - dependency-name: zbus
+        update-types:
+          - version-update:semver-major
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
