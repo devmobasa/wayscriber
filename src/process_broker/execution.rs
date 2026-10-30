@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
-use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::Arc;
@@ -10,6 +9,10 @@ use std::time::Duration;
 use std::{mem, thread};
 
 use anyhow::{Context, Result, anyhow};
+use rustix::event::{self, PollFd, PollFlags, Timespec};
+use rustix::fs::{self as rustix_fs, OFlags};
+use rustix::io::Errno;
+use rustix::process::{self as rustix_process, Pid, Signal, WaitId, WaitIdOptions};
 
 use crate::daemon::protocol_v2::{BootClock, BootDeadline};
 
@@ -25,7 +28,10 @@ use super::wire::{HelperKind, MAX_STDERR_BYTES, OutputMode, STDOUT_CAP_EXCEEDED}
 const PIPE_DRAIN_GRACE: Duration = Duration::from_secs(2);
 
 /// How often a pipe thread waiting on an idle pipe checks whether to give up.
-const PIPE_POLL_INTERVAL_MS: libc::c_int = 20;
+const PIPE_POLL_INTERVAL: Timespec = Timespec {
+    tv_sec: 0,
+    tv_nsec: 20_000_000,
+};
 
 const PIPE_HELD_OPEN: &str = "broker helper pipe is still open after the helper exited";
 
@@ -63,12 +69,9 @@ pub(super) fn terminate_owned_children(children: &mut BTreeMap<String, Child>) {
 }
 
 pub(super) fn kill_child_process_group(child: &mut Child) {
-    let pid = child.id();
-    if let Ok(group) = i32::try_from(pid) {
-        // SAFETY: broker children use a fresh process group equal to their PID.
-        if unsafe { libc::kill(-group, libc::SIGKILL) } == 0 {
-            return;
-        }
+    // Broker children use a fresh process group equal to their PID.
+    if rustix_process::kill_process_group(Pid::from_child(child), Signal::KILL).is_ok() {
+        return;
     }
     let _ = child.kill();
 }
@@ -145,48 +148,28 @@ impl Drop for OwnedProcess {
 }
 
 fn child_status_unreaped(child: &Child) -> io::Result<Option<i32>> {
-    let mut info = MaybeUninit::<libc::siginfo_t>::zeroed();
     // WNOWAIT pins the zombie leader and therefore its process-group identity.
-    // SAFETY: info is writable and child is owned by this broker.
-    if unsafe {
-        libc::waitid(
-            libc::P_PID,
-            child.id(),
-            info.as_mut_ptr(),
-            libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-        )
-    } != 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: waitid initialized info after success.
-    let info = unsafe { info.assume_init() };
-    // SAFETY: info was zeroed before the call and waitid only writes a SIGCHLD
-    // record into it, so the pid field it reads is initialized; it stays zero
-    // when WNOHANG found no waitable child.
-    if unsafe { info.si_pid() } == 0 {
+    let options = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
+    let Some(status) = rustix_process::waitid(WaitId::Pid(Pid::from_child(child)), options)? else {
         return Ok(None);
-    }
-    // SAFETY: CLD terminal records initialize si_status.
-    let detail = unsafe { info.si_status() };
-    let status = match info.si_code {
-        libc::CLD_EXITED => detail,
-        libc::CLD_KILLED | libc::CLD_DUMPED => 128_i32.saturating_add(detail),
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "waitid returned a nonterminal child status",
-            ));
-        }
     };
-    Ok(Some(status))
+    if let Some(code) = status.exit_status() {
+        return Ok(Some(code));
+    }
+    if let Some(signal) = status.terminating_signal() {
+        return Ok(Some(128_i32.saturating_add(signal)));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "waitid returned a nonterminal child status",
+    ))
 }
 
 pub(super) fn publish_bounded(
     mut command: Command,
     input: Vec<u8>,
     timeout: Duration,
-    shutdown_fd: RawFd,
+    shutdown_fd: BorrowedFd<'static>,
 ) -> Result<PublishOutput> {
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker publication cancelled during shutdown"));
@@ -254,17 +237,10 @@ fn write_input_until(
     mut stdin: ChildStdin,
     input: &[u8],
     deadline: BootDeadline,
-    shutdown_fd: RawFd,
+    shutdown_fd: BorrowedFd<'static>,
 ) -> io::Result<()> {
-    let descriptor = stdin.as_raw_fd();
-    // SAFETY: fcntl reads and updates descriptor-local flags.
-    let flags = unsafe { libc::fcntl(descriptor, libc::F_GETFL) };
-    // SAFETY: `stdin` keeps the descriptor open, and F_SETFL only adds
-    // O_NONBLOCK to the flags just read from it.
-    if flags < 0 || unsafe { libc::fcntl(descriptor, libc::F_SETFL, flags | libc::O_NONBLOCK) } != 0
-    {
-        return Err(io::Error::last_os_error());
-    }
+    let flags = rustix_fs::fcntl_getfl(&stdin)?;
+    rustix_fs::fcntl_setfl(&stdin, flags | OFlags::NONBLOCK)?;
     let mut offset = 0;
     while offset < input.len() {
         if shutdown_requested(shutdown_fd)? {
@@ -298,7 +274,7 @@ pub(super) fn run_bounded(
     timeout: Duration,
     output_cap: usize,
     output_mode: OutputMode,
-    shutdown_fd: RawFd,
+    shutdown_fd: BorrowedFd<'static>,
 ) -> Result<BoundedOutput> {
     if shutdown_requested(shutdown_fd)? {
         return Err(anyhow!("broker helper cancelled during shutdown"));
@@ -421,7 +397,7 @@ struct AbandonablePipe<P> {
     abandon: Arc<AtomicBool>,
 }
 
-impl<P: AsRawFd> AbandonablePipe<P> {
+impl<P: AsFd> AbandonablePipe<P> {
     fn new(pipe: P, abandon: &Arc<AtomicBool>) -> Self {
         Self {
             pipe,
@@ -429,42 +405,31 @@ impl<P: AsRawFd> AbandonablePipe<P> {
         }
     }
 
-    fn wait_until_ready(&self, events: libc::c_short) -> io::Result<()> {
-        let mut pollfd = libc::pollfd {
-            fd: self.pipe.as_raw_fd(),
-            events,
-            revents: 0,
-        };
+    fn wait_until_ready(&self, events: PollFlags) -> io::Result<()> {
+        let mut pollfds = [PollFd::new(&self.pipe, events)];
         loop {
             if self.abandon.load(Ordering::Acquire) {
                 return Err(io::Error::new(io::ErrorKind::TimedOut, PIPE_HELD_OPEN));
             }
-            // SAFETY: pollfd points to one initialized entry, and the pipe
-            // stays open for as long as `self` owns it.
-            let result = unsafe { libc::poll(&raw mut pollfd, 1, PIPE_POLL_INTERVAL_MS) };
-            if result > 0 {
-                return Ok(());
-            }
-            if result < 0 {
-                let error = io::Error::last_os_error();
-                if error.kind() != io::ErrorKind::Interrupted {
-                    return Err(error);
-                }
+            match event::poll(&mut pollfds, Some(&PIPE_POLL_INTERVAL)) {
+                Ok(0) | Err(Errno::INTR) => {}
+                Ok(_) => return Ok(()),
+                Err(errno) => return Err(errno.into()),
             }
         }
     }
 }
 
-impl<P: Read + AsRawFd> Read for AbandonablePipe<P> {
+impl<P: Read + AsFd> Read for AbandonablePipe<P> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        self.wait_until_ready(libc::POLLIN)?;
+        self.wait_until_ready(PollFlags::IN)?;
         self.pipe.read(buffer)
     }
 }
 
-impl<P: Write + AsRawFd> Write for AbandonablePipe<P> {
+impl<P: Write + AsFd> Write for AbandonablePipe<P> {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        self.wait_until_ready(libc::POLLOUT)?;
+        self.wait_until_ready(PollFlags::OUT)?;
         // A writable pipe has room for at least PIPE_BUF bytes, so a write of
         // no more than that cannot block on a reader that stopped reading.
         self.pipe.write(&buffer[..buffer.len().min(libc::PIPE_BUF)])

@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::io::ErrorKind;
-use std::os::fd::{AsRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, Weak};
 #[cfg(test)]
@@ -10,6 +10,9 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use rustix::io::Errno;
+use rustix::net::{self, SendFlags};
+use rustix::process::{self as rustix_process, Pid, Signal};
 
 use crate::daemon::protocol_v2::ProtocolId;
 
@@ -87,8 +90,8 @@ enum ExchangeWait {
 /// The transport policy and watchdog a spawn request carries, kept together so
 /// the private spawn path stays inside the argument-count lint.
 #[derive(Debug, Clone, Copy)]
-struct SpawnOptions {
-    watchdog: Option<RawFd>,
+struct SpawnOptions<'descriptor> {
+    watchdog: Option<BorrowedFd<'descriptor>>,
     wait: ExchangeWait,
 }
 
@@ -119,7 +122,7 @@ pub(crate) fn current() -> Result<ProcessBroker> {
 impl Drop for ProcessBrokerGuard {
     fn drop(&mut self) {
         let was_healthy = self.broker.inner.healthy.swap(false, Ordering::AcqRel);
-        let asked_to_stop = signal_shutdown(self.broker.inner.shutdown.as_raw_fd()).is_ok();
+        let asked_to_stop = signal_shutdown(self.broker.inner.shutdown.as_fd()).is_ok();
         // A broker whose exchange failed may be stuck and never read the
         // shutdown request. Waiting on it without a bound would hang the very
         // exit that lets the service manager start a fresh daemon.
@@ -129,11 +132,11 @@ impl Drop for ProcessBrokerGuard {
                     self.broker.inner.child_pid,
                     UNHEALTHY_BROKER_EXIT_GRACE,
                 ));
-        if must_kill && self.broker.inner.child_pid > 0 {
-            // SAFETY: child_pid is the broker process owned by this guard.
-            unsafe {
-                libc::kill(self.broker.inner.child_pid, libc::SIGKILL);
-            }
+        if must_kill
+            && self.broker.inner.child_pid > 0
+            && let Some(pid) = Pid::from_raw(self.broker.inner.child_pid)
+        {
+            let _ = rustix_process::kill_process(pid, Signal::KILL);
         }
         #[cfg(test)]
         if let Some(thread) = self
@@ -163,29 +166,20 @@ impl Drop for ProcessBrokerGuard {
     }
 }
 
-fn signal_shutdown(descriptor: RawFd) -> io::Result<()> {
+fn signal_shutdown(descriptor: BorrowedFd<'_>) -> io::Result<()> {
     let byte = [GRACEFUL_SHUTDOWN_BYTE];
     loop {
-        // SAFETY: descriptor is the broker shutdown socket and byte is readable.
-        let written = unsafe {
-            libc::send(
-                descriptor,
-                byte.as_ptr().cast(),
-                byte.len(),
-                libc::MSG_NOSIGNAL,
-            )
-        };
-        if written == 1 {
-            return Ok(());
+        match net::send(descriptor, &byte, SendFlags::NOSIGNAL) {
+            Ok(1) => return Ok(()),
+            Ok(_) => {
+                return Err(io::Error::new(
+                    ErrorKind::WriteZero,
+                    "short broker shutdown write",
+                ));
+            }
+            Err(Errno::INTR) => {}
+            Err(errno) => return Err(errno.into()),
         }
-        if written < 0 && io::Error::last_os_error().kind() == ErrorKind::Interrupted {
-            continue;
-        }
-        return Err(if written < 0 {
-            io::Error::last_os_error()
-        } else {
-            io::Error::new(ErrorKind::WriteZero, "short broker shutdown write")
-        });
     }
 }
 
@@ -253,7 +247,7 @@ impl ProcessBroker {
     fn request_with_descriptors(
         &self,
         operation: BrokerOperation,
-        descriptors: &[RawFd],
+        descriptors: &[BorrowedFd<'_>],
         wait: ExchangeWait,
     ) -> Result<(BrokerOutcome, Vec<OwnedFd>)> {
         let request_id = ProtocolId::generate()?.to_string();
@@ -271,9 +265,9 @@ impl ProcessBroker {
             bail!("process broker transport is no longer usable");
         }
         let exchange = (|| -> Result<(BrokerResponse, Vec<OwnedFd>)> {
-            set_socket_timeout(self.inner.socket.as_raw_fd(), exchange_timeout)?;
-            send_packet(self.inner.socket.as_raw_fd(), &packet, descriptors)?;
-            let (packet, descriptors) = recv_packet(self.inner.socket.as_raw_fd())?;
+            set_socket_timeout(self.inner.socket.as_fd(), exchange_timeout)?;
+            send_packet(self.inner.socket.as_fd(), &packet, descriptors)?;
+            let (packet, descriptors) = recv_packet(self.inner.socket.as_fd())?;
             let response: BrokerResponse = serde_json::from_slice(&packet)?;
             if response.request_id != request_id {
                 bail!("broker response identity mismatch");
@@ -368,7 +362,7 @@ impl ProcessBroker {
         let (input, input_descriptor) = encode_blob(input, MAX_INPUT_BYTES)?;
         let request_descriptors = input_descriptor
             .as_ref()
-            .map(|descriptor| vec![descriptor.as_raw_fd()])
+            .map(|descriptor| vec![descriptor.as_fd()])
             .unwrap_or_default();
         let (outcome, descriptors) = self.request_with_descriptors(
             BrokerOperation::Run {
@@ -428,7 +422,7 @@ impl ProcessBroker {
         let (input, input_descriptor) = encode_blob(input, super::manifest::input_cap(kind))?;
         let request_descriptors = input_descriptor
             .as_ref()
-            .map(|descriptor| vec![descriptor.as_raw_fd()])
+            .map(|descriptor| vec![descriptor.as_fd()])
             .unwrap_or_default();
         let (outcome, descriptors) = self.request_with_descriptors(
             BrokerOperation::Publish {
@@ -530,7 +524,7 @@ impl ProcessBroker {
         program: &OsStr,
         arguments: I,
         environment: Vec<(OsString, Option<OsString>)>,
-        watchdog: RawFd,
+        watchdog: BorrowedFd<'_>,
     ) -> Result<BrokerChild>
     where
         I: IntoIterator<Item = S>,
@@ -556,7 +550,7 @@ impl ProcessBroker {
         program: &OsStr,
         arguments: I,
         environment: Vec<(OsString, Option<OsString>)>,
-        options: SpawnOptions,
+        options: SpawnOptions<'_>,
     ) -> Result<BrokerChild>
     where
         I: IntoIterator<Item = S>,

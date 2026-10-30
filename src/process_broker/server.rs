@@ -1,12 +1,17 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::os::fd::{AsRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, ExitCode, Stdio};
 use std::thread::Builder;
 use std::time::Duration;
-use std::{env, io, mem};
+use std::{env, io};
 
 use anyhow::{Context, Result, anyhow, bail};
+use rustix::event::{self, PollFd, PollFlags};
+use rustix::io::{self as rustix_io, Errno, FdFlags};
+use rustix::net::SocketType;
+use rustix::net::sockopt;
+use rustix::process::{self as rustix_process, Pid, Signal};
 
 use crate::daemon::protocol_v2::ProtocolId;
 use crate::env_vars;
@@ -33,18 +38,24 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
         .parse::<RawFd>()
         .ok()?;
     let token = env::var(BROKER_TOKEN_ENV).ok()?;
-    if fd != BROKER_FD
-        || shutdown_fd != BROKER_SHUTDOWN_FD
-        || !canonical_lower_hex(&token, 64)
-        || validate_broker_socket(fd).is_err()
-        || validate_broker_socket(shutdown_fd).is_err()
-    {
+    if fd != BROKER_FD || shutdown_fd != BROKER_SHUTDOWN_FD || !canonical_lower_hex(&token, 64) {
+        return Some(ExitCode::from(126));
+    }
+    // SAFETY: the fixed numbers are never -1, the socket checks below reject a
+    // number that is not an open broker channel before anything else uses it,
+    // and nothing in this process closes those channels before it exits.
+    let (fd, shutdown_fd) = unsafe {
+        (
+            BorrowedFd::borrow_raw(fd),
+            BorrowedFd::borrow_raw(shutdown_fd),
+        )
+    };
+    if validate_broker_socket(fd).is_err() || validate_broker_socket(shutdown_fd).is_err() {
         return Some(ExitCode::from(126));
     }
     // Restore CLOEXEC before any runtime helper can inherit broker internals.
     for descriptor in [fd, shutdown_fd] {
-        // SAFETY: both descriptors were validated as inherited broker channels.
-        if unsafe { libc::fcntl(descriptor, libc::F_SETFD, libc::FD_CLOEXEC) } != 0 {
+        if rustix_io::fcntl_setfd(descriptor, FdFlags::CLOEXEC).is_err() {
             return Some(ExitCode::from(126));
         }
     }
@@ -60,23 +71,8 @@ pub(crate) fn run_internal_broker_if_requested() -> Option<ExitCode> {
     })
 }
 
-fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
-    let mut socket_type = 0_i32;
-    let mut length = mem::size_of::<i32>() as libc::socklen_t;
-    // SAFETY: the output slots are valid for getsockopt.
-    if unsafe {
-        libc::getsockopt(
-            fd,
-            libc::SOL_SOCKET,
-            libc::SO_TYPE,
-            (&raw mut socket_type).cast(),
-            &raw mut length,
-        )
-    } != 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-    if socket_type != libc::SOCK_SEQPACKET {
+fn validate_broker_socket(fd: BorrowedFd<'_>) -> io::Result<()> {
+    if sockopt::socket_type(fd)? != SocketType::SEQPACKET {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "broker descriptor is not SOCK_SEQPACKET",
@@ -85,7 +81,11 @@ fn validate_broker_socket(fd: RawFd) -> io::Result<()> {
     Ok(())
 }
 
-fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
+fn broker_loop(
+    socket: BorrowedFd<'static>,
+    shutdown_fd: BorrowedFd<'static>,
+    token: &str,
+) -> Result<()> {
     let mut ownership = BrokerOwnership::default();
     loop {
         if wait_for_request(socket, shutdown_fd)? == BrokerWake::Shutdown {
@@ -139,7 +139,7 @@ fn broker_loop(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
         let response_descriptors = wire_response
             .descriptors
             .iter()
-            .map(AsRawFd::as_raw_fd)
+            .map(AsFd::as_fd)
             .collect::<Vec<_>>();
         send_packet(socket, &bytes, &response_descriptors)?;
         if take_graceful_shutdown_signal(shutdown_fd)? {
@@ -155,39 +155,27 @@ enum BrokerWake {
     Shutdown,
 }
 
-fn wait_for_request(socket: RawFd, shutdown_fd: RawFd) -> io::Result<BrokerWake> {
+fn wait_for_request(socket: BorrowedFd<'_>, shutdown_fd: BorrowedFd<'_>) -> io::Result<BrokerWake> {
     let mut descriptors = [
-        libc::pollfd {
-            fd: socket,
-            events: libc::POLLIN,
-            revents: 0,
-        },
-        libc::pollfd {
-            fd: shutdown_fd,
-            events: libc::POLLIN,
-            revents: 0,
-        },
+        PollFd::from_borrowed_fd(socket, PollFlags::IN),
+        PollFd::from_borrowed_fd(shutdown_fd, PollFlags::IN),
     ];
+    let unusable = PollFlags::HUP | PollFlags::ERR | PollFlags::NVAL;
     loop {
-        // SAFETY: descriptors points to two initialized pollfd entries.
-        let result = unsafe { libc::poll(descriptors.as_mut_ptr(), descriptors.len() as _, -1) };
-        if result < 0 {
-            let error = io::Error::last_os_error();
-            if error.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(error);
+        match event::poll(&mut descriptors, None) {
+            Ok(_) => {}
+            Err(Errno::INTR) => continue,
+            Err(errno) => return Err(errno.into()),
         }
-        if descriptors[1].revents & libc::POLLIN != 0 && take_graceful_shutdown_signal(shutdown_fd)?
-        {
+        let socket_events = descriptors[0].revents();
+        let shutdown_events = descriptors[1].revents();
+        if shutdown_events.contains(PollFlags::IN) && take_graceful_shutdown_signal(shutdown_fd)? {
             return Ok(BrokerWake::Shutdown);
         }
-        if descriptors[0].revents & libc::POLLIN != 0 {
+        if socket_events.contains(PollFlags::IN) {
             return Ok(BrokerWake::Request);
         }
-        if descriptors[0].revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
-            || descriptors[1].revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
-        {
+        if socket_events.intersects(unusable) || shutdown_events.intersects(unusable) {
             return Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "broker control channel became unusable",
@@ -198,6 +186,14 @@ fn wait_for_request(socket: RawFd, shutdown_fd: RawFd) -> io::Result<BrokerWake>
 
 #[cfg(test)]
 pub(super) fn run_loop_for_test(socket: RawFd, shutdown_fd: RawFd, token: &str) -> Result<()> {
+    // SAFETY: the test broker thread owns both descriptors and keeps them open
+    // until this loop returns.
+    let (socket, shutdown_fd) = unsafe {
+        (
+            BorrowedFd::borrow_raw(socket),
+            BorrowedFd::borrow_raw(shutdown_fd),
+        )
+    };
     broker_loop(socket, shutdown_fd, token)
 }
 
@@ -242,7 +238,7 @@ fn handle_operation(
     operation: BrokerOperation,
     descriptors: &mut VecDeque<OwnedFd>,
     ownership: &mut BrokerOwnership,
-    shutdown_fd: RawFd,
+    shutdown_fd: BorrowedFd<'static>,
 ) -> Result<BrokerWireResponse> {
     if shutdown_requested(shutdown_fd)? {
         bail!("broker operation cancelled during shutdown");
@@ -350,20 +346,20 @@ fn handle_operation(
         ),
         BrokerOperation::Signal { handle, signal } => {
             reject_descriptors(descriptors)?;
-            if !matches!(
-                signal,
-                libc::SIGUSR1 | libc::SIGUSR2 | libc::SIGTERM | libc::SIGKILL
-            ) {
-                bail!("signal is not allowed by broker manifest");
-            }
+            let signal = match signal {
+                libc::SIGUSR1 => Signal::USR1,
+                libc::SIGUSR2 => Signal::USR2,
+                libc::SIGTERM => Signal::TERM,
+                libc::SIGKILL => Signal::KILL,
+                _ => bail!("signal is not allowed by broker manifest"),
+            };
             let child = ownership
                 .children
                 .get(&handle)
                 .ok_or_else(|| anyhow!("unknown broker child handle"))?;
-            // SAFETY: the broker retains the exact unreaped child handle.
-            if unsafe { libc::kill(child.id() as i32, signal) } != 0 {
-                return Err(io::Error::last_os_error()).context("broker child signal failed");
-            }
+            rustix_process::kill_process(Pid::from_child(child), signal)
+                .map_err(io::Error::from)
+                .context("broker child signal failed")?;
             Ok(wire_outcome(BrokerOutcome::Acknowledged))
         }
         BrokerOperation::TryWait { handle } => {
@@ -409,7 +405,7 @@ fn spawn_helper(
     request: SpawnRequest,
     descriptors: &mut VecDeque<OwnedFd>,
     children: &mut BTreeMap<String, Child>,
-    shutdown_fd: RawFd,
+    shutdown_fd: BorrowedFd<'static>,
 ) -> Result<BrokerWireResponse> {
     let SpawnRequest {
         kind,
@@ -504,22 +500,17 @@ fn reject_descriptors(descriptors: &VecDeque<OwnedFd>) -> Result<()> {
 }
 
 fn set_cloexec(descriptor: &OwnedFd, enabled: bool) -> Result<()> {
-    // SAFETY: fcntl reads and updates descriptor-local flags.
-    let current = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_GETFD) };
-    if current < 0 {
-        return Err(io::Error::last_os_error()).context("failed to read descriptor flags");
-    }
+    let current = rustix_io::fcntl_getfd(descriptor)
+        .map_err(io::Error::from)
+        .context("failed to read descriptor flags")?;
     let updated = if enabled {
-        current | libc::FD_CLOEXEC
+        current | FdFlags::CLOEXEC
     } else {
-        current & !libc::FD_CLOEXEC
+        current - FdFlags::CLOEXEC
     };
-    // SAFETY: `descriptor` is borrowed open for the call, and `updated` only
-    // changes FD_CLOEXEC in the flags just read from it.
-    if unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_SETFD, updated) } != 0 {
-        return Err(io::Error::last_os_error()).context("failed to update descriptor flags");
-    }
-    Ok(())
+    rustix_io::fcntl_setfd(descriptor, updated)
+        .map_err(io::Error::from)
+        .context("failed to update descriptor flags")
 }
 
 fn wire_outcome(outcome: BrokerOutcome) -> BrokerWireResponse {
@@ -551,30 +542,18 @@ fn canonical_lower_hex(value: &str, length: usize) -> bool {
 mod tests {
     use std::process::Command;
 
+    use rustix::net::{self, AddressFamily, SendFlags, SocketFlags};
+
     use super::*;
-    use std::os::fd::FromRawFd;
 
     fn test_socket_pair() -> (OwnedFd, OwnedFd) {
-        let mut sockets = [0; 2];
-        assert_eq!(
-            // SAFETY: sockets has room for both returned descriptors.
-            unsafe {
-                libc::socketpair(
-                    libc::AF_UNIX,
-                    libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
-                    0,
-                    sockets.as_mut_ptr(),
-                )
-            },
-            0
-        );
-        // SAFETY: socketpair returned two fresh owned descriptors.
-        unsafe {
-            (
-                OwnedFd::from_raw_fd(sockets[0]),
-                OwnedFd::from_raw_fd(sockets[1]),
-            )
-        }
+        net::socketpair(
+            AddressFamily::UNIX,
+            SocketType::SEQPACKET,
+            SocketFlags::CLOEXEC,
+            None,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -583,8 +562,7 @@ mod tests {
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         drop(shutdown_writer);
 
-        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        else {
+        let Err(error) = wait_for_request(control_reader.as_fd(), shutdown_reader.as_fd()) else {
             panic!("hangup must unwind through destructive broker cleanup");
         };
 
@@ -597,21 +575,13 @@ mod tests {
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let signal = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE];
         assert_eq!(
-            // SAFETY: both the descriptor and one-byte buffer are valid.
-            unsafe {
-                libc::send(
-                    shutdown_writer.as_raw_fd(),
-                    signal.as_ptr().cast(),
-                    signal.len(),
-                    libc::MSG_NOSIGNAL,
-                )
-            },
+            net::send(&shutdown_writer, &signal, SendFlags::NOSIGNAL).unwrap(),
             1
         );
         drop(shutdown_writer);
 
         assert!(matches!(
-            wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd()),
+            wait_for_request(control_reader.as_fd(), shutdown_reader.as_fd()),
             Ok(BrokerWake::Shutdown)
         ));
     }
@@ -622,20 +592,11 @@ mod tests {
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [2_u8];
         assert_eq!(
-            // SAFETY: both the descriptor and one-byte buffer are valid.
-            unsafe {
-                libc::send(
-                    shutdown_writer.as_raw_fd(),
-                    invalid.as_ptr().cast(),
-                    invalid.len(),
-                    libc::MSG_NOSIGNAL,
-                )
-            },
+            net::send(&shutdown_writer, &invalid, SendFlags::NOSIGNAL).unwrap(),
             1
         );
 
-        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        else {
+        let Err(error) = wait_for_request(control_reader.as_fd(), shutdown_reader.as_fd()) else {
             panic!("invalid packet must not authorize ownership release");
         };
 
@@ -648,20 +609,11 @@ mod tests {
         let (shutdown_writer, shutdown_reader) = test_socket_pair();
         let invalid = [super::super::transport::GRACEFUL_SHUTDOWN_BYTE; 2];
         assert_eq!(
-            // SAFETY: both the descriptor and two-byte buffer are valid.
-            unsafe {
-                libc::send(
-                    shutdown_writer.as_raw_fd(),
-                    invalid.as_ptr().cast(),
-                    invalid.len(),
-                    libc::MSG_NOSIGNAL,
-                )
-            },
+            net::send(&shutdown_writer, &invalid, SendFlags::NOSIGNAL).unwrap(),
             2
         );
 
-        let Err(error) = wait_for_request(control_reader.as_raw_fd(), shutdown_reader.as_raw_fd())
-        else {
+        let Err(error) = wait_for_request(control_reader.as_fd(), shutdown_reader.as_fd()) else {
             panic!("oversized packet must not authorize ownership release");
         };
 

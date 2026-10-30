@@ -1,4 +1,4 @@
-use std::os::fd::{AsRawFd, BorrowedFd};
+use std::os::fd::{AsFd, BorrowedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -108,7 +108,7 @@ impl OverlayLifecycle {
                 &candidate.program,
                 &launch.arguments,
                 launch.environment,
-                daemon_watchdog.as_raw_fd(),
+                daemon_watchdog.as_fd(),
             )?;
             self.child.start(child)?;
             self.child

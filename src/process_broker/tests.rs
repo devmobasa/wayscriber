@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
@@ -778,7 +778,7 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
             OsStr::new("sleep"),
             [OsStr::new("30")],
             Vec::new(),
-            watchdog.as_raw_fd(),
+            watchdog.as_fd(),
         )
         .unwrap();
     let inherited_pidfd = fs::read_dir(format!("/proc/{}/fd", child.id()))
