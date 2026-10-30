@@ -139,6 +139,13 @@ Rust tests include the repository guards in `tests/repository_guards`. The sourc
 gate uses current rustc dep-info and rejects tracked or unignored `.rs` files that are outside
 the supported Cargo target/feature matrix.
 
+Dependency changes must also satisfy the policy in `deny.toml`, which CI enforces in its own
+job. The Nix shell includes `cargo-deny`; elsewhere, install it and run:
+
+```bash
+cargo deny --workspace --locked check
+```
+
 The all-feature portal transport tests require `dbus-daemon`. Each fixture owns a private
 session bus and connects through its explicit address, leaving the desktop session bus alone.
 

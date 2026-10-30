@@ -1,0 +1,42 @@
+# Dependency policy for the workspace. CI runs it in the `dependency-policy` job;
+# `cargo deny --workspace --locked check` gives the same result locally.
+
+[graph]
+all-features = true
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+]
+
+[advisories]
+# zbus 6 absorbed these crates. ksni, which the `tray` feature needs, still
+# requires zbus 5, so remove these entries once it moves.
+ignore = [
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: blocked on ksni supporting zbus 6" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: blocked on ksni supporting zbus 6" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: blocked on ksni supporting zbus 6" },
+]
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+allow-wildcard-paths = true
+skip = [
+    { crate = "miniz_oxide@0.8", reason = "png needs 0.8 while flate2 needs 0.9" },
+    { crate = "syn@2", reason = "proc macros have not all moved to syn 3" },
+    { crate = "system-deps@7", reason = "build-only: the GTK sys crates span three majors" },
+    { crate = "system-deps@8", reason = "build-only: the GTK sys crates span three majors" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

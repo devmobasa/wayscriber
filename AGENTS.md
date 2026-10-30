@@ -51,6 +51,7 @@
 - Config changes often require `config.example.toml`, `docs/CONFIG.md`, configurator models/views, schema behavior, and tests.
 - Tool/action/keybinding changes often require config defaults, action metadata, help/command UI, toolbar UI, configurator labels/search, docs, and tests.
 - Daemon, service, shortcut, path, and packaging changes often need updates across `src/daemon/`, `src/paths/`, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, `configurator/src/app/daemon_setup/`, and `packaging/`.
+- Dependency changes must satisfy `deny.toml`. A new license or duplicate version needs an entry there with its reason.
 
 ## Validation
 - Full local CI is `./tools/lint-and-test.sh`. It needs the .NET SDK selected by `global.json`. Without it, `cargo test` still runs the Rust source guards in `tests/repository_guards` (process sites, config writers, shared dependencies, use statements, no Python), but not the C# checks, including the source-coverage check that finds `.rs` files Cargo never compiles.

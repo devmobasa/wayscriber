@@ -16,6 +16,7 @@
   binary points at that page. Renaming or removing an id silently drops the
   prefill for binaries that can never be updated retroactively.
 - Keep Linux system dependencies aligned with real build needs for Wayland, Cairo, Pango, GTK4/libadwaita, D-Bus, packaging, and Nix checks.
+- `deny.toml` is the dependency policy and the `dependency-policy` job enforces it. Advisories report without blocking, so a new advisory cannot fail an unrelated pull request; bans, licenses, and sources block.
 - Do not weaken release checks or skip package layout/version validation without a documented reason.
 
 ## Coupled Changes
