@@ -13,9 +13,12 @@ use input::event::pointer::{Axis, ButtonState, PointerScrollEvent};
 use input::event::tablet_tool::{TabletToolEvent, TipState};
 use input::event::{Event, EventTrait, KeyboardEvent, PointerEvent};
 use input::{DeviceCapability, Libinput, LibinputInterface};
+use rustix::event::{self, PollFd, PollFlags, Timespec};
+use rustix::io::Errno;
+use rustix::pipe::{self, PipeFlags};
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::sync::mpsc::Sender;
@@ -28,17 +31,7 @@ use repeat::{KeyboardKeys, RepeatPress, RepeatState};
 
 /// Non-blocking, close-on-exec pipe used only to interrupt the reader's poll.
 pub(super) fn stop_pipe() -> io::Result<(OwnedFd, OwnedFd)> {
-    let mut fds = [0 as RawFd; 2];
-    // SAFETY: `fds` is a writable two-element array, the shape pipe2(2) expects.
-    let result = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
-    if result < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: both descriptors were just returned by pipe2 and are unwrapped.
-    let read = unsafe { OwnedFd::from_raw_fd(fds[0]) };
-    // SAFETY: as above for the write end.
-    let write = unsafe { OwnedFd::from_raw_fd(fds[1]) };
-    Ok((read, write))
+    pipe::pipe_with(PipeFlags::CLOEXEC).map_err(io::Error::from)
 }
 
 /// Open evdev nodes for libinput. Unprivileged `open(2)`: it succeeds when the
@@ -239,47 +232,33 @@ fn wait_for_input(
     stop_read: &OwnedFd,
     timeout: Option<Duration>,
 ) -> io::Result<PollOutcome> {
-    // A repeat deadline in the past polls with 0 and returns Timeout at once.
-    let timeout_ms = timeout.map_or(-1, |timeout| {
-        timeout.as_millis().min(i32::MAX as u128) as i32
-    });
+    // A repeat deadline in the past polls with zero and returns Timeout at once.
+    let timeout = timeout
+        .map(Timespec::try_from)
+        .transpose()
+        .map_err(io::Error::other)?;
     loop {
         let mut fds = [
-            libc::pollfd {
-                fd: libinput.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            },
-            libc::pollfd {
-                fd: stop_read.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            },
+            PollFd::new(libinput, PollFlags::IN),
+            PollFd::new(stop_read, PollFlags::IN),
         ];
-        // SAFETY: `fds` is a valid two-element array and both descriptors are
-        // owned (or borrowed from an owner) for the duration of the call. A
-        // negative timeout blocks until one becomes ready.
-        let ready = unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout_ms) };
-        if ready < 0 {
-            let err = io::Error::last_os_error();
-            if err.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(err);
+        match event::poll(&mut fds, timeout.as_ref()) {
+            Ok(0) => return Ok(PollOutcome::Timeout),
+            Ok(_) => {}
+            Err(Errno::INTR) => continue,
+            Err(errno) => return Err(errno.into()),
         }
-        if ready == 0 {
-            return Ok(PollOutcome::Timeout);
-        }
-        if fds[1].revents != 0 {
+        if !fds[1].revents().is_empty() {
             return Ok(PollOutcome::Stop);
         }
-        if fds[0].revents & (libc::POLLERR | libc::POLLNVAL | libc::POLLHUP) != 0 {
+        let revents = fds[0].revents();
+        if revents.intersects(PollFlags::ERR | PollFlags::NVAL | PollFlags::HUP) {
             return Err(io::Error::other(format!(
                 "libinput poll descriptor failed with readiness {:#x}",
-                fds[0].revents
+                revents.bits()
             )));
         }
-        if fds[0].revents & libc::POLLIN != 0 {
+        if revents.contains(PollFlags::IN) {
             return Ok(PollOutcome::Ready);
         }
     }

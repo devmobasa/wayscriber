@@ -16,7 +16,9 @@
 //! device or keymap problem can never panic across the libinput FFI edge.
 
 use std::io;
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::OwnedFd;
+
+use rustix::io as rustix_io;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -188,15 +190,10 @@ impl InputMonitor {
     /// A reader wedged inside libinput is left to finish on its own rather than
     /// blocking overlay shutdown; its descriptors close with the process.
     fn stop(&mut self) {
-        let byte = [1_u8];
-        // SAFETY: the write end is owned and open for the duration of the call,
-        // and `byte` is a valid one-byte buffer.
-        let written =
-            unsafe { libc::write(self.stop.as_raw_fd(), byte.as_ptr().cast(), byte.len()) };
-        if written < 0 {
+        if let Err(errno) = rustix_io::write(&self.stop, &[1]) {
             log::warn!(
                 "Failed to signal the system input reader: {}",
-                io::Error::last_os_error()
+                io::Error::from(errno)
             );
         }
         let Some(join) = self.join.take() else {

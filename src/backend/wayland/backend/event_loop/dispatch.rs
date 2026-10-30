@@ -64,11 +64,8 @@ pub(super) fn dispatch_events(
 
 #[cfg(test)]
 mod tests {
-    use std::io;
-    use std::io::ErrorKind;
-    use std::os::fd::AsRawFd;
     use std::path::PathBuf;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     use super::*;
     use crate::backend::wayland::session::{
@@ -126,27 +123,12 @@ mod tests {
     }
 
     fn wait_for_runtime_wake(runtime_wake: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: runtime_wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        loop {
-            // SAFETY: pollfd and the runtime wake descriptor stay valid for this
-            // bounded test wait.
-            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
-            if ready > 0 {
-                assert_ne!(pollfd.revents & libc::POLLIN, 0);
-                return;
-            }
-            if ready == 0 {
-                panic!("persistence worker did not wake the production route");
-            }
-            let err = io::Error::last_os_error();
-            if err.kind() != ErrorKind::Interrupted {
-                panic!("runtime wake poll failed: {err}");
-            }
-        }
+        assert!(
+            runtime_wake
+                .is_readable_within(Duration::from_secs(1))
+                .unwrap(),
+            "persistence worker did not wake the production route"
+        );
     }
 
     #[test]

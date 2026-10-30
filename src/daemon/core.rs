@@ -3,10 +3,12 @@ use std::{io, mem, process, thread};
 
 use anyhow::{Context, Result};
 use log::{info, warn};
+use rustix::event::{self, PollFd, PollFlags};
+use rustix::io::Errno;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
-use std::os::fd::{AsRawFd, BorrowedFd};
+use std::os::fd::BorrowedFd;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -922,48 +924,31 @@ fn wait_for_daemon_lifecycle(
     deadline_source: Option<&BootDeadlineSource>,
     overlay_exit_fd: Option<BorrowedFd<'_>>,
 ) -> Result<DaemonLifecycleReadiness> {
-    let mut pollfds = vec![libc::pollfd {
-        fd: daemon_wake.poll_fd().as_raw_fd(),
-        events: libc::POLLIN,
-        revents: 0,
-    }];
+    let mut pollfds = vec![PollFd::from_borrowed_fd(
+        daemon_wake.poll_fd(),
+        PollFlags::IN,
+    )];
     if let Some(watcher) = command_watcher {
-        pollfds.push(libc::pollfd {
-            fd: watcher.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        });
+        pollfds.push(PollFd::from_borrowed_fd(watcher.poll_fd(), PollFlags::IN));
     }
     let command_index = command_watcher.map(|_| 1);
     let deadline_index = deadline_source.map(|source| {
         let index = pollfds.len();
-        pollfds.push(libc::pollfd {
-            fd: source.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        });
+        pollfds.push(PollFd::from_borrowed_fd(source.poll_fd(), PollFlags::IN));
         index
     });
     let child_index = overlay_exit_fd.map(|fd| {
         let index = pollfds.len();
-        pollfds.push(libc::pollfd {
-            fd: fd.as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        });
+        pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN));
         index
     });
     loop {
-        // SAFETY: the descriptor remains owned by `daemon_wake` throughout poll.
-        let ready = unsafe {
-            libc::poll(
-                pollfds.as_mut_ptr(),
-                pollfds
-                    .len()
-                    .try_into()
-                    .expect("poll descriptor count fits"),
-                -1,
-            )
+        let ready = match event::poll(&mut pollfds, None) {
+            Ok(ready) => ready,
+            Err(Errno::INTR) => continue,
+            Err(errno) => {
+                return Err(io::Error::from(errno)).context("daemon lifecycle poll failed");
+            }
         };
         if ready == 0 {
             return Ok(DaemonLifecycleReadiness {
@@ -971,36 +956,28 @@ fn wait_for_daemon_lifecycle(
                 deadline: false,
             });
         }
-        if ready < 0 {
-            let err = io::Error::last_os_error();
-            if err.kind() == ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(err).context("daemon lifecycle poll failed");
-        }
         for pollfd in &pollfds {
-            let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL);
-            if terminal != 0 {
+            let revents = pollfd.revents();
+            if revents.intersects(PollFlags::ERR | PollFlags::HUP | PollFlags::NVAL) {
                 return Err(anyhow::anyhow!(
                     "daemon lifecycle descriptor returned terminal readiness {:#x}",
-                    pollfd.revents
+                    revents.bits()
                 ));
             }
         }
-        let daemon_ready = pollfds[0].revents & libc::POLLIN != 0;
-        let command_ready = command_index
-            .and_then(|index| pollfds.get(index))
-            .is_some_and(|pollfd| pollfd.revents & libc::POLLIN != 0);
-        let deadline_ready = deadline_index
-            .and_then(|index| pollfds.get(index))
-            .is_some_and(|pollfd| pollfd.revents & libc::POLLIN != 0);
-        let child_ready = child_index
-            .and_then(|index| pollfds.get(index))
-            .is_some_and(|pollfd| pollfd.revents & libc::POLLIN != 0);
+        let is_readable = |index: Option<usize>| {
+            index
+                .and_then(|index| pollfds.get(index))
+                .is_some_and(|pollfd| pollfd.revents().contains(PollFlags::IN))
+        };
+        let daemon_ready = is_readable(Some(0));
+        let command_ready = is_readable(command_index);
+        let deadline_ready = is_readable(deadline_index);
+        let child_ready = is_readable(child_index);
         if !daemon_ready && !command_ready && !deadline_ready && !child_ready {
             return Err(anyhow::anyhow!(
                 "daemon wake descriptor returned invalid readiness {:#x}",
-                pollfds[0].revents
+                pollfds[0].revents().bits()
             ));
         }
         if daemon_ready {
