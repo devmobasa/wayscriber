@@ -1,11 +1,20 @@
 use std::ffi::CString;
 use std::fs::{File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};
-use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{fmt, fs, process, ptr};
+
+use rustix::event::{self, PollFd, PollFlags, Timespec};
+use rustix::fs::inotify::{self, CreateFlags, WatchFlags};
+use rustix::io::{self as rustix_io, Errno};
+use rustix::process::{self as rustix_process, Pid, PidfdFlags};
+use rustix::time::{
+    self as rustix_time, DynamicClockId, Itimerspec, TimerfdClockId, TimerfdFlags,
+    TimerfdTimerFlags,
+};
 
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const TIME_NAMESPACE_PATH: &str = "/proc/self/ns/time";
@@ -171,8 +180,7 @@ pub(crate) fn read_bounded_private_file(path: &Path, cap: usize) -> io::Result<V
 
 /// Whether this user owns the file or directory and nobody else may use it.
 pub(crate) fn is_private(metadata: &Metadata) -> bool {
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    metadata.uid() == unsafe { libc::geteuid() } && metadata.mode() & 0o077 == 0
+    metadata.uid() == rustix_process::geteuid().as_raw() && metadata.mode() & 0o077 == 0
 }
 
 /// Creates `path` as a directory only this user may use, or makes an existing
@@ -188,8 +196,7 @@ pub(crate) fn create_private_directory(path: &Path) -> anyhow::Result<()> {
     }
 
     let metadata = fs::symlink_metadata(path)?;
-    // SAFETY: geteuid has no preconditions and cannot fail.
-    if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() } {
+    if !metadata.is_dir() || metadata.uid() != rustix_process::geteuid().as_raw() {
         anyhow::bail!("{} is not a no-follow private directory", path.display());
     }
     fs::set_permissions(path, Permissions::from_mode(0o700))?;
@@ -362,15 +369,10 @@ pub(crate) fn process_start_ticks(pid: u32) -> io::Result<u64> {
 
 pub(crate) fn open_pidfd(pid: u32) -> io::Result<OwnedFd> {
     let pid = i32::try_from(pid)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "pid does not fit pid_t"))?;
-    // SAFETY: pidfd_open has no pointer arguments. The returned descriptor is
-    // owned by the caller on success.
-    let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
-    if raw < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    // SAFETY: raw is a new pidfd not wrapped elsewhere.
-    Ok(unsafe { OwnedFd::from_raw_fd(raw as i32) })
+        .ok()
+        .and_then(Pid::from_raw)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "pid does not fit pid_t"))?;
+    Ok(rustix_process::pidfd_open(pid, PidfdFlags::empty())?)
 }
 
 /// Blocks until the process behind `fd` exits or `timeout` elapses, returning
@@ -386,27 +388,14 @@ pub(crate) fn wait_for_pidfd_exit(fd: BorrowedFd<'_>, timeout: Duration) -> io::
         if remaining.is_zero() {
             return Ok(false);
         }
-        let mut poll_fd = libc::pollfd {
-            fd: fd.as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        let millis = i32::try_from(remaining.as_millis()).unwrap_or(i32::MAX);
-        // SAFETY: one owned pollfd, valid for the call; the descriptor is
-        // borrowed for at least this long.
-        let ready = unsafe { libc::poll(&raw mut poll_fd, 1, millis) };
-        if ready < 0 {
-            let error = io::Error::last_os_error();
+        let mut pollfds = [PollFd::from_borrowed_fd(fd, PollFlags::IN)];
+        let remaining = Timespec::try_from(remaining).map_err(io::Error::other)?;
+        match event::poll(&mut pollfds, Some(&remaining)) {
+            Ok(ready) => return Ok(ready != 0),
             // A signal arriving mid-wait is expected on this thread.
-            if error.kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
-            return Err(error);
+            Err(Errno::INTR) => {}
+            Err(errno) => return Err(errno.into()),
         }
-        if ready == 0 {
-            return Ok(false);
-        }
-        return Ok(true);
     }
 }
 
@@ -432,15 +421,7 @@ pub(crate) fn validate_pidfd(fd: BorrowedFd<'_>) -> io::Result<()> {
 
 impl BootClock {
     pub(crate) fn now() -> io::Result<BootDeadline> {
-        let mut value = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: 0,
-        };
-        // SAFETY: value is a valid writable timespec and CLOCK_BOOTTIME has no
-        // additional preconditions.
-        if unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &raw mut value) } != 0 {
-            return Err(io::Error::last_os_error());
-        }
+        let value = rustix_time::clock_gettime_dynamic(DynamicClockId::Boottime)?;
         if value.tv_sec < 0 || !(0..1_000_000_000).contains(&value.tv_nsec) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -481,17 +462,11 @@ impl BootDeadline {
 
 impl BootDeadlineSource {
     pub(crate) fn try_new() -> io::Result<Self> {
-        // SAFETY: timerfd_create returns a new owned descriptor on success.
-        let raw = unsafe {
-            libc::timerfd_create(libc::CLOCK_BOOTTIME, libc::TFD_NONBLOCK | libc::TFD_CLOEXEC)
-        };
-        if raw < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(Self {
-            // SAFETY: raw is a newly created descriptor not wrapped elsewhere.
-            fd: unsafe { OwnedFd::from_raw_fd(raw) },
-        })
+        let fd = rustix_time::timerfd_create(
+            TimerfdClockId::Boottime,
+            TimerfdFlags::NONBLOCK | TimerfdFlags::CLOEXEC,
+        )?;
+        Ok(Self { fd })
     }
 
     pub(crate) fn poll_fd(&self) -> BorrowedFd<'_> {
@@ -501,82 +476,45 @@ impl BootDeadlineSource {
     pub(crate) fn arm(&self, deadline: BootDeadline) -> io::Result<()> {
         let seconds = deadline.0 / 1_000_000_000;
         let nanos = deadline.0 % 1_000_000_000;
-        let value = libc::itimerspec {
-            it_interval: libc::timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            it_value: libc::timespec {
-                tv_sec: libc::time_t::try_from(seconds).map_err(|_| {
+        let value = Itimerspec {
+            it_interval: Timespec::default(),
+            it_value: Timespec {
+                tv_sec: i64::try_from(seconds).map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidInput, "deadline seconds overflow")
                 })?,
-                tv_nsec: libc::c_long::try_from(nanos).map_err(|_| {
+                tv_nsec: i64::try_from(nanos).map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidInput, "deadline nanos overflow")
                 })?,
             },
         };
-        // SAFETY: value is a fully initialized itimerspec and fd owns a timerfd.
-        if unsafe {
-            libc::timerfd_settime(
-                self.fd.as_raw_fd(),
-                libc::TFD_TIMER_ABSTIME,
-                &raw const value,
-                ptr::null_mut(),
-            )
-        } != 0
-        {
-            return Err(io::Error::last_os_error());
-        }
+        rustix_time::timerfd_settime(&self.fd, TimerfdTimerFlags::ABSTIME, &value)?;
         Ok(())
     }
 
     pub(crate) fn disarm(&self) -> io::Result<()> {
-        let value = libc::itimerspec {
-            it_interval: libc::timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
-            it_value: libc::timespec {
-                tv_sec: 0,
-                tv_nsec: 0,
-            },
+        let value = Itimerspec {
+            it_interval: Timespec::default(),
+            it_value: Timespec::default(),
         };
-        // SAFETY: value is initialized and fd owns a timerfd.
-        if unsafe {
-            libc::timerfd_settime(self.fd.as_raw_fd(), 0, &raw const value, ptr::null_mut())
-        } != 0
-        {
-            return Err(io::Error::last_os_error());
-        }
+        rustix_time::timerfd_settime(&self.fd, TimerfdTimerFlags::empty(), &value)?;
         Ok(())
     }
 
     pub(crate) fn drain(&self) -> io::Result<bool> {
-        let mut expirations = 0_u64;
+        let mut expirations = [0_u8; size_of::<u64>()];
         loop {
-            // SAFETY: expirations is writable and fd remains valid for the read.
-            let result = unsafe {
-                libc::read(
-                    self.fd.as_raw_fd(),
-                    (&raw mut expirations).cast(),
-                    size_of::<u64>(),
-                )
-            };
-            if result == size_of::<u64>() as isize {
-                return Ok(true);
+            match rustix_io::read(&self.fd, &mut expirations) {
+                Ok(read) if read == expirations.len() => return Ok(true),
+                Ok(read) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("timerfd returned a short read ({read} bytes)"),
+                    ));
+                }
+                Err(Errno::INTR) => {}
+                Err(Errno::WOULDBLOCK) => return Ok(false),
+                Err(errno) => return Err(errno.into()),
             }
-            if result < 0 {
-                let error = io::Error::last_os_error();
-                return match error.kind() {
-                    io::ErrorKind::Interrupted => continue,
-                    io::ErrorKind::WouldBlock => Ok(false),
-                    _ => Err(error),
-                };
-            }
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                format!("timerfd returned a short read ({result} bytes)"),
-            ));
         }
     }
 }
@@ -584,27 +522,15 @@ impl BootDeadlineSource {
 impl CommandQueueWatcher {
     pub(crate) fn try_new(queue_path: &Path) -> io::Result<Self> {
         let (queue_fd, queue_identity) = open_nofollow_directory(queue_path)?;
-        // SAFETY: inotify_init1 returns a newly owned descriptor on success.
-        let raw = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
-        if raw < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: raw is a new descriptor not wrapped elsewhere.
-        let fd = unsafe { OwnedFd::from_raw_fd(raw) };
+        let fd = inotify::init(CreateFlags::NONBLOCK | CreateFlags::CLOEXEC)?;
         let path = CString::new(queue_path.as_os_str().as_encoded_bytes())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "queue path contains NUL"))?;
-        let mask = libc::IN_MOVED_TO
-            | libc::IN_CREATE
-            | libc::IN_DELETE_SELF
-            | libc::IN_MOVE_SELF
-            | libc::IN_IGNORED
-            | libc::IN_Q_OVERFLOW;
-        // SAFETY: path is NUL-terminated and fd owns an inotify instance.
-        let watch_descriptor =
-            unsafe { libc::inotify_add_watch(fd.as_raw_fd(), path.as_ptr(), mask) };
-        if watch_descriptor < 0 {
-            return Err(io::Error::last_os_error());
-        }
+        // IN_IGNORED and IN_Q_OVERFLOW always arrive, so they are not requested here.
+        let mask = WatchFlags::MOVED_TO
+            | WatchFlags::CREATE
+            | WatchFlags::DELETE_SELF
+            | WatchFlags::MOVE_SELF;
+        let watch_descriptor = inotify::add_watch(&fd, &path, mask)?;
         revalidate_path_identity(queue_path, queue_identity)?;
         Ok(Self {
             fd,
@@ -630,30 +556,20 @@ impl CommandQueueWatcher {
         self.buffered_length = 0;
         self.buffered_offset = 0;
         loop {
-            // SAFETY: buffer is writable for its full fixed length and fd is
-            // a nonblocking inotify descriptor.
-            let read = unsafe {
-                libc::read(
-                    self.fd.as_raw_fd(),
-                    self.buffer.as_mut_ptr().cast(),
-                    self.buffer.len(),
-                )
-            };
-            if read > 0 {
-                self.buffered_length = read as usize;
-                return Ok(true);
-            }
-            if read == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "inotify returned EOF",
-                ));
-            }
-            let error = io::Error::last_os_error();
-            match error.kind() {
-                io::ErrorKind::Interrupted => continue,
-                io::ErrorKind::WouldBlock => return Ok(false),
-                _ => return Err(error),
+            match rustix_io::read(&self.fd, &mut self.buffer[..]) {
+                Ok(0) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "inotify returned EOF",
+                    ));
+                }
+                Ok(read) => {
+                    self.buffered_length = read;
+                    return Ok(true);
+                }
+                Err(Errno::INTR) => {}
+                Err(Errno::WOULDBLOCK) => return Ok(false),
+                Err(errno) => return Err(errno.into()),
             }
         }
     }

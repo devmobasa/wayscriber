@@ -1,5 +1,5 @@
 use std::io::ErrorKind;
-use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::thread::Builder;
@@ -7,6 +7,8 @@ use std::time::Duration;
 use std::{env, fs, io, process, thread};
 
 use anyhow::{Context, Result, anyhow, bail};
+use rustix::event::{self, PollFd, PollFlags};
+use rustix::io::{self as rustix_io, Errno, FdFlags};
 use serde::{Deserialize, Serialize};
 
 use crate::durable_io::{AtomicWriteOptions, OverwriteMode, PermissionPolicy, SymlinkPolicy};
@@ -535,11 +537,9 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
     // inherited descriptor. The environment marker is removed immediately so
     // no later exec can reinterpret the descriptor number.
     let descriptor = unsafe { OwnedFd::from_raw_fd(raw) };
-    // SAFETY: descriptor is owned and F_SETFD changes only exec inheritance.
-    if unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) } != 0 {
-        return Err(io::Error::last_os_error())
-            .context("failed to protect daemon watchdog descriptor");
-    }
+    rustix_io::fcntl_setfd(&descriptor, FdFlags::CLOEXEC)
+        .map_err(io::Error::from)
+        .context("failed to protect daemon watchdog descriptor")?;
     super::linux::validate_pidfd(descriptor.as_fd())
         .context("inherited daemon watchdog is not a live pidfd")?;
     // SAFETY: application startup has not launched runtime worker threads yet;
@@ -550,27 +550,12 @@ pub(crate) fn start_daemon_watchdog_from_environment() -> Result<()> {
     Builder::new()
         .name("wayscriber-daemon-watchdog".into())
         .spawn(move || {
-            let mut pollfd = libc::pollfd {
-                fd: descriptor.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            loop {
-                // SAFETY: pollfd points to one initialized entry and the
-                // descriptor remains owned by this thread.
-                let result = unsafe { libc::poll(&raw mut pollfd, 1, -1) };
-                if result > 0 {
-                    // SAFETY: loss of the owning daemon is an irrevocable
-                    // fail-stop condition for its internal overlay child.
-                    unsafe { super::linux::fail_stop(70) }
-                }
-                if result < 0 && io::Error::last_os_error().kind() == ErrorKind::Interrupted {
-                    continue;
-                }
-                // SAFETY: an unusable parent-death channel cannot safely
-                // preserve overlay ownership.
-                unsafe { super::linux::fail_stop(70) }
-            }
+            let mut pollfds = [PollFd::new(&descriptor, PollFlags::IN)];
+            while event::poll(&mut pollfds, None) == Err(Errno::INTR) {}
+            // SAFETY: readiness means the owning daemon is gone, and any other
+            // result is an unusable parent-death channel. Neither can safely
+            // preserve overlay ownership, so this is an irrevocable fail-stop.
+            unsafe { super::linux::fail_stop(70) }
         })
         .context("failed to start daemon watchdog")?;
     Ok(())

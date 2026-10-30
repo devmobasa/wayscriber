@@ -6,6 +6,8 @@ use crate::paths::{daemon_lock_file, daemon_pid_file};
 use crate::session::try_lock_exclusive;
 use anyhow::{Context, Result, anyhow};
 use log::warn;
+#[cfg(unix)]
+use rustix::process::{self as rustix_process, Pid, Signal};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
@@ -136,16 +138,13 @@ pub(super) fn signal_daemon_pid(pid: u32) -> Result<()> {
             return Err(anyhow!("invalid daemon pid {pid}"));
         }
 
-        // SAFETY: `pid` has been checked to be a positive Unix process id and
-        // `SIGUSR1` is a valid signal constant.
-        if unsafe { libc::kill(pid, libc::SIGUSR1) } != 0 {
-            return Err(anyhow!(
-                "failed to signal wayscriber daemon {}: {}",
-                pid,
-                io::Error::last_os_error()
-            ));
-        }
-        Ok(())
+        let target = Pid::from_raw(pid).ok_or_else(|| anyhow!("invalid daemon pid {pid}"))?;
+        rustix_process::kill_process(target, Signal::USR1).map_err(|errno| {
+            anyhow!(
+                "failed to signal wayscriber daemon {pid}: {}",
+                io::Error::from(errno)
+            )
+        })
     }
 
     #[cfg(not(unix))]
