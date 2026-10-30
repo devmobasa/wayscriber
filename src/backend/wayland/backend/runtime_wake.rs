@@ -142,6 +142,8 @@ impl RuntimeWakeSource {
     }
 
     /// Reports whether a wake arrives within `timeout`, without draining it.
+    /// Any other readiness is an error, so a broken descriptor cannot pass for
+    /// silence in a test that expects no wake.
     #[cfg(test)]
     pub(crate) fn is_readable_within(&self, timeout: Duration) -> io::Result<bool> {
         let readable = poll_with_retry(Some(timeout), |timeout_ms| {
@@ -149,8 +151,14 @@ impl RuntimeWakeSource {
             if poll_for_ms(&mut pollfds, timeout_ms)? == 0 {
                 return Ok(None);
             }
-            Ok(Some(pollfds[0].revents().contains(PollFlags::IN)))
+            validate_poll_readiness(
+                pollfds[0].revents(),
+                "runtime wake",
+                TerminalReadinessPolicy::Reject,
+            )
+            .map(Some)
         })?;
+
         Ok(readable == Some(true))
     }
 }
@@ -194,6 +202,7 @@ mod tests {
     use std::time::{Duration, Instant};
     use std::{fs, thread};
 
+    use rustix::pipe;
     use rustix::process::Pid;
     use rustix::thread as rustix_thread;
 
@@ -272,6 +281,15 @@ mod tests {
     fn empty_drain_reports_no_consumed_wake() {
         let source = RuntimeWakeSource::try_new().unwrap();
         assert!(!source.drain().unwrap());
+    }
+
+    #[test]
+    fn readiness_without_a_wake_is_an_error_rather_than_silence() {
+        let (read, write) = pipe::pipe().unwrap();
+        drop(write);
+        let source = RuntimeWakeSource { fd: Arc::new(read) };
+
+        assert!(source.is_readable_within(Duration::ZERO).is_err());
     }
 
     #[test]

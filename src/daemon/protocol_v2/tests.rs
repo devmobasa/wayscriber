@@ -10,11 +10,19 @@ use crate::{env_vars, test_env, test_temp};
 
 use super::*;
 
+/// Polls for input. Any other readiness fails the test, so a broken descriptor
+/// cannot pass for silence.
 fn is_readable(fd: BorrowedFd<'_>, timeout: Duration) -> bool {
     let mut pollfds = [PollFd::from_borrowed_fd(fd, PollFlags::IN)];
     let timeout = Timespec::try_from(timeout).unwrap();
-    event::poll(&mut pollfds, Some(&timeout)).unwrap() == 1
-        && pollfds[0].revents().contains(PollFlags::IN)
+    let ready = event::poll(&mut pollfds, Some(&timeout)).unwrap();
+    let revents = pollfds[0].revents();
+    assert!(
+        ready == 0 || revents == PollFlags::IN,
+        "unexpected readiness {:#x}",
+        revents.bits()
+    );
+    ready == 1
 }
 
 #[test]
