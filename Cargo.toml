@@ -92,6 +92,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1"
 schemars = { version = "1.2", features = ["derive"], optional = true }
 libc = "0.2"
+# Kernel random bytes for portal handle tokens and daemon protocol identifiers.
+getrandom = { version = "0.4", features = ["std"] }
 # Securely created, self-deleting temporary files for the OCR engine handoff.
 tempfile = "3"
 flate2 = "1.0"
@@ -105,7 +107,6 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "syn
 
 # Screenshot capture
 zbus = { version = "5.0", optional = true, default-features = false, features = ["tokio"] }
-getrandom = { version = "0.3", optional = true }
 serde_json = "1.0"
 png = "0.18"
 
@@ -125,7 +126,7 @@ xkbcommon = { version = "0.8", optional = true }
 tablet-input = []
 # D-Bus dependent functionality (portal capture, notifications, tray)
 dbus = ["zbus"]
-portal = ["dbus", "dep:getrandom"]
+portal = ["dbus"]
 tray = ["dbus", "ksni"]
 config-schema = ["dep:schemars"]
 # GTK4-rendered toolbars on layer-shell compositors; the built-in Cairo

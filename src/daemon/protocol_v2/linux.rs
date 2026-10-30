@@ -63,33 +63,6 @@ pub(crate) struct CommandQueueWatcher {
     buffered_offset: usize,
 }
 
-fn fill_random(bytes: &mut [u8]) -> io::Result<()> {
-    let mut filled = 0;
-    while filled < bytes.len() {
-        // SAFETY: the remaining slice is writable for its full length. getrandom
-        // writes at most that length and does not retain the pointer.
-        let result = unsafe {
-            libc::getrandom(bytes[filled..].as_mut_ptr().cast(), bytes.len() - filled, 0)
-        };
-        if result > 0 {
-            filled += result as usize;
-            continue;
-        }
-        if result == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "getrandom returned zero bytes",
-            ));
-        }
-        let error = io::Error::last_os_error();
-        if error.kind() == io::ErrorKind::Interrupted {
-            continue;
-        }
-        return Err(error);
-    }
-    Ok(())
-}
-
 fn lowercase_hex(bytes: &[u8], output: &mut fmt::Formatter<'_>) -> fmt::Result {
     for byte in bytes {
         write!(output, "{byte:02x}")?;
@@ -100,7 +73,7 @@ fn lowercase_hex(bytes: &[u8], output: &mut fmt::Formatter<'_>) -> fmt::Result {
 impl ProtocolId {
     pub(crate) fn generate() -> io::Result<Self> {
         let mut bytes = [0; 16];
-        fill_random(&mut bytes)?;
+        getrandom::fill(&mut bytes)?;
         Ok(Self(bytes))
     }
 }
@@ -120,7 +93,7 @@ impl fmt::Display for ProtocolId {
 impl ProtocolToken {
     pub(crate) fn generate() -> io::Result<Self> {
         let mut bytes = [0; 32];
-        fill_random(&mut bytes)?;
+        getrandom::fill(&mut bytes)?;
         Ok(Self(bytes))
     }
 }
