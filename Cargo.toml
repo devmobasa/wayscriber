@@ -99,6 +99,8 @@ getrandom = { version = "0.4", features = ["std"] }
 tempfile = "3"
 flate2 = "1.0"
 zune-jpeg = "0.5"
+# Command-line tokenizing without a parser framework.
+lexopt = "0.3"
 # Grapheme/word segmentation for the text-editor caret and selection.
 unicode-segmentation = "1"
 

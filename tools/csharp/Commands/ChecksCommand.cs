@@ -334,6 +334,7 @@ internal static class ChecksCommand
         [RepositoryNames.Gtk4LayerShell] = [RepositoryNames.Gtk4LayerShell],
         ["input"] = ["libinput"],
         ["ksni"] = [],
+        ["lexopt"] = [],
         ["libc"] = [],
         ["log"] = [],
         ["pango"] = ["pango"],
