@@ -2,7 +2,6 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
@@ -11,6 +10,7 @@ use std::sync::LazyLock;
 use std::sync::Mutex;
 
 use anyhow::{Context, Result, anyhow, bail};
+use rustix::fs::{self as rustix_fs, FlockOperation};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -224,10 +224,13 @@ fn try_open_journal_lock(root: &Path, nonblocking: bool) -> Result<Option<File>>
     if !file.metadata()?.is_file() {
         bail!("action journal lock is not a regular file");
     }
-    let operation = libc::LOCK_EX | if nonblocking { libc::LOCK_NB } else { 0 };
-    // SAFETY: file owns the descriptor; flock retains no pointer.
-    if unsafe { libc::flock(file.as_raw_fd(), operation) } != 0 {
-        let error = io::Error::last_os_error();
+    let operation = if nonblocking {
+        FlockOperation::NonBlockingLockExclusive
+    } else {
+        FlockOperation::LockExclusive
+    };
+    if let Err(errno) = rustix_fs::flock(&file, operation) {
+        let error = io::Error::from(errno);
         if nonblocking && error.kind() == ErrorKind::WouldBlock {
             return Ok(None);
         }
@@ -237,12 +240,9 @@ fn try_open_journal_lock(root: &Path, nonblocking: bool) -> Result<Option<File>>
 }
 
 fn unlock(file: &File) -> Result<()> {
-    // SAFETY: file owns the descriptor; flock retains no pointer.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error()).context("failed to unlock action journal")
-    }
+    rustix_fs::flock(file, FlockOperation::Unlock)
+        .map_err(io::Error::from)
+        .context("failed to unlock action journal")
 }
 
 fn write_record<T: Serialize>(path: &Path, value: &T) -> Result<()> {

@@ -4,19 +4,11 @@ use std::fs::File;
 use std::io;
 
 #[cfg(unix)]
-use std::os::unix::io::AsRawFd;
+use rustix::fs::{self as rustix_fs, FlockOperation};
 
 #[cfg(unix)]
-fn flock(file: &File, op: libc::c_int) -> io::Result<()> {
-    let fd = file.as_raw_fd();
-    // SAFETY: `fd` stays open for the borrowed `file`, and flock takes no
-    // pointers or ownership of the descriptor.
-    let result = unsafe { libc::flock(fd, op) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+fn flock(file: &File, operation: FlockOperation) -> io::Result<()> {
+    rustix_fs::flock(file, operation).map_err(io::Error::from)
 }
 
 #[cfg(not(unix))]
@@ -30,7 +22,7 @@ fn flock(_file: &File, _op: i32) -> io::Result<()> {
 pub fn lock_shared(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {
-        flock(file, libc::LOCK_SH)
+        flock(file, FlockOperation::LockShared)
     }
     #[cfg(not(unix))]
     {
@@ -41,7 +33,7 @@ pub fn lock_shared(file: &File) -> io::Result<()> {
 pub fn lock_exclusive(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {
-        flock(file, libc::LOCK_EX)
+        flock(file, FlockOperation::LockExclusive)
     }
     #[cfg(not(unix))]
     {
@@ -52,7 +44,7 @@ pub fn lock_exclusive(file: &File) -> io::Result<()> {
 pub fn try_lock_exclusive(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {
-        flock(file, libc::LOCK_EX | libc::LOCK_NB)
+        flock(file, FlockOperation::NonBlockingLockExclusive)
     }
     #[cfg(not(unix))]
     {
@@ -63,7 +55,7 @@ pub fn try_lock_exclusive(file: &File) -> io::Result<()> {
 pub fn unlock(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {
-        flock(file, libc::LOCK_UN)
+        flock(file, FlockOperation::Unlock)
     }
     #[cfg(not(unix))]
     {

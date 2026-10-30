@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use rustix::fs::FlockOperation;
 
 use super::super::wire::{
     ActionStatus, CallerDisposition, ChildReportStatus, CommandDecision, CommandResponse,
@@ -191,7 +192,11 @@ impl CommandOwner {
             Err(error) => return Err(error),
         };
         let retry_deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        if !try_lock_until(&decision_lock, libc::LOCK_EX, retry_deadline)? {
+        if !try_lock_until(
+            &decision_lock,
+            FlockOperation::LockExclusive,
+            retry_deadline,
+        )? {
             return Ok(None);
         }
         let Ok(mut control) = read_control(&path) else {
@@ -316,7 +321,7 @@ impl CommandOwner {
             Err(error) => return Err(error),
         };
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision, libc::LOCK_EX, deadline)?;
+        lock_until(&decision, FlockOperation::LockExclusive, deadline)?;
         let mut control = read_control(&path)?;
         if control.identity == reference.command_identity
             && control.queue_order == reference.queue_order
@@ -341,13 +346,13 @@ impl CommandOwner {
         observed: &super::super::wire::CommandControl,
     ) -> Result<()> {
         let caller_lease = open_lock(&path.join("caller.lease"), false)?;
-        match flock(&caller_lease, libc::LOCK_EX | libc::LOCK_NB) {
+        match flock(&caller_lease, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(()),
             Err(error) => return Err(error).context("failed to inspect unqueued caller lease"),
         }
         let decision = open_lock(&path.join("decision.lock"), false)?;
-        match flock(&decision, libc::LOCK_EX | libc::LOCK_NB) {
+        match flock(&decision, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 unlock(&caller_lease)?;
@@ -390,7 +395,7 @@ impl CommandOwner {
         }
         let decision_lock = open_lock(&path.join("decision.lock"), false)?;
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        if !try_lock_until(&decision_lock, libc::LOCK_EX, deadline)? {
+        if !try_lock_until(&decision_lock, FlockOperation::LockExclusive, deadline)? {
             return Ok(None);
         }
         let mut control = read_control(&path)?;
@@ -440,11 +445,11 @@ impl CommandOwner {
         for entry in read_dir_bounded(&controls_dir(&self.root), MAX_DIRECTORY_ENTRIES_PER_SCAN)? {
             let path = entry.path();
             let lease = open_lock(&path.join("caller.lease"), false)?;
-            if flock(&lease, libc::LOCK_EX | libc::LOCK_NB).is_err() {
+            if flock(&lease, FlockOperation::NonBlockingLockExclusive).is_err() {
                 continue;
             }
             let decision = open_lock(&path.join("decision.lock"), false)?;
-            if flock(&decision, libc::LOCK_EX | libc::LOCK_NB).is_err() {
+            if flock(&decision, FlockOperation::NonBlockingLockExclusive).is_err() {
                 unlock(&lease)?;
                 continue;
             }

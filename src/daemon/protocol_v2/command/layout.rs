@@ -1,13 +1,13 @@
 use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use rustix::fs::{self as rustix_fs, FlockOperation};
 use serde::de::DeserializeOwned;
 
 use crate::durable_io::AtomicWriteOptions;
@@ -279,22 +279,25 @@ pub(super) fn open_lock(path: &Path, create_new: bool) -> Result<File> {
     Ok(file)
 }
 
-pub(super) fn flock(file: &File, operation: libc::c_int) -> io::Result<()> {
-    // SAFETY: file owns a valid descriptor and flock does not retain it.
-    if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
+pub(super) fn flock(file: &File, operation: FlockOperation) -> io::Result<()> {
+    rustix_fs::flock(file, operation).map_err(io::Error::from)
+}
+
+fn nonblocking(operation: FlockOperation) -> FlockOperation {
+    match operation {
+        FlockOperation::LockShared => FlockOperation::NonBlockingLockShared,
+        FlockOperation::LockExclusive => FlockOperation::NonBlockingLockExclusive,
+        other => other,
     }
 }
 
 pub(super) fn unlock(file: &File) -> Result<()> {
-    flock(file, libc::LOCK_UN).context("failed to unlock protocol descriptor")
+    flock(file, FlockOperation::Unlock).context("failed to unlock protocol descriptor")
 }
 
 pub(super) fn lock_until(
     file: &File,
-    operation: libc::c_int,
+    operation: FlockOperation,
     deadline: BootDeadline,
 ) -> Result<()> {
     if try_lock_until(file, operation, deadline)? {
@@ -306,11 +309,11 @@ pub(super) fn lock_until(
 
 pub(super) fn try_lock_until(
     file: &File,
-    operation: libc::c_int,
+    operation: FlockOperation,
     deadline: BootDeadline,
 ) -> Result<bool> {
     loop {
-        match flock(file, operation | libc::LOCK_NB) {
+        match flock(file, nonblocking(operation)) {
             Ok(()) => return Ok(true),
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 if BootClock::now()? >= deadline {
@@ -341,7 +344,7 @@ pub(super) fn try_admission_lock(root: &Path, deadline: BootDeadline) -> Result<
         }
         Err(error) => return Err(error),
     };
-    if try_lock_until(&file, libc::LOCK_EX, deadline)? {
+    if try_lock_until(&file, FlockOperation::LockExclusive, deadline)? {
         Ok(Some(file))
     } else {
         Ok(None)

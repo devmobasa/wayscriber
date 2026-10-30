@@ -2,6 +2,7 @@ use std::io::ErrorKind;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use rustix::fs::FlockOperation;
 
 use super::super::BootClock;
 use super::super::action::PreparedAction;
@@ -37,14 +38,14 @@ fn claim_command_action_inner(
     let path = control_path(&command_root(), command_identity);
     let decision = open_lock(&path.join("decision.lock"), false)?;
     if nonblocking {
-        match flock(&decision, libc::LOCK_EX | libc::LOCK_NB) {
+        match flock(&decision, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(None),
             Err(error) => return Err(error).context("failed to try command-action decision lock"),
         }
     } else {
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision, libc::LOCK_EX, deadline)?;
+        lock_until(&decision, FlockOperation::LockExclusive, deadline)?;
     }
     let mut control = read_control(&path)?;
     let exact = |status: &ActionStatus| match status {
@@ -193,14 +194,14 @@ fn finish_command_action_inner(
     let path = control_path(&command_root(), command_identity);
     let decision = open_lock(&path.join("decision.lock"), false)?;
     if nonblocking {
-        match flock(&decision, libc::LOCK_EX | libc::LOCK_NB) {
+        match flock(&decision, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(false),
             Err(error) => return Err(error).context("failed to try command-action decision lock"),
         }
     } else {
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision, libc::LOCK_EX, deadline)?;
+        lock_until(&decision, FlockOperation::LockExclusive, deadline)?;
     }
     let mut control = read_control(&path)?;
     let applied = result == CommandActionResult::Applied;

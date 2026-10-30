@@ -1894,6 +1894,7 @@ dependencies = [
  "pango",
  "pangocairo",
  "png",
+ "rustix",
  "schemars",
  "serde",
  "serde_ignored",

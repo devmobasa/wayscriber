@@ -340,6 +340,7 @@ internal static class ChecksCommand
         ["pango"] = ["pango"],
         ["pangocairo"] = ["pango", "cairo"],
         ["png"] = [],
+        ["rustix"] = [],
         ["schemars"] = [],
         ["serde"] = [],
         ["serde_ignored"] = [],

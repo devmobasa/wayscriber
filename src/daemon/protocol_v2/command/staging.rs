@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
+use rustix::fs::FlockOperation;
 
 use super::super::{BootClock, BootIdentity};
 use super::MAX_COMMAND_STAGING_DIRECTORIES;
@@ -24,7 +25,7 @@ pub(super) fn recover_staging(root: &Path) -> Result<()> {
             let _ = fs::remove_dir_all(path);
             continue;
         };
-        if flock(&lease, libc::LOCK_EX | libc::LOCK_NB).is_ok() {
+        if flock(&lease, FlockOperation::NonBlockingLockExclusive).is_ok() {
             fs::remove_dir_all(path)?;
         }
     }
