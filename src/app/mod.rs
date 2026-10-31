@@ -22,10 +22,14 @@ use crate::{
 };
 use anyhow::Context;
 use env::env_flag_enabled;
+#[cfg(unix)]
+use rustix::process as rustix_process;
 use session::run_session_cli_commands;
 use std::ffi::OsString;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
+#[cfg(unix)]
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use usage::{log_overlay_controls, print_usage};
 
@@ -170,16 +174,17 @@ fn run_update_check() -> anyhow::Result<()> {
 #[cfg(unix)]
 fn detach_from_tty() {
     // Start a new session to drop the controlling terminal (prevents stuck shells).
-    // SAFETY: setsid takes no arguments; a failure only leaves the session as is.
-    unsafe {
-        let _ = libc::setsid();
-    }
+    // A failure only leaves the session as is.
+    let _ = rustix_process::setsid();
     // Point stdio that still refers to a TTY at /dev/null. Closing it instead
     // frees the descriptor number for the next open, and the logger's stderr
     // writes would then land in whatever file that open returned.
-    for fd in [libc::STDIN_FILENO, libc::STDOUT_FILENO, libc::STDERR_FILENO] {
-        // SAFETY: isatty only inspects the descriptor number it is given.
-        let is_tty = unsafe { libc::isatty(fd) } == 1;
+    let stdio = [
+        (libc::STDIN_FILENO, io::stdin().is_terminal()),
+        (libc::STDOUT_FILENO, io::stdout().is_terminal()),
+        (libc::STDERR_FILENO, io::stderr().is_terminal()),
+    ];
+    for (fd, is_tty) in stdio {
         if is_tty && let Err(error) = redirect_to_dev_null(fd) {
             log::warn!("Failed to detach descriptor {fd} from the terminal: {error}");
         }
@@ -414,6 +419,8 @@ mod tests {
         use std::io::Write;
         use std::os::fd::AsRawFd;
 
+        use rustix::io as rustix_io;
+
         let temp = test_temp::tempdir().unwrap();
         let path = temp.path().join("was-a-terminal");
         let mut file = File::create(&path).unwrap();
@@ -422,8 +429,7 @@ mod tests {
         redirect_to_dev_null(file.as_raw_fd()).unwrap();
         file.write_all(b"after").unwrap();
 
-        // SAFETY: F_GETFD only inspects the descriptor the file still owns.
-        assert!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } >= 0);
+        rustix_io::fcntl_getfd(&file).unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"before ");
     }
 

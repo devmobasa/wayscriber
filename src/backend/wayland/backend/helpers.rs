@@ -3,8 +3,9 @@ use std::io::ErrorKind;
 
 use anyhow::{Context, Result};
 use log::warn;
+use rustix::event::{PollFd, PollFlags};
 use std::env;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::BorrowedFd;
 use std::time::Duration;
 use wayland_client::EventQueue;
 use wayland_client::backend::{ReadEventsGuard, WaylandError};
@@ -13,7 +14,8 @@ use super::super::state::WaylandState;
 #[cfg(test)]
 use super::runtime_wake::timeout_to_poll_ms;
 use super::runtime_wake::{
-    RuntimeWakeSource, TerminalReadinessPolicy, poll_with_retry, validate_poll_readiness,
+    RuntimeWakeSource, TerminalReadinessPolicy, poll_for_ms, poll_with_retry,
+    validate_poll_readiness,
 };
 use crate::capture::CaptureFailureKind;
 use crate::i18n::tr;
@@ -73,13 +75,13 @@ struct RuntimeReadOutcome {
 }
 
 trait PreparedWaylandRead {
-    fn connection_raw_fd(&self) -> RawFd;
+    fn connection_fd(&self) -> BorrowedFd<'_>;
     fn read(self) -> Result<usize, WaylandError>;
 }
 
 impl PreparedWaylandRead for ReadEventsGuard {
-    fn connection_raw_fd(&self) -> RawFd {
-        self.connection_fd().as_raw_fd()
+    fn connection_fd(&self) -> BorrowedFd<'_> {
+        ReadEventsGuard::connection_fd(self)
     }
 
     fn read(self) -> Result<usize, WaylandError> {
@@ -87,52 +89,28 @@ impl PreparedWaylandRead for ReadEventsGuard {
     }
 }
 
+/// Applies the retry and readiness rules to `poll_once`, which reports the
+/// Wayland and runtime wake readiness in that order. Both empty means timeout.
 fn poll_runtime_fds_with(
-    wayland_fd: RawFd,
-    wake_fd: RawFd,
     timeout: Option<Duration>,
-    mut poll_once: impl FnMut(&mut [libc::pollfd], i32) -> io::Result<i32>,
+    mut poll_once: impl FnMut(i32) -> io::Result<[PollFlags; 2]>,
 ) -> io::Result<RuntimePollReadiness> {
     poll_with_retry(timeout, |timeout_ms| {
-        let mut pollfds = [
-            libc::pollfd {
-                fd: wayland_fd,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-            libc::pollfd {
-                fd: wake_fd,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-        ];
-        match poll_once(&mut pollfds, timeout_ms) {
-            Ok(0) => Ok(None),
-            Ok(_) => {
-                let readiness = RuntimePollReadiness {
-                    // A Wayland socket can report final buffered protocol data
-                    // together with HUP/ERR. Read and dispatch it first so the
-                    // compositor's actual disconnect error is preserved.
-                    wayland: validate_poll_readiness(
-                        &pollfds[0],
-                        "Wayland",
-                        TerminalReadinessPolicy::ReadBuffered,
-                    )?,
-                    wake: validate_poll_readiness(
-                        &pollfds[1],
-                        "runtime wake",
-                        TerminalReadinessPolicy::Reject,
-                    )?,
-                };
-                if !readiness.wayland && !readiness.wake {
-                    return Err(io::Error::other(
-                        "runtime poll reported readiness without a readable descriptor",
-                    ));
-                }
-                Ok(Some(readiness))
-            }
-            Err(err) => Err(err),
+        let [wayland, wake] = poll_once(timeout_ms)?;
+        if wayland.is_empty() && wake.is_empty() {
+            return Ok(None);
         }
+        Ok(Some(RuntimePollReadiness {
+            // A Wayland socket can report final buffered protocol data
+            // together with HUP/ERR. Read and dispatch it first so the
+            // compositor's actual disconnect error is preserved.
+            wayland: validate_poll_readiness(
+                wayland,
+                "Wayland",
+                TerminalReadinessPolicy::ReadBuffered,
+            )?,
+            wake: validate_poll_readiness(wake, "runtime wake", TerminalReadinessPolicy::Reject)?,
+        }))
     })
     .map(|readiness| {
         readiness.unwrap_or(RuntimePollReadiness {
@@ -143,25 +121,17 @@ fn poll_runtime_fds_with(
 }
 
 fn poll_runtime_fds(
-    wayland_fd: RawFd,
-    wake_fd: RawFd,
+    wayland_fd: BorrowedFd<'_>,
+    wake_fd: BorrowedFd<'_>,
     timeout: Option<Duration>,
 ) -> io::Result<RuntimePollReadiness> {
-    poll_runtime_fds_with(wayland_fd, wake_fd, timeout, |pollfds, timeout_ms| {
-        // SAFETY: pollfds is a live mutable slice for the duration of this call,
-        // and both descriptors remain borrowed by their runtime owners.
-        let ready = unsafe {
-            libc::poll(
-                pollfds.as_mut_ptr(),
-                pollfds.len() as libc::nfds_t,
-                timeout_ms,
-            )
-        };
-        if ready < 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(ready)
-        }
+    poll_runtime_fds_with(timeout, |timeout_ms| {
+        let mut pollfds = [
+            PollFd::from_borrowed_fd(wayland_fd, PollFlags::IN),
+            PollFd::from_borrowed_fd(wake_fd, PollFlags::IN),
+        ];
+        poll_for_ms(&mut pollfds, timeout_ms)?;
+        Ok([pollfds[0].revents(), pollfds[1].revents()])
     })
 }
 
@@ -170,12 +140,8 @@ fn read_events_with_runtime_wake(
     runtime_wake: &RuntimeWakeSource,
     timeout: Option<Duration>,
 ) -> Result<RuntimeReadOutcome> {
-    let readiness = poll_runtime_fds(
-        guard.connection_raw_fd(),
-        runtime_wake.poll_fd().as_raw_fd(),
-        timeout,
-    )
-    .context("runtime readiness poll failed")?;
+    let readiness = poll_runtime_fds(guard.connection_fd(), runtime_wake.poll_fd(), timeout)
+        .context("runtime readiness poll failed")?;
 
     let wayland_read = if readiness.wayland {
         let _ =
@@ -331,6 +297,7 @@ mod tests {
     use crate::set_runtime_session_override;
     use std::collections::VecDeque;
     use std::io::Write;
+    use std::os::fd::AsFd;
     use std::os::unix::net::UnixStream;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -372,12 +339,7 @@ mod tests {
         wake.handle().wake().unwrap();
 
         assert_eq!(
-            poll_runtime_fds(
-                wayland_read.as_raw_fd(),
-                wake.poll_fd().as_raw_fd(),
-                Some(Duration::ZERO),
-            )
-            .unwrap(),
+            poll_runtime_fds(wayland_read.as_fd(), wake.poll_fd(), Some(Duration::ZERO),).unwrap(),
             RuntimePollReadiness {
                 wayland: false,
                 wake: true,
@@ -392,12 +354,7 @@ mod tests {
         wayland_write.write_all(&[1]).unwrap();
 
         assert_eq!(
-            poll_runtime_fds(
-                wayland_read.as_raw_fd(),
-                wake.poll_fd().as_raw_fd(),
-                Some(Duration::ZERO),
-            )
-            .unwrap(),
+            poll_runtime_fds(wayland_read.as_fd(), wake.poll_fd(), Some(Duration::ZERO),).unwrap(),
             RuntimePollReadiness {
                 wayland: true,
                 wake: false,
@@ -413,12 +370,7 @@ mod tests {
         drop(wayland_write);
 
         assert_eq!(
-            poll_runtime_fds(
-                wayland_read.as_raw_fd(),
-                wake.poll_fd().as_raw_fd(),
-                Some(Duration::ZERO),
-            )
-            .unwrap(),
+            poll_runtime_fds(wayland_read.as_fd(), wake.poll_fd(), Some(Duration::ZERO),).unwrap(),
             RuntimePollReadiness {
                 wayland: true,
                 wake: false,
@@ -434,8 +386,8 @@ mod tests {
 
         assert_eq!(
             poll_runtime_fds(
-                wayland_read.as_raw_fd(),
-                wake.poll_fd().as_raw_fd(),
+                wayland_read.as_fd(),
+                wake.poll_fd(),
                 Some(Duration::from_secs(30)),
             )
             .unwrap(),
@@ -454,12 +406,7 @@ mod tests {
         wake.handle().wake().unwrap();
 
         assert_eq!(
-            poll_runtime_fds(
-                wayland_read.as_raw_fd(),
-                wake.poll_fd().as_raw_fd(),
-                Some(Duration::ZERO),
-            )
-            .unwrap(),
+            poll_runtime_fds(wayland_read.as_fd(), wake.poll_fd(), Some(Duration::ZERO),).unwrap(),
             RuntimePollReadiness {
                 wayland: true,
                 wake: true,
@@ -475,8 +422,8 @@ mod tests {
     }
 
     impl PreparedWaylandRead for FakePreparedWaylandRead {
-        fn connection_raw_fd(&self) -> RawFd {
-            self.stream.as_raw_fd()
+        fn connection_fd(&self) -> BorrowedFd<'_> {
+            self.stream.as_fd()
         }
 
         fn read(mut self) -> Result<usize, WaylandError> {
@@ -684,13 +631,12 @@ mod tests {
     #[test]
     fn runtime_poll_retries_interruption() {
         let mut calls = 0;
-        let readiness = poll_runtime_fds_with(10, 11, None, |pollfds, _| {
+        let readiness = poll_runtime_fds_with(None, |_| {
             calls += 1;
             if calls == 1 {
                 return Err(io::Error::from(ErrorKind::Interrupted));
             }
-            pollfds[1].revents = libc::POLLIN;
-            Ok(1)
+            Ok([PollFlags::empty(), PollFlags::IN])
         })
         .unwrap();
 
@@ -706,11 +652,8 @@ mod tests {
 
     #[test]
     fn runtime_poll_rejects_invalid_descriptor_readiness() {
-        let err = poll_runtime_fds_with(10, 11, None, |pollfds, _| {
-            pollfds[1].revents = libc::POLLNVAL;
-            Ok(1)
-        })
-        .unwrap_err();
+        let err =
+            poll_runtime_fds_with(None, |_| Ok([PollFlags::empty(), PollFlags::NVAL])).unwrap_err();
 
         assert!(err.to_string().contains("runtime wake"));
         assert!(err.to_string().contains("readiness"));
@@ -718,9 +661,9 @@ mod tests {
 
     #[test]
     fn runtime_poll_timeout_reports_no_readiness() {
-        let readiness = poll_runtime_fds_with(10, 11, Some(Duration::ZERO), |_, timeout_ms| {
+        let readiness = poll_runtime_fds_with(Some(Duration::ZERO), |timeout_ms| {
             assert_eq!(timeout_ms, 0);
-            Ok(0)
+            Ok([PollFlags::empty(); 2])
         })
         .unwrap();
 

@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(target_os = "linux")]
+use rustix::fs::{self as rustix_fs, RenameFlags};
+
 use std::ffi::{CString, OsStr, OsString};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -594,23 +597,14 @@ fn metadata_mode(_metadata: &fs::Metadata) -> Option<u32> {
 pub fn rename_no_replace(source: &Path, target: &Path) -> io::Result<()> {
     let source = path_to_cstring(source)?;
     let target = path_to_cstring(target)?;
-    // SAFETY: The C strings are valid, NUL-terminated paths. AT_FDCWD makes both
-    // paths relative to the process cwd, matching std::fs::rename path semantics.
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            target.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    rustix_fs::renameat_with(
+        rustix_fs::CWD,
+        &source,
+        rustix_fs::CWD,
+        &target,
+        RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
 }
 
 #[cfg(target_os = "linux")]

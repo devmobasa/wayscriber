@@ -1,6 +1,4 @@
-use std::ffi::CString;
 use std::fs;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::time::{Duration, Instant};
 
@@ -257,9 +255,7 @@ fn target_symlink_is_rejected_and_neither_path_is_modified() {
 fn fifo_is_rejected_without_blocking_for_a_writer() {
     let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("runtime-ui.toml");
-    let c_path = CString::new(path.as_os_str().as_bytes()).unwrap();
-    // SAFETY: the CString is NUL-terminated and remains live for the call.
-    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    test_temp::make_fifo(&path);
     let started = Instant::now();
     assert!(RuntimeUiStateStore::new(path).inspect().is_err());
     assert!(started.elapsed() < Duration::from_secs(1));

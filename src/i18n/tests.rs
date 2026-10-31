@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
-use std::ffi::CString;
 use std::os::unix;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::{fs, thread};
 
-use crate::test_env;
+use crate::{test_env, test_temp};
 
 use super::*;
 
@@ -314,9 +313,7 @@ fn a_symlinked_override_is_refused() {
 fn a_fifo_override_is_refused_without_waiting_for_a_writer() {
     let directory = tempfile::tempdir().expect("override directory");
     let path = directory.path().join("zh-CN.toml");
-    let raw_path = CString::new(path.as_os_str().as_encoded_bytes()).expect("path");
-    // SAFETY: `raw_path` is a valid NUL-terminated path for the call.
-    assert_eq!(unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) }, 0);
+    test_temp::make_fifo(&path);
 
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {

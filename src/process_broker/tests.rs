@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::os::fd::AsRawFd;
+use std::os::fd::AsFd;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
@@ -7,9 +7,22 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{env, fs, iter, thread};
 
+use rustix::net::{self, Shutdown};
+use rustix::process::{self as rustix_process, Pid, Signal};
+
 use crate::daemon::protocol_v2;
 use crate::test_fake_helper::Role;
 use crate::{env_vars, process_broker, test_env, test_fake_helper, test_temp};
+
+fn process_exists(pid: libc::pid_t) -> bool {
+    Pid::from_raw(pid).is_some_and(|pid| rustix_process::test_kill_process(pid).is_ok())
+}
+
+fn kill_for_cleanup(pid: libc::pid_t) {
+    if let Some(pid) = Pid::from_raw(pid) {
+        let _ = rustix_process::kill_process(pid, Signal::KILL);
+    }
+}
 
 use super::*;
 
@@ -28,10 +41,7 @@ fn release_test_provider(release_path: &Path, proof_path: &Path, provider_pid: i
             return;
         }
         if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its provider.
-            unsafe {
-                libc::kill(provider_pid, libc::SIGKILL);
-            }
+            kill_for_cleanup(provider_pid);
             panic!("successful provider could not act after normal broker shutdown");
         }
         thread::sleep(Duration::from_millis(5));
@@ -540,8 +550,7 @@ fn process_group_guard_cleans_up_before_ownership_transfer() {
 
     drop(child);
 
-    // SAFETY: signal zero only probes the test-owned helper PID after guard cleanup.
-    assert_ne!(unsafe { libc::kill(pid, 0) }, 0);
+    assert!(!process_exists(pid));
 }
 
 #[test]
@@ -762,8 +771,7 @@ fn broker_guard_preempts_an_active_operation_and_kills_its_group() {
         "broker shutdown waited for the active operation"
     );
     assert!(run.join().unwrap().is_err());
-    // SAFETY: signal zero only probes the test-owned helper PID.
-    assert_ne!(unsafe { libc::kill(helper_pid, 0) }, 0);
+    assert!(!process_exists(helper_pid));
 }
 
 #[test]
@@ -778,7 +786,7 @@ fn owned_child_inherits_daemon_pidfd_without_leaking_broker_copy() {
             OsStr::new("sleep"),
             [OsStr::new("30")],
             Vec::new(),
-            watchdog.as_raw_fd(),
+            watchdog.as_fd(),
         )
         .unwrap();
     let inherited_pidfd = fs::read_dir(format!("/proc/{}/fd", child.id()))
@@ -891,10 +899,7 @@ fn a_descendant_outside_the_helper_group_cannot_hold_the_broker_on_its_pipes() {
         .ok()
         .and_then(|pid| pid.trim().parse::<libc::pid_t>().ok())
     {
-        // SAFETY: cleanup of the descendant this test started in its own session.
-        unsafe {
-            libc::kill(pid, libc::SIGKILL);
-        }
+        kill_for_cleanup(pid);
     }
 
     let error = result.expect_err("output still held open must not read as complete");
@@ -950,8 +955,7 @@ fn normal_broker_shutdown_releases_successful_provider_descendant() {
         .trim()
         .parse::<i32>()
         .unwrap();
-    // SAFETY: signal zero only checks the test-owned provider.
-    assert_eq!(unsafe { libc::kill(provider_pid, 0) }, 0);
+    assert!(process_exists(provider_pid));
 
     drop(guard);
 
@@ -984,28 +988,19 @@ fn shutdown_channel_peer_loss_kills_retained_provider() {
         .trim()
         .parse::<i32>()
         .unwrap();
-    // SAFETY: signal zero only checks the test-owned provider.
-    assert_eq!(unsafe { libc::kill(provider_pid, 0) }, 0);
+    assert!(process_exists(provider_pid));
 
     // Simulate abrupt parent loss without writing the graceful-shutdown packet.
-    assert_eq!(
-        // SAFETY: the descriptor belongs to this test's live broker guard.
-        unsafe { libc::shutdown(guard.broker().inner.shutdown.as_raw_fd(), libc::SHUT_RDWR) },
-        0
-    );
+    net::shutdown(&guard.broker().inner.shutdown, Shutdown::Both).unwrap();
     drop(guard);
 
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        // SAFETY: signal zero only probes the recorded test provider PID.
-        if unsafe { libc::kill(provider_pid, 0) } != 0 {
+        if !process_exists(provider_pid) {
             break;
         }
         if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its provider.
-            unsafe {
-                libc::kill(provider_pid, libc::SIGKILL);
-            }
+            kill_for_cleanup(provider_pid);
             panic!("provider survived abnormal broker channel loss");
         }
         thread::sleep(Duration::from_millis(5));
@@ -1069,22 +1064,17 @@ fn retained_publication_replacement_disposes_the_previous_provider() {
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        // SAFETY: signal zero only probes the recorded test provider PID.
-        if unsafe { libc::kill(first_pid, 0) } != 0 {
+        if !process_exists(first_pid) {
             break;
         }
         if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its helpers.
-            unsafe {
-                libc::kill(first_pid, libc::SIGKILL);
-                libc::kill(second_pid, libc::SIGKILL);
-            }
+            kill_for_cleanup(first_pid);
+            kill_for_cleanup(second_pid);
             panic!("replaced publication provider remained alive");
         }
         thread::sleep(Duration::from_millis(5));
     }
-    // SAFETY: signal zero only checks the current test-owned provider.
-    assert_eq!(unsafe { libc::kill(second_pid, 0) }, 0);
+    assert!(process_exists(second_pid));
 
     drop(guard);
     release_test_provider(&second_release_path, &second_proof_path, second_pid);
@@ -1146,20 +1136,15 @@ fn failed_publication_replacement_preserves_the_current_provider() {
         .trim()
         .parse::<i32>()
         .unwrap();
-    // SAFETY: signal zero only checks the current test-owned provider.
-    assert_eq!(unsafe { libc::kill(current_pid, 0) }, 0);
+    assert!(process_exists(current_pid));
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        // SAFETY: signal zero only probes the failed test provider PID.
-        if unsafe { libc::kill(failed_pid, 0) } != 0 {
+        if !process_exists(failed_pid) {
             break;
         }
         if Instant::now() >= deadline {
-            // SAFETY: cleanup keeps a failing regression test from leaking its helpers.
-            unsafe {
-                libc::kill(current_pid, libc::SIGKILL);
-                libc::kill(failed_pid, libc::SIGKILL);
-            }
+            kill_for_cleanup(current_pid);
+            kill_for_cleanup(failed_pid);
             panic!("failed replacement provider survived cleanup");
         }
         thread::sleep(Duration::from_millis(5));
@@ -1205,8 +1190,7 @@ fn retained_publication_kills_failed_or_input_stalled_provider_groups() {
         }
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
-            // SAFETY: signal zero only probes the recorded test child PID.
-            if unsafe { libc::kill(provider_pid, 0) } != 0 {
+            if !process_exists(provider_pid) {
                 break;
             }
             assert!(
@@ -1307,8 +1291,7 @@ fn broker_shutdown_preempts_retained_publication_stdin_writer() {
     release_test_provider(&current_release_path, &current_proof_path, current_pid);
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        // SAFETY: signal zero only probes the recorded test child PID.
-        if unsafe { libc::kill(provider_pid, 0) } != 0 {
+        if !process_exists(provider_pid) {
             break;
         }
         assert!(

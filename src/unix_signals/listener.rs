@@ -7,6 +7,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::{fmt, io};
 
+#[cfg(test)]
+use rustix::thread as rustix_thread;
+
 use super::{
     SIGNAL_WRITE_FD, begin_listener_teardown, clear_registered_signals, create_pipe,
     dispatch_pending_signals, finish_listener_teardown, install_handler, publish_listener_active,
@@ -259,9 +262,9 @@ impl Drop for SignalListener {
 fn listener_thread(read_fd: RawFd, shared: &ListenerShared) {
     #[cfg(test)]
     {
-        // SAFETY: gettid has no preconditions and is used only by tests to
-        // observe that this exact thread reached its blocking read.
-        let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
+        // Used only by tests to observe that this exact thread reached its
+        // blocking read.
+        let tid = rustix_thread::gettid().as_raw_pid();
         shared.thread_tid.store(tid, Ordering::Release);
     }
 

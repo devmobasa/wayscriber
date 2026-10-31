@@ -205,12 +205,11 @@ fn is_gnome_copied_files_mime(mime_type: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
     use std::os::unix;
 
     use super::*;
     use crate::backend::wayland::clipboard::image::choose_supported_mime;
-    use crate::test_temp::TempDir;
+    use crate::test_temp::{self, TempDir};
     use std::fs;
 
     #[test]
@@ -265,16 +264,9 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn uri_list_paste_rejects_fifo_without_blocking() {
-        use std::ffi::CString;
-        use std::os::unix::ffi::OsStrExt;
-
         let temp = TempDir::new().unwrap();
         let fifo_path = temp.path().join("not-an-image");
-        let c_path = CString::new(fifo_path.as_os_str().as_bytes()).unwrap();
-        // SAFETY: `c_path` is a NUL-terminated string that outlives the call,
-        // and mkfifo only reads it.
-        let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
-        assert_eq!(result, 0, "mkfifo failed: {}", io::Error::last_os_error());
+        test_temp::make_fifo(&fifo_path);
         let uri = file_uri_for_path(&fifo_path);
         let offered = vec![TEXT_URI_LIST_MIME.to_string()];
 

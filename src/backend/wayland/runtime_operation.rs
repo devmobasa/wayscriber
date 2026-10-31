@@ -379,11 +379,13 @@ impl<T> Drop for RuntimeOperationExitGuard<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::os::fd::AsRawFd;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use std::{fs, thread};
+
+    use rustix::process::Pid;
+    use rustix::thread as rustix_thread;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
@@ -396,17 +398,10 @@ mod tests {
     }
 
     fn wait_for_wake(wake: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd and the runtime wake descriptor remain valid for the bounded wait.
-        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 1_000) }, 1);
-        assert_ne!(pollfd.revents & libc::POLLIN, 0);
+        assert!(wake.is_readable_within(Duration::from_secs(1)).unwrap());
     }
 
-    fn wait_until_thread_is_blocked_in_poll(tid: libc::pid_t) {
+    fn wait_until_thread_is_blocked_in_poll(tid: Pid) {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
@@ -516,9 +511,7 @@ mod tests {
             .unwrap();
         let (tid_tx, tid_rx) = mpsc::channel();
         let poller = thread::spawn(move || {
-            // SAFETY: gettid has no preconditions and is used only to observe this test thread.
-            let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
-            tid_tx.send(tid).unwrap();
+            tid_tx.send(rustix_thread::gettid()).unwrap();
             wait_for_wake(&wake);
         });
         let tid = tid_rx.recv().unwrap();
@@ -592,13 +585,7 @@ mod tests {
             )
         );
         assert!(!controller.is_active());
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd and the runtime wake descriptor are valid for this non-blocking poll.
-        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 0) }, 0);
+        assert!(!wake.is_readable_within(Duration::ZERO).unwrap());
         assert_eq!(
             controller
                 .try_submit(42, "test-after-spawn-failure", || 2)

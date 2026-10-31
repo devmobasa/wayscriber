@@ -125,6 +125,16 @@ cargo test session::
 cargo test -p wayscriber-configurator
 ```
 
+For a fast run of the whole suite, use [cargo-nextest](https://nexte.st/), which the Nix shell
+includes. It gives each test its own process, so it can run in parallel despite the native font
+race that keeps the local CI entry point serial:
+
+```bash
+cargo nextest run --workspace --all-features
+```
+
+It skips doctests and the isolated render tests, so it does not replace that entry point.
+
 Before submitting a broad or cross-package change, run the local CI entry point:
 
 ```bash
@@ -138,6 +148,13 @@ formatting, strict all-feature Clippy, all-feature tests, and no-default-feature
 Rust tests include the repository guards in `tests/repository_guards`. The source-coverage
 gate uses current rustc dep-info and rejects tracked or unignored `.rs` files that are outside
 the supported Cargo target/feature matrix.
+
+Dependency changes must also satisfy the policy in `deny.toml`, which CI enforces in its own
+job. The Nix shell includes `cargo-deny`; elsewhere, install it and run:
+
+```bash
+cargo deny --workspace --locked check
+```
 
 The all-feature portal transport tests require `dbus-daemon`. Each fixture owns a private
 session bus and connects through its explicit address, leaving the desktop session bus alone.

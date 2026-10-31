@@ -5,14 +5,14 @@
 //! silently pick overlay mode and `system` can warn with actionable guidance
 //! before anything is spawned.
 
-use std::ffi::CString;
-use std::os::unix::ffi::OsStrExt;
+use rustix::fs::{self as rustix_fs, Access};
+use rustix::io::Errno;
 use std::path::Path;
 
 use crate::env_vars;
 use std::ffi::OsString;
 use std::io::ErrorKind;
-use std::{env, fs, io};
+use std::{env, fs};
 
 const DEV_INPUT_DIR: &str = "/dev/input";
 /// Seat to follow when the session does not name one. libinput's udev backend
@@ -211,18 +211,11 @@ fn classify_seat_nodes(seat: &str) -> EventNodeAccess {
 }
 
 fn node_path_access(path: &Path) -> NodePathAccess {
-    let Ok(c_path) = CString::new(path.as_os_str().as_bytes()) else {
-        return NodePathAccess::Unknown;
-    };
-    // SAFETY: `c_path` is a valid NUL-terminated C string that outlives the
-    // call, and `access(2)` only reads it.
-    if unsafe { libc::access(c_path.as_ptr(), libc::R_OK) } == 0 {
-        return NodePathAccess::Readable;
-    }
-    match io::Error::last_os_error().raw_os_error() {
-        Some(libc::EACCES | libc::EPERM) => NodePathAccess::PermissionDenied,
-        Some(libc::ENOENT | libc::ENOTDIR | libc::ENODEV) => NodePathAccess::Absent,
-        _ => NodePathAccess::Unknown,
+    match rustix_fs::access(path, Access::READ_OK) {
+        Ok(()) => NodePathAccess::Readable,
+        Err(Errno::ACCESS | Errno::PERM) => NodePathAccess::PermissionDenied,
+        Err(Errno::NOENT | Errno::NOTDIR | Errno::NODEV) => NodePathAccess::Absent,
+        Err(_) => NodePathAccess::Unknown,
     }
 }
 

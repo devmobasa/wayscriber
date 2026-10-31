@@ -32,6 +32,8 @@
         servicePath = pkgs.lib.makeBinPath [ pkgs.grim pkgs.slurp pkgs.wl-clipboard ];
         developmentInputs = with pkgs; [
           rustToolchain
+          cargo-deny
+          cargo-nextest
           util-linux
           pkg-config
           cairo

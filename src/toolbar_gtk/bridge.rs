@@ -527,7 +527,8 @@ mod tests {
     use std::fs;
 
     use glib::MainContext;
-    use std::os::fd::AsRawFd;
+    use rustix::process::Pid;
+    use rustix::thread as rustix_thread;
     use std::sync::mpsc;
 
     use super::*;
@@ -570,18 +571,10 @@ mod tests {
     }
 
     fn wake_is_readable(source: &RuntimeWakeSource) -> bool {
-        let mut pollfd = libc::pollfd {
-            fd: source.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
-        assert!(ready >= 0);
-        ready > 0 && pollfd.revents & libc::POLLIN != 0
+        source.is_readable_within(Duration::ZERO).unwrap()
     }
 
-    fn wait_until_thread_is_blocked_in_poll(tid: libc::pid_t) {
+    fn wait_until_thread_is_blocked_in_poll(tid: Pid) {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
@@ -814,18 +807,8 @@ mod tests {
         let (wake, _health, publisher) = channel();
         let (tid_tx, tid_rx) = mpsc::channel();
         let poller = thread::spawn(move || {
-            // SAFETY: gettid has no preconditions and is used only to observe this test thread.
-            let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
-            tid_tx.send(tid).unwrap();
-            let mut pollfd = libc::pollfd {
-                fd: wake.poll_fd().as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            // SAFETY: pollfd and the source descriptor remain valid for the bounded wait.
-            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
-            assert_eq!(ready, 1);
-            assert_ne!(pollfd.revents & libc::POLLIN, 0);
+            tid_tx.send(rustix_thread::gettid()).unwrap();
+            assert!(wake.is_readable_within(Duration::from_secs(1)).unwrap());
         });
 
         let tid = tid_rx.recv().unwrap();

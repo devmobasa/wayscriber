@@ -1,5 +1,5 @@
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, OwnedFd};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -17,6 +17,13 @@ use std::thread::Builder;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+#[cfg(not(test))]
+use rustix::io as rustix_io;
+use rustix::io::Errno;
+use rustix::net::{self, AddressFamily, SocketFlags, SocketType};
+#[cfg(not(test))]
+use rustix::process::Signal;
+use rustix::process::{self as rustix_process, Pid, WaitOptions};
 
 use crate::daemon::protocol_v2::ProtocolToken;
 #[cfg(not(test))]
@@ -152,9 +159,8 @@ pub(super) fn start() -> Result<ProcessBroker> {
         }),
     };
     if let Err(error) = broker.request(BrokerOperation::Ping) {
-        // SAFETY: pid is the raw-clone broker child created above.
-        unsafe {
-            libc::kill(pid, libc::SIGKILL);
+        if let Some(broker_pid) = Pid::from_raw(pid) {
+            let _ = rustix_process::kill_process(broker_pid, Signal::KILL);
         }
         wait_for_broker_process(pid);
         return Err(error).context("process broker exec/authentication handshake failed");
@@ -164,37 +170,20 @@ pub(super) fn start() -> Result<ProcessBroker> {
 
 #[cfg(not(test))]
 fn duplicate_for_exec(descriptor: &OwnedFd) -> Result<OwnedFd> {
-    // SAFETY: F_DUPFD_CLOEXEC duplicates the live descriptor at or above five.
-    let duplicate = unsafe { libc::fcntl(descriptor.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 5) };
-    if duplicate < 0 {
-        return Err(io::Error::last_os_error()).context("failed to stage broker descriptor");
-    }
-    // SAFETY: fcntl returned a fresh owned descriptor.
-    Ok(unsafe { OwnedFd::from_raw_fd(duplicate) })
+    rustix_io::fcntl_dupfd_cloexec(descriptor, 5)
+        .map_err(io::Error::from)
+        .context("failed to stage broker descriptor")
 }
 
 fn socket_pair(label: &str) -> Result<(OwnedFd, OwnedFd)> {
-    let mut sockets = [0; 2];
-    // SAFETY: sockets has room for the returned descriptor pair.
-    if unsafe {
-        libc::socketpair(
-            libc::AF_UNIX,
-            libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
-            0,
-            sockets.as_mut_ptr(),
-        )
-    } != 0
-    {
-        return Err(io::Error::last_os_error())
-            .with_context(|| format!("failed to create {label} socketpair"));
-    }
-    // SAFETY: socketpair returned two new descriptors.
-    Ok(unsafe {
-        (
-            OwnedFd::from_raw_fd(sockets[0]),
-            OwnedFd::from_raw_fd(sockets[1]),
-        )
-    })
+    net::socketpair(
+        AddressFamily::UNIX,
+        SocketType::SEQPACKET,
+        SocketFlags::CLOEXEC,
+        None,
+    )
+    .map_err(io::Error::from)
+    .with_context(|| format!("failed to create {label} socketpair"))
 }
 
 /// Whether the broker process exits within `grace`, reaping it if it does.
@@ -203,20 +192,17 @@ pub(super) fn broker_exits_within(child_pid: libc::pid_t, grace: Duration) -> bo
         return true;
     }
 
+    let Some(pid) = Pid::from_raw(child_pid) else {
+        return true;
+    };
     let deadline = Instant::now() + grace;
-    let mut status = 0;
     loop {
-        // SAFETY: child_pid names the raw-clone broker child owned by its guard.
-        let result = unsafe { libc::waitpid(child_pid, &raw mut status, libc::WNOHANG) };
-        if result == child_pid {
-            return true;
-        }
-        if result < 0 {
-            if io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
-                continue;
-            }
+        match rustix_process::waitpid(Some(pid), WaitOptions::NOHANG) {
+            Ok(Some(_)) => return true,
+            Ok(None) => {}
+            Err(Errno::INTR) => continue,
             // Already reaped: nothing is left to wait for.
-            return true;
+            Err(_) => return true,
         }
         if Instant::now() >= deadline {
             return false;
@@ -229,16 +215,11 @@ pub(super) fn wait_for_broker_process(child_pid: libc::pid_t) {
     if child_pid <= 0 {
         return;
     }
-    let mut status = 0;
-    loop {
-        // SAFETY: child_pid names the raw-clone broker child owned by its guard.
-        let result = unsafe { libc::waitpid(child_pid, &raw mut status, 0) };
-        if result == child_pid {
-            break;
-        }
-        if result < 0 && io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
-            continue;
-        }
-        break;
-    }
+    let Some(pid) = Pid::from_raw(child_pid) else {
+        return;
+    };
+    while matches!(
+        rustix_process::waitpid(Some(pid), WaitOptions::empty()),
+        Err(Errno::INTR)
+    ) {}
 }

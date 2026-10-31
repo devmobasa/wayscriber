@@ -8,14 +8,9 @@ use crate::session::snapshot::{BoardPagesSnapshot, BoardSnapshot};
 use crate::session::{
     CompressionMode, SessionOptions, SessionSnapshot, ToolStateSnapshot, save_snapshot,
 };
-#[cfg(unix)]
-use std::ffi::CString;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
-use std::path::Path;
-use std::{fs, io};
 
 fn transparent_line_snapshot() -> SessionSnapshot {
     let mut frame = Frame::new();
@@ -632,7 +627,7 @@ fn inspect_named_file_rejects_special_lock_without_blocking() {
     save_snapshot(&snapshot, &options).expect("save_snapshot should succeed");
     let lock_path = options.lock_file_path();
     fs::remove_file(&lock_path).expect("remove named session lock");
-    make_fifo(&lock_path);
+    test_temp::make_fifo(&lock_path);
 
     let err = inspect_session(&options).expect_err("special lock should be rejected");
 
@@ -720,19 +715,5 @@ fn clear_named_file_rejects_symlink_primary_without_removing_artifacts() {
     assert!(
         options.backup_file_path().exists(),
         "clear must not remove selected sidecars after primary validation fails"
-    );
-}
-
-#[cfg(unix)]
-fn make_fifo(path: &Path) {
-    let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
-    // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
-    let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
-    assert_eq!(
-        result,
-        0,
-        "mkfifo {} failed: {}",
-        path.display(),
-        io::Error::last_os_error()
     );
 }

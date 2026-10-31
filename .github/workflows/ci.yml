@@ -144,3 +144,26 @@ jobs:
 
       - name: Check flake package and development shell instantiation
         run: dotnet run tools/wayscriber.cs --no-build -- check nix-instantiation
+
+  dependency-policy:
+    name: Dependency policy (${{ matrix.checks }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+    # A newly published advisory must not block unrelated pull requests.
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check dependency policy
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --workspace --locked
+          command: check ${{ matrix.checks }}
+          rust-version: 1.99.1

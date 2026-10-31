@@ -217,7 +217,6 @@ impl<T> Drop for PortalTaskExitGuard<T> {
 #[cfg(test)]
 mod tests {
     use std::future;
-    use std::os::fd::AsRawFd;
 
     use tokio::task;
 
@@ -225,13 +224,7 @@ mod tests {
     use crate::backend::wayland::RuntimeWakeSource;
 
     fn wait_for_wake(wake: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: the descriptor and pollfd remain valid during the bounded wait.
-        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 1_000) }, 1);
+        assert!(wake.is_readable_within(Duration::from_secs(1)).unwrap());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -264,14 +257,7 @@ mod tests {
         });
         drop(task);
         task::yield_now().await;
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: the descriptor and pollfd are valid for this non-blocking poll.
-        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
-        assert_eq!(ready, 0);
+        assert!(!wake.is_readable_within(Duration::ZERO).unwrap());
     }
 
     #[tokio::test]

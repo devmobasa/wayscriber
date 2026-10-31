@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
+use rustix::fs::FlockOperation;
 
 use super::super::BootClock;
 use super::super::wire::{
@@ -32,7 +33,7 @@ pub(super) fn recover_previous_generation(root: &Path, daemon_token: &str) -> Re
             continue;
         };
         let deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-        lock_until(&decision_lock, libc::LOCK_EX, deadline)?;
+        lock_until(&decision_lock, FlockOperation::LockExclusive, deadline)?;
         let Ok(mut control) = read_control(&path) else {
             unlock(&decision_lock)?;
             quarantine_entry(root, &path, QuarantineKind::Control)?;

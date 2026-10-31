@@ -1,5 +1,7 @@
 use std::{env, thread};
 
+use rustix::fs::{self as rustix_fs, FlockOperation};
+
 use crate::{test_env, test_temp};
 
 use super::*;
@@ -179,21 +181,11 @@ fn event_loop_claim_and_finish_defer_instead_of_waiting_for_locks() {
             .write(true)
             .open(decision_path)
             .unwrap();
-        assert_eq!(
-            // SAFETY: `held_decision` keeps the descriptor open for the call,
-            // and flock retains no pointer.
-            unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_EX) },
-            0
-        );
+        rustix_fs::flock(&held_decision, FlockOperation::LockExclusive).unwrap();
         let ActionFinishOutcome::Deferred(action) = action.try_finish(true, None).unwrap() else {
             panic!("contended command finish should defer");
         };
-        assert_eq!(
-            // SAFETY: `held_decision` keeps the descriptor open for the call,
-            // and flock retains no pointer.
-            unsafe { libc::flock(held_decision.as_raw_fd(), libc::LOCK_UN) },
-            0
-        );
+        rustix_fs::flock(&held_decision, FlockOperation::Unlock).unwrap();
         assert!(matches!(
             action.try_finish(true, None).unwrap(),
             ActionFinishOutcome::Complete

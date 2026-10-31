@@ -2,6 +2,8 @@ use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use lexopt::{Arg, Parser};
+
 use crate::domain::Language;
 use crate::tray_action::TrayAction;
 use crate::{build_info, i18n, runtime_capabilities};
@@ -105,96 +107,70 @@ impl Cli {
         I: IntoIterator<Item = T>,
         T: Into<OsString>,
     {
-        let mut args = args
-            .into_iter()
-            .map(|arg| {
-                arg.into()
-                    .into_string()
-                    .map_err(|_| "arguments must be valid UTF-8".to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        if args.is_empty() {
-            args.push("wayscriber".to_string());
-        }
-
+        let mut parser = Parser::from_iter(args.into_iter().map(Into::into));
         let mut cli = Cli::default();
-        let mut index = 1;
-        while index < args.len() {
-            let arg = &args[index];
-            match arg.as_str() {
-                "-h" | "--help" => return Ok(CliOutcome::Help),
-                "-V" | "--version" => return Ok(CliOutcome::Version),
-                "-d" | "--daemon" => cli.daemon = true,
-                "--daemon-toggle" => cli.daemon_toggle = true,
-                "--daemon-action" => {
-                    index += 1;
-                    cli.daemon_action = Some(value_after(&args, index, "--daemon-action")?);
+
+        while let Some(arg) = parser.next().map_err(|error| parse_error(&error))? {
+            match arg {
+                Arg::Short('h') => return Ok(CliOutcome::Help),
+                Arg::Short('V') => return Ok(CliOutcome::Version),
+                Arg::Long("help") => {
+                    reject_attached_value(&mut parser, "--help")?;
+                    return Ok(CliOutcome::Help);
                 }
-                "--light-toggle" => cli.light_toggle = true,
-                "--light-draw-toggle" => cli.light_draw_toggle = true,
-                "--light-draw-on" => cli.light_draw_on = true,
-                "--light-draw-off" => cli.light_draw_off = true,
-                "-a" | "--active" => cli.active = true,
-                "-m" | "--mode" => {
-                    index += 1;
-                    cli.mode = Some(value_after(&args, index, "--mode")?);
+                Arg::Long("version") => {
+                    reject_attached_value(&mut parser, "--version")?;
+                    return Ok(CliOutcome::Version);
                 }
-                "--no-tray" => cli.no_tray = true,
-                "--freeze-on-show" => cli.freeze_on_show = true,
-                "--clear-session" => cli.clear_session = true,
-                "--clear-tool-state" => cli.clear_tool_state = true,
-                "--session-info" => cli.session_info = true,
-                "--rename-session" => {
-                    index += 1;
-                    cli.rename_session = Some(value_after(&args, index, "--rename-session")?);
+                Arg::Short('d') | Arg::Long("daemon") => cli.daemon = true,
+                Arg::Long("daemon-toggle") => cli.daemon_toggle = true,
+                Arg::Long("daemon-action") => {
+                    cli.daemon_action = Some(string_value(&mut parser, "--daemon-action")?);
                 }
-                "--session-file" => {
-                    index += 1;
+                Arg::Long("light-toggle") => cli.light_toggle = true,
+                Arg::Long("light-draw-toggle") => cli.light_draw_toggle = true,
+                Arg::Long("light-draw-on") => cli.light_draw_on = true,
+                Arg::Long("light-draw-off") => cli.light_draw_off = true,
+                Arg::Short('a') | Arg::Long("active") => cli.active = true,
+                Arg::Short('m') => cli.mode = Some(string_value(&mut parser, "-m")?),
+                Arg::Long("mode") => cli.mode = Some(string_value(&mut parser, "--mode")?),
+                Arg::Long("no-tray") => cli.no_tray = true,
+                Arg::Long("freeze-on-show") => cli.freeze_on_show = true,
+                Arg::Long("clear-session") => cli.clear_session = true,
+                Arg::Long("clear-tool-state") => cli.clear_tool_state = true,
+                Arg::Long("session-info") => cli.session_info = true,
+                Arg::Long("rename-session") => {
+                    cli.rename_session = Some(string_value(&mut parser, "--rename-session")?);
+                }
+                Arg::Long("session-file") => {
                     cli.session_file =
-                        Some(PathBuf::from(value_after(&args, index, "--session-file")?));
+                        Some(PathBuf::from(option_value(&mut parser, "--session-file")?));
                 }
-                "--freeze" => cli.freeze = true,
-                "--exit-after-capture" => cli.exit_after_capture = true,
-                "--no-exit-after-capture" => cli.no_exit_after_capture = true,
-                "--resume-session" => cli.resume_session = true,
-                "--no-resume-session" => cli.no_resume_session = true,
-                "--about" => cli.about = true,
-                "--check-update" => cli.check_update = true,
-                "--language" => {
-                    index += 1;
-                    cli.language = Some(parse_language(&value_after(&args, index, "--language")?)?);
+                Arg::Long("freeze") => cli.freeze = true,
+                Arg::Long("exit-after-capture") => cli.exit_after_capture = true,
+                Arg::Long("no-exit-after-capture") => cli.no_exit_after_capture = true,
+                Arg::Long("resume-session") => cli.resume_session = true,
+                Arg::Long("no-resume-session") => cli.no_resume_session = true,
+                Arg::Long("about") => cli.about = true,
+                Arg::Long("check-update") => cli.check_update = true,
+                Arg::Long("language") => {
+                    cli.language = Some(parse_language(&string_value(&mut parser, "--language")?)?);
                 }
-                "--list-languages" => cli.list_languages = true,
-                runtime_capabilities::RUNTIME_CAPABILITIES_FLAG => {
+                Arg::Long("list-languages") => cli.list_languages = true,
+                Arg::Long(name)
+                    if runtime_capabilities::RUNTIME_CAPABILITIES_FLAG.strip_prefix("--")
+                        == Some(name) =>
+                {
                     cli.runtime_capabilities = true;
                 }
-                _ if arg.starts_with("--daemon-action=") => {
-                    cli.daemon_action = Some(value_from_equals(arg, "--daemon-action")?);
+                Arg::Long(name) => {
+                    let option = format!("--{name}");
+                    reject_attached_value(&mut parser, &option)?;
+                    return Err(unknown_argument(&option));
                 }
-                _ if arg.starts_with("--mode=") => {
-                    cli.mode = Some(value_from_equals(arg, "--mode")?);
-                }
-                _ if arg.starts_with("--session-file=") => {
-                    cli.session_file =
-                        Some(PathBuf::from(value_from_equals(arg, "--session-file")?));
-                }
-                _ if arg.starts_with("--rename-session=") => {
-                    cli.rename_session = Some(value_from_equals(arg, "--rename-session")?);
-                }
-                _ if arg.starts_with("--language=") => {
-                    cli.language = Some(parse_language(&value_from_equals(arg, "--language")?)?);
-                }
-                _ if is_short_option_cluster(arg) => {
-                    match parse_short_option_cluster(&args, index, &mut cli)? {
-                        ShortOptionOutcome::Continue(next_index) => index = next_index,
-                        ShortOptionOutcome::Help => return Ok(CliOutcome::Help),
-                        ShortOptionOutcome::Version => return Ok(CliOutcome::Version),
-                    }
-                }
-                _ => return Err(format!("unknown argument '{arg}'")),
+                Arg::Short(flag) => return Err(format!("unknown short option '-{flag}'")),
+                Arg::Value(value) => return Err(unknown_argument(&value.display().to_string())),
             }
-            index += 1;
         }
 
         cli.validate()?;
@@ -525,77 +501,53 @@ fn parse_language(value: &str) -> Result<Language, String> {
     })
 }
 
-fn is_short_option_cluster(arg: &str) -> bool {
-    arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2
+/// Reads an option's value, either attached (`--mode=x`, `-mx`, `-m=x`) or as
+/// the next argument. A next argument starting with `-` is the next option, so
+/// a value that starts with `-` has to be attached.
+fn option_value(parser: &mut Parser, name: &str) -> Result<OsString, String> {
+    let requires_value = || format!("{name} requires a value");
+
+    if let Some(value) = parser.optional_value() {
+        return if value.is_empty() {
+            Err(requires_value())
+        } else {
+            Ok(value)
+        };
+    }
+
+    let value = parser.value().map_err(|_| requires_value())?;
+    if value.as_encoded_bytes().starts_with(b"-") {
+        return Err(requires_value());
+    }
+    Ok(value)
 }
 
-enum ShortOptionOutcome {
-    Continue(usize),
-    Help,
-    Version,
+fn string_value(parser: &mut Parser, name: &str) -> Result<String, String> {
+    option_value(parser, name)?
+        .into_string()
+        .map_err(|_| "arguments must be valid UTF-8".to_string())
 }
 
-fn parse_short_option_cluster(
-    args: &[String],
-    index: usize,
-    cli: &mut Cli,
-) -> Result<ShortOptionOutcome, String> {
-    let arg = &args[index];
-    for (offset, flag) in arg[1..].char_indices() {
-        match flag {
-            'h' => return Ok(ShortOptionOutcome::Help),
-            'V' => return Ok(ShortOptionOutcome::Version),
-            'd' => cli.daemon = true,
-            'a' => cli.active = true,
-            'm' => {
-                let value_start = 1 + offset + flag.len_utf8();
-                let value = if value_start < arg.len() {
-                    attached_short_value(arg, value_start, "-m")?
-                } else {
-                    value_after(args, index + 1, "-m")?
-                };
-                cli.mode = Some(value);
-                return Ok(ShortOptionOutcome::Continue(if value_start < arg.len() {
-                    index
-                } else {
-                    index + 1
-                }));
-            }
-            _ => return Err(format!("unknown short option '-{flag}'")),
+/// Rejects `--flag=value` for an option that is about to stop parsing, which
+/// would otherwise skip the check `Parser::next` makes on its following call.
+fn reject_attached_value(parser: &mut Parser, name: &str) -> Result<(), String> {
+    match parser.optional_value() {
+        Some(value) => Err(unknown_argument(&format!("{name}={}", value.display()))),
+        None => Ok(()),
+    }
+}
+
+fn parse_error(error: &lexopt::Error) -> String {
+    match error {
+        lexopt::Error::UnexpectedValue { option, value } => {
+            unknown_argument(&format!("{option}={}", value.display()))
         }
+        other => other.to_string(),
     }
-    Ok(ShortOptionOutcome::Continue(index))
 }
 
-fn value_after(args: &[String], index: usize, name: &str) -> Result<String, String> {
-    let value = args
-        .get(index)
-        .ok_or_else(|| format!("{name} requires a value"))?;
-    if value.starts_with('-') {
-        return Err(format!("{name} requires a value"));
-    }
-    Ok(value.clone())
-}
-
-fn attached_short_value(arg: &str, value_start: usize, name: &str) -> Result<String, String> {
-    let value = arg[value_start..]
-        .strip_prefix('=')
-        .unwrap_or_else(|| &arg[value_start..]);
-    if value.is_empty() {
-        return Err(format!("{name} requires a value"));
-    }
-    Ok(value.to_string())
-}
-
-fn value_from_equals(arg: &str, name: &str) -> Result<String, String> {
-    let value = arg
-        .split_once('=')
-        .map(|(_, value)| value)
-        .unwrap_or_default();
-    if value.is_empty() {
-        return Err(format!("{name} requires a value"));
-    }
-    Ok(value.to_string())
+fn unknown_argument(arg: &str) -> String {
+    format!("unknown argument '{arg}'")
 }
 
 fn conflict(left: &str, right: &str) -> String {

@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+use std::os::unix::ffi::OsStringExt;
 use std::path::PathBuf;
 
 use super::{Cli, CliOutcome};
@@ -600,4 +602,105 @@ fn list_languages_is_a_print_and_exit_command() {
             "{args:?}"
         );
     }
+}
+
+#[test]
+fn a_value_starting_with_a_dash_must_be_attached() {
+    for args in [
+        &["wayscriber", "--mode", "-x"][..],
+        &["wayscriber", "-m", "-x"],
+        &["wayscriber", "--mode", "--active"],
+    ] {
+        assert!(
+            Cli::try_parse_from(args.iter().copied())
+                .unwrap_err()
+                .ends_with("requires a value"),
+            "{args:?}"
+        );
+    }
+
+    assert_eq!(
+        parse_cli(["wayscriber", "--mode=-x"]).mode.as_deref(),
+        Some("-x")
+    );
+    assert_eq!(
+        parse_cli(["wayscriber", "-m=-x"]).mode.as_deref(),
+        Some("-x")
+    );
+    assert_eq!(
+        parse_cli(["wayscriber", "-m-x"]).mode.as_deref(),
+        Some("-x")
+    );
+}
+
+#[test]
+fn an_empty_attached_value_is_missing_but_a_separate_one_is_not() {
+    for (args, name) in [
+        (&["wayscriber", "--mode="][..], "--mode"),
+        (&["wayscriber", "-m="], "-m"),
+        (&["wayscriber", "--language="], "--language"),
+    ] {
+        assert_eq!(
+            Cli::try_parse_from(args.iter().copied()).unwrap_err(),
+            format!("{name} requires a value")
+        );
+    }
+
+    assert_eq!(
+        parse_cli(["wayscriber", "--mode", ""]).mode.as_deref(),
+        Some("")
+    );
+}
+
+#[test]
+fn unknown_and_misused_options_are_rejected() {
+    for (args, expected) in [
+        (&["wayscriber", "--nope"][..], "unknown argument '--nope'"),
+        (&["wayscriber", "--nope=1"], "unknown argument '--nope=1'"),
+        (
+            &["wayscriber", "--active=1"],
+            "unknown argument '--active=1'",
+        ),
+        (&["wayscriber", "--help=1"], "unknown argument '--help=1'"),
+        (
+            &["wayscriber", "--version=1"],
+            "unknown argument '--version=1'",
+        ),
+        (&["wayscriber", "stray"], "unknown argument 'stray'"),
+        (&["wayscriber", "-"], "unknown argument '-'"),
+        (&["wayscriber", "--", "stray"], "unknown argument 'stray'"),
+        (&["wayscriber", "-x"], "unknown short option '-x'"),
+        (&["wayscriber", "-dx"], "unknown short option '-x'"),
+    ] {
+        assert_eq!(
+            Cli::try_parse_from(args.iter().copied()).unwrap_err(),
+            expected,
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
+fn a_session_path_keeps_its_bytes_but_other_values_must_be_utf8() {
+    let raw_path = OsString::from_vec(b"/tmp/s\xff.wayscriber-session".to_vec());
+
+    let outcome = Cli::try_parse_from([
+        OsString::from("wayscriber"),
+        OsString::from("--active"),
+        OsString::from("--session-file"),
+        raw_path.clone(),
+    ])
+    .unwrap();
+    let CliOutcome::Run(cli) = outcome else {
+        panic!("expected CLI run outcome, got {outcome:?}");
+    };
+    assert_eq!(cli.session_file, Some(PathBuf::from(raw_path)));
+
+    let error = Cli::try_parse_from([
+        OsString::from("wayscriber"),
+        OsString::from("--mode"),
+        OsString::from_vec(b"\xff".to_vec()),
+    ])
+    .unwrap_err();
+    assert_eq!(error, "arguments must be valid UTF-8");
 }

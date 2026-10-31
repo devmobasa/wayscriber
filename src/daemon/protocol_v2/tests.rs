@@ -1,12 +1,29 @@
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::process::Command;
 use std::time::{Duration, Instant};
 use std::{env, process};
+
+use rustix::event::{self, PollFd, PollFlags, Timespec};
 
 use crate::tray_action::TrayAction;
 use crate::{env_vars, test_env, test_temp};
 
 use super::*;
+
+/// Polls for input. Any other readiness fails the test, so a broken descriptor
+/// cannot pass for silence.
+fn is_readable(fd: BorrowedFd<'_>, timeout: Duration) -> bool {
+    let mut pollfds = [PollFd::from_borrowed_fd(fd, PollFlags::IN)];
+    let timeout = Timespec::try_from(timeout).unwrap();
+    let ready = event::poll(&mut pollfds, Some(&timeout)).unwrap();
+    let revents = pollfds[0].revents();
+    assert!(
+        ready == 0 || revents == PollFlags::IN,
+        "unexpected readiness {:#x}",
+        revents.bits()
+    );
+    ready == 1
+}
 
 #[test]
 fn production_mode_is_closed_to_published_v2_after_cutover() {
@@ -71,15 +88,7 @@ fn boottime_deadline_source_arms_absolutely_and_drains_once() {
         .unwrap();
     source.arm(deadline).unwrap();
 
-    let mut poll_fd = libc::pollfd {
-        fd: source.poll_fd().as_raw_fd(),
-        events: libc::POLLIN,
-        revents: 0,
-    };
-    // SAFETY: poll_fd remains valid for this bounded poll.
-    let ready = unsafe { libc::poll(&raw mut poll_fd, 1, 500) };
-    assert_eq!(ready, 1);
-    assert_ne!(poll_fd.revents & libc::POLLIN, 0);
+    assert!(is_readable(source.poll_fd(), Duration::from_millis(500)));
     assert!(source.drain().unwrap());
     assert!(!source.drain().unwrap());
     source.disarm().unwrap();
@@ -128,14 +137,7 @@ fn pidfd_wait_times_out_while_alive_and_returns_once_exited() {
 #[test]
 fn self_pidfd_is_not_readable_while_process_is_alive() {
     let pidfd = linux::open_self_pidfd().unwrap();
-    let mut poll_fd = libc::pollfd {
-        fd: pidfd.as_raw_fd(),
-        events: libc::POLLIN,
-        revents: 0,
-    };
-    // SAFETY: poll_fd remains valid for the zero-timeout observation.
-    let ready = unsafe { libc::poll(&raw mut poll_fd, 1, 0) };
-    assert_eq!(ready, 0);
+    assert!(!is_readable(pidfd.as_fd(), Duration::ZERO));
 }
 
 #[test]
@@ -189,13 +191,7 @@ fn command_queue_watch_reports_atomic_publication_and_rejects_replacement() {
     )
     .unwrap();
 
-    let mut poll_fd = libc::pollfd {
-        fd: watcher.poll_fd().as_raw_fd(),
-        events: libc::POLLIN,
-        revents: 0,
-    };
-    // SAFETY: watcher owns the descriptor throughout the bounded poll.
-    assert_eq!(unsafe { libc::poll(&raw mut poll_fd, 1, 500) }, 1);
+    assert!(is_readable(watcher.poll_fd(), Duration::from_millis(500)));
     assert!(watcher.drain().unwrap().scan_pending);
 
     fs::rename(&queue, temp.path().join("old-queue")).unwrap();

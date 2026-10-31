@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
+use rustix::fs::FlockOperation;
 
 #[cfg(test)]
 use super::super::wire::CommandControl;
@@ -61,7 +62,8 @@ impl ClaimedCommand {
             journal.prepare_command(&expected.identity, &expected.target_daemon_token, action)?;
         let deadline =
             BootDeadline::from_nanos(expected.submission_clock.authorization_deadline_boottime_ns);
-        if let Err(error) = lock_until(&self.decision_lock, libc::LOCK_EX, deadline) {
+        if let Err(error) = lock_until(&self.decision_lock, FlockOperation::LockExclusive, deadline)
+        {
             let _ = journal.abandon(&prepared, "command decision lock was not reacquired");
             return Err(error);
         }
@@ -71,7 +73,11 @@ impl ClaimedCommand {
             let reason = "command was canceled during action preparation";
             journal.abandon(&prepared, reason)?;
             let recovery_deadline = BootClock::now()?.checked_add(Duration::from_millis(200))?;
-            lock_until(&self.decision_lock, libc::LOCK_EX, recovery_deadline)?;
+            lock_until(
+                &self.decision_lock,
+                FlockOperation::LockExclusive,
+                recovery_deadline,
+            )?;
             let mut latest = read_control(&self.control_path)?;
             if latest != current
                 || !matches!(
@@ -221,6 +227,6 @@ impl ClaimedCommand {
 
 impl Drop for ClaimedCommand {
     fn drop(&mut self) {
-        let _ = flock(&self.decision_lock, libc::LOCK_UN);
+        let _ = flock(&self.decision_lock, FlockOperation::Unlock);
     }
 }

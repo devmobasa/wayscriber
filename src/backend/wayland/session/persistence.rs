@@ -470,9 +470,7 @@ fn assert_send_static<T: Send + 'static>() {}
 
 #[cfg(test)]
 mod tests {
-    use std::io::ErrorKind;
-    use std::os::fd::AsRawFd;
-    use std::{fs, io};
+    use std::fs;
 
     use crate::test_temp;
 
@@ -503,27 +501,10 @@ mod tests {
     }
 
     fn wait_for_runtime_wake(wake: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        loop {
-            // SAFETY: pollfd and the runtime-owned descriptor remain valid for
-            // this bounded test wait.
-            let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
-            if ready > 0 {
-                assert_ne!(pollfd.revents & libc::POLLIN, 0);
-                return;
-            }
-            if ready == 0 {
-                panic!("persistence worker did not wake runtime within one second");
-            }
-            let err = io::Error::last_os_error();
-            if err.kind() != ErrorKind::Interrupted {
-                panic!("runtime wake poll failed: {err}");
-            }
-        }
+        assert!(
+            wake.is_readable_within(Duration::from_secs(1)).unwrap(),
+            "persistence worker did not wake runtime within one second"
+        );
     }
 
     #[test]

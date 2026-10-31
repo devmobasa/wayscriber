@@ -1,7 +1,10 @@
 use std::io;
-use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use rustix::event::{self, EventfdFlags, PollFd, PollFlags, Timespec};
+use rustix::io::{self as rustix_io, Errno};
 
 #[derive(Debug)]
 pub(crate) struct RuntimeWakeSource {
@@ -20,31 +23,41 @@ pub(super) enum TerminalReadinessPolicy {
 }
 
 pub(super) fn validate_poll_readiness(
-    pollfd: &libc::pollfd,
+    revents: PollFlags,
     label: &str,
     terminal_policy: TerminalReadinessPolicy,
 ) -> io::Result<bool> {
-    let readable = pollfd.revents & libc::POLLIN != 0;
-    if pollfd.revents & libc::POLLNVAL != 0 {
+    let readable = revents.contains(PollFlags::IN);
+    if revents.contains(PollFlags::NVAL) {
         return Err(io::Error::other(format!(
             "{label} poll descriptor failed with readiness {:#x}",
-            pollfd.revents
+            revents.bits()
         )));
     }
-    let terminal = pollfd.revents & (libc::POLLERR | libc::POLLHUP);
-    if terminal != 0 && !(terminal_policy == TerminalReadinessPolicy::ReadBuffered && readable) {
+    let terminal = revents.intersects(PollFlags::ERR | PollFlags::HUP);
+    if terminal && !(terminal_policy == TerminalReadinessPolicy::ReadBuffered && readable) {
         return Err(io::Error::other(format!(
             "{label} poll descriptor failed with readiness {:#x}",
-            pollfd.revents
+            revents.bits()
         )));
     }
-    if pollfd.revents != 0 && !readable {
+    if !revents.is_empty() && !readable {
         return Err(io::Error::other(format!(
             "{label} poll descriptor returned unexpected readiness {:#x}",
-            pollfd.revents
+            revents.bits()
         )));
     }
     Ok(readable)
+}
+
+/// `poll(2)` with a millisecond timeout from [`timeout_to_poll_ms`], where a
+/// negative value blocks.
+pub(super) fn poll_for_ms(fds: &mut [PollFd<'_>], timeout_ms: i32) -> io::Result<usize> {
+    let timeout = (timeout_ms >= 0).then(|| Timespec {
+        tv_sec: (timeout_ms / 1_000).into(),
+        tv_nsec: (timeout_ms % 1_000 * 1_000_000).into(),
+    });
+    Ok(event::poll(fds, timeout.as_ref())?)
 }
 
 pub(super) fn poll_with_retry<T>(
@@ -67,15 +80,9 @@ pub(super) fn poll_with_retry<T>(
 
 impl RuntimeWakeSource {
     pub(crate) fn try_new() -> io::Result<Self> {
-        // SAFETY: eventfd returns a new owned descriptor on success. EFD_NONBLOCK
-        // keeps both producer writes and consumer drains bounded, and EFD_CLOEXEC
-        // prevents subprocesses from extending the runtime descriptor lifetime.
-        let raw_fd = unsafe { libc::eventfd(0, libc::EFD_NONBLOCK | libc::EFD_CLOEXEC) };
-        if raw_fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: raw_fd was just returned by eventfd and has not been wrapped.
-        let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
+        // NONBLOCK keeps both producer writes and consumer drains bounded, and
+        // CLOEXEC prevents subprocesses from extending the descriptor lifetime.
+        let fd = event::eventfd(0, EventfdFlags::NONBLOCK | EventfdFlags::CLOEXEC)?;
         Ok(Self { fd: Arc::new(fd) })
     }
 
@@ -93,32 +100,20 @@ impl RuntimeWakeSource {
     /// One eventfd read consumes the entire accumulated counter, so a second
     /// successful-path read would only issue a guaranteed-EAGAIN syscall.
     pub(crate) fn drain(&self) -> io::Result<bool> {
+        let mut value = [0_u8; size_of::<u64>()];
         loop {
-            let mut value = 0_u64;
-            // SAFETY: value points to a writable u64 and the owned eventfd remains
-            // valid for the duration of this read.
-            let result = unsafe {
-                libc::read(
-                    self.fd.as_raw_fd(),
-                    (&raw mut value).cast(),
-                    size_of::<u64>(),
-                )
-            };
-            if result == size_of::<u64>() as isize {
-                return Ok(true);
-            }
-            if result < 0 {
-                let err = io::Error::last_os_error();
-                match err.kind() {
-                    io::ErrorKind::Interrupted => continue,
-                    io::ErrorKind::WouldBlock => return Ok(false),
-                    _ => return Err(err),
+            match rustix_io::read(&self.fd, &mut value) {
+                Ok(read) if read == value.len() => return Ok(true),
+                Ok(read) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("runtime wake eventfd returned a short read ({read} bytes)"),
+                    ));
                 }
+                Err(Errno::INTR) => {}
+                Err(Errno::WOULDBLOCK) => return Ok(false),
+                Err(errno) => return Err(errno.into()),
             }
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                format!("runtime wake eventfd returned a short read ({result} bytes)"),
-            ));
         }
     }
 
@@ -126,24 +121,15 @@ impl RuntimeWakeSource {
     #[cfg(test)]
     pub(crate) fn wait_readable(&self, timeout: Option<Duration>) -> io::Result<bool> {
         let readable = poll_with_retry(timeout, |timeout_ms| {
-            let mut pollfd = libc::pollfd {
-                fd: self.fd.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            // SAFETY: pollfd is valid and the Arc-owned descriptor remains open
-            // throughout this bounded or producer-woken wait.
-            let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
-            if ready == 0 {
+            let mut pollfds = [PollFd::new(&self.fd, PollFlags::IN)];
+            if poll_for_ms(&mut pollfds, timeout_ms)? == 0 {
                 return Ok(None);
             }
-            if ready < 0 {
-                return Err(io::Error::last_os_error());
-            }
-            if !validate_poll_readiness(&pollfd, "runtime wake", TerminalReadinessPolicy::Reject)? {
+            let revents = pollfds[0].revents();
+            if !validate_poll_readiness(revents, "runtime wake", TerminalReadinessPolicy::Reject)? {
                 return Err(io::Error::other(format!(
                     "runtime wake poll reported readiness without a readable descriptor ({:#x})",
-                    pollfd.revents
+                    revents.bits()
                 )));
             }
             Ok(Some(()))
@@ -153,6 +139,27 @@ impl RuntimeWakeSource {
         } else {
             Ok(false)
         }
+    }
+
+    /// Reports whether a wake arrives within `timeout`, without draining it.
+    /// Any other readiness is an error, so a broken descriptor cannot pass for
+    /// silence in a test that expects no wake.
+    #[cfg(test)]
+    pub(crate) fn is_readable_within(&self, timeout: Duration) -> io::Result<bool> {
+        let readable = poll_with_retry(Some(timeout), |timeout_ms| {
+            let mut pollfds = [PollFd::new(&self.fd, PollFlags::IN)];
+            if poll_for_ms(&mut pollfds, timeout_ms)? == 0 {
+                return Ok(None);
+            }
+            validate_poll_readiness(
+                pollfds[0].revents(),
+                "runtime wake",
+                TerminalReadinessPolicy::Reject,
+            )
+            .map(Some)
+        })?;
+
+        Ok(readable == Some(true))
     }
 }
 
@@ -169,34 +176,22 @@ pub(super) fn timeout_to_poll_ms(timeout: Option<Duration>) -> i32 {
 
 impl RuntimeWakeHandle {
     pub(crate) fn wake(&self) -> io::Result<()> {
-        let value = 1_u64;
+        let value = 1_u64.to_ne_bytes();
         loop {
-            // SAFETY: value points to a readable u64 and the shared eventfd remains
-            // valid for the duration of this write.
-            let result = unsafe {
-                libc::write(
-                    self.fd.as_raw_fd(),
-                    (&raw const value).cast(),
-                    size_of::<u64>(),
-                )
-            };
-            if result == size_of::<u64>() as isize {
-                return Ok(());
-            }
-            if result < 0 {
-                let err = io::Error::last_os_error();
-                match err.kind() {
-                    io::ErrorKind::Interrupted => continue,
-                    // A saturated eventfd is already readable, so the wake is
-                    // successfully coalesced rather than lost.
-                    io::ErrorKind::WouldBlock => return Ok(()),
-                    _ => return Err(err),
+            match rustix_io::write(&self.fd, &value) {
+                Ok(written) if written == value.len() => return Ok(()),
+                Ok(written) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::WriteZero,
+                        format!("runtime wake eventfd returned a short write ({written} bytes)"),
+                    ));
                 }
+                Err(Errno::INTR) => {}
+                // A saturated eventfd is already readable, so the wake is
+                // successfully coalesced rather than lost.
+                Err(Errno::WOULDBLOCK) => return Ok(()),
+                Err(errno) => return Err(errno.into()),
             }
-            return Err(io::Error::new(
-                io::ErrorKind::WriteZero,
-                format!("runtime wake eventfd returned a short write ({result} bytes)"),
-            ));
         }
     }
 }
@@ -207,21 +202,13 @@ mod tests {
     use std::time::{Duration, Instant};
     use std::{fs, thread};
 
+    use rustix::pipe;
+    use rustix::process::Pid;
+    use rustix::thread as rustix_thread;
+
     use super::*;
 
-    fn poll_readable(source: &RuntimeWakeSource, timeout_ms: i32) -> bool {
-        let mut pollfd = libc::pollfd {
-            fd: source.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd is valid for the duration of this call.
-        let ready = unsafe { libc::poll(&raw mut pollfd, 1, timeout_ms) };
-        assert!(ready >= 0, "poll failed: {}", io::Error::last_os_error());
-        ready > 0 && pollfd.revents & libc::POLLIN != 0
-    }
-
-    fn wait_until_task_is_blocked_in_poll(tid: libc::pid_t) {
+    fn wait_until_task_is_blocked_in_poll(tid: Pid) {
         let stat_path = format!("/proc/self/task/{tid}/stat");
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {
@@ -248,9 +235,9 @@ mod tests {
         let source = RuntimeWakeSource::try_new().unwrap();
         source.handle().wake().unwrap();
 
-        assert!(poll_readable(&source, 0));
+        assert!(source.is_readable_within(Duration::ZERO).unwrap());
         assert!(source.drain().unwrap());
-        assert!(!poll_readable(&source, 0));
+        assert!(!source.is_readable_within(Duration::ZERO).unwrap());
     }
 
     #[test]
@@ -259,10 +246,7 @@ mod tests {
         let handle = source.handle();
         let (poll_entry_tx, poll_entry_rx) = mpsc::channel();
         let poller = thread::spawn(move || {
-            // SAFETY: gettid has no preconditions and returns the calling Linux
-            // thread's id, used only to observe its scheduler state in this test.
-            let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
-            poll_entry_tx.send(tid).unwrap();
+            poll_entry_tx.send(rustix_thread::gettid()).unwrap();
             assert!(source.wait_readable(Some(Duration::from_secs(1))).unwrap());
         });
 
@@ -281,7 +265,7 @@ mod tests {
         }
 
         assert!(source.drain().unwrap());
-        assert!(!poll_readable(&source, 0));
+        assert!(!source.is_readable_within(Duration::ZERO).unwrap());
     }
 
     #[test]
@@ -300,6 +284,15 @@ mod tests {
     }
 
     #[test]
+    fn readiness_without_a_wake_is_an_error_rather_than_silence() {
+        let (read, write) = pipe::pipe().unwrap();
+        drop(write);
+        let source = RuntimeWakeSource { fd: Arc::new(read) };
+
+        assert!(source.is_readable_within(Duration::ZERO).is_err());
+    }
+
+    #[test]
     fn wait_readable_times_out_without_a_wake() {
         let source = RuntimeWakeSource::try_new().unwrap();
         assert!(!source.wait_readable(Some(Duration::ZERO)).unwrap());
@@ -307,22 +300,18 @@ mod tests {
 
     #[test]
     fn terminal_readiness_policy_distinguishes_streams_from_wake_descriptors() {
-        let pollfd = libc::pollfd {
-            fd: 7,
-            events: libc::POLLIN,
-            revents: libc::POLLIN | libc::POLLHUP,
-        };
+        let revents = PollFlags::IN | PollFlags::HUP;
 
         assert!(
             validate_poll_readiness(
-                &pollfd,
+                revents,
                 "buffered stream",
                 TerminalReadinessPolicy::ReadBuffered,
             )
             .unwrap()
         );
         assert!(
-            validate_poll_readiness(&pollfd, "runtime wake", TerminalReadinessPolicy::Reject,)
+            validate_poll_readiness(revents, "runtime wake", TerminalReadinessPolicy::Reject)
                 .is_err()
         );
     }

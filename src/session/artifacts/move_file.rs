@@ -1,6 +1,8 @@
 use std::ffi::CString;
 
 use anyhow::{Context, Result, anyhow};
+#[cfg(target_os = "linux")]
+use rustix::fs::{self as rustix_fs, RenameFlags};
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::io;
@@ -386,23 +388,14 @@ fn rename_artifacts_with_rollback(artifacts: &[MoveArtifact]) -> Result<()> {
 pub(crate) fn rename_artifact_no_replace(source: &Path, target: &Path) -> io::Result<()> {
     let source = path_to_cstring(source)?;
     let target = path_to_cstring(target)?;
-    // SAFETY: The C strings are valid, NUL-terminated paths. AT_FDCWD makes both paths
-    // relative to the current process, matching std::fs::rename path semantics.
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            target.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    rustix_fs::renameat_with(
+        rustix_fs::CWD,
+        &source,
+        rustix_fs::CWD,
+        &target,
+        RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
 }
 
 #[cfg(target_os = "linux")]

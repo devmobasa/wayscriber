@@ -3,6 +3,7 @@ use std::time::Duration;
 use std::{fs, process, thread};
 
 use anyhow::{Context, Result, bail};
+use rustix::fs::FlockOperation;
 
 #[cfg(test)]
 use anyhow::anyhow;
@@ -62,8 +63,16 @@ impl ClientCommand {
         create_private_directory(&stage)?;
         let decision_lock = open_lock(&stage.join("decision.lock"), true)?;
         let caller_lease = open_lock(&stage.join("caller.lease"), true)?;
-        lock_until(&caller_lease, libc::LOCK_SH, authorization_deadline)?;
-        lock_until(&decision_lock, libc::LOCK_EX, authorization_deadline)?;
+        lock_until(
+            &caller_lease,
+            FlockOperation::LockShared,
+            authorization_deadline,
+        )?;
+        lock_until(
+            &decision_lock,
+            FlockOperation::LockExclusive,
+            authorization_deadline,
+        )?;
 
         let mut control = CommandControl {
             protocol_version: DAEMON_COMMAND_PROTOCOL_VERSION,
@@ -154,7 +163,7 @@ impl ClientCommand {
             let slice = now
                 .checked_add(Duration::from_millis(20))?
                 .min(self.response_deadline);
-            if !try_lock_until(&self.decision_lock, libc::LOCK_EX, slice)? {
+            if !try_lock_until(&self.decision_lock, FlockOperation::LockExclusive, slice)? {
                 if slice < self.response_deadline {
                     continue;
                 }
@@ -201,7 +210,11 @@ impl ClientCommand {
             let _ = unlock(&self.caller_lease);
             return Ok(TerminalCommandResult::AdmittedIndeterminate(reason));
         }
-        lock_until(&self.decision_lock, libc::LOCK_EX, self.response_deadline)?;
+        lock_until(
+            &self.decision_lock,
+            FlockOperation::LockExclusive,
+            self.response_deadline,
+        )?;
         let mut control = read_control(&self.control_path)?;
         if cancel_open(&mut control)? {
             write_control(&self.control_path, &control)?;

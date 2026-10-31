@@ -13,7 +13,7 @@ use super::*;
 use crate::session::snapshot::tests::sample_snapshot;
 use crate::session::snapshot::{load, save};
 use crate::session::{CompressionMode, SessionOptions};
-use crate::test_temp::tempdir;
+use crate::test_temp::{self, tempdir};
 use std::fs::{self, File};
 use std::io::{Seek, Write};
 use std::path::Path;
@@ -427,7 +427,7 @@ fn save_as_and_gzip_preserve_the_allocated_header_generation() {
 fn fifo_marker_probe_never_blocks_and_oversized_generations_do_not_raise_the_sequence() {
     let temp = tempdir().unwrap();
     let options = options(temp.path());
-    super::super::tests::make_fifo(&options.clear_marker_file_path());
+    test_temp::make_fifo(&options.clear_marker_file_path());
     assert_eq!(
         ArtifactSetView::probe(&options)
             .next_generation(UnreadablePolicy::Refuse)

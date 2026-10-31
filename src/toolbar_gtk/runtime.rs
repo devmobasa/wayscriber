@@ -125,8 +125,8 @@ pub(super) fn run(
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
-    use std::os::fd::AsRawFd;
     use std::rc::Rc;
+    use std::time::Duration;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
@@ -140,16 +140,8 @@ mod tests {
             clean: Cell::new(false),
         });
 
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 0) };
-        assert_eq!(ready, 1);
+        assert!(wake.is_readable_within(Duration::ZERO).unwrap());
         assert!(health.failed());
-        assert_ne!(pollfd.revents & libc::POLLIN, 0);
     }
 
     #[test]
@@ -162,13 +154,7 @@ mod tests {
         });
 
         assert!(!health.failed());
-        let mut pollfd = libc::pollfd {
-            fd: wake.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: pollfd and the source descriptor are valid for this non-blocking poll.
-        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 0) }, 0);
+        assert!(!wake.is_readable_within(Duration::ZERO).unwrap());
     }
 
     #[test]

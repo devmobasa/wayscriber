@@ -1,4 +1,3 @@
-use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -163,23 +162,19 @@ async fn completion_wakes_an_already_blocked_runtime_poll_after_publication() {
         .unwrap();
     started.notified().await;
 
-    let wake_fd = runtime_wake.poll_fd().as_raw_fd();
     let (polling_tx, polling_rx) = mpsc::sync_channel(0);
     let poller = thread::spawn(move || {
-        let mut pollfd = libc::pollfd {
-            fd: wake_fd,
-            events: libc::POLLIN,
-            revents: 0,
-        };
         polling_tx.send(()).unwrap();
-        // SAFETY: the runtime wake source outlives this bounded poll and owns
-        // the descriptor for the entire test.
-        assert_eq!(unsafe { libc::poll(&raw mut pollfd, 1, 1_000) }, 1);
-        assert_ne!(pollfd.revents & libc::POLLIN, 0);
+        assert!(
+            runtime_wake
+                .is_readable_within(Duration::from_secs(1))
+                .unwrap()
+        );
+        runtime_wake
     });
     polling_rx.recv().unwrap();
     release.notify_one();
-    poller.join().unwrap();
+    let runtime_wake = poller.join().unwrap();
     runtime_wake.drain().unwrap();
 
     assert!(matches!(

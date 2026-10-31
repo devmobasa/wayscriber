@@ -40,6 +40,7 @@
 - Never reach inside a poisoned lock. Use `expect` when the critical section cannot panic, or a fallback that leaves the data alone. Tests that serialize on process-wide state use `test_env::lock()` or a `test_env::Lease`.
 - `catch_unwind` is reserved for the reviewed worker-isolation sites that carry an `#[expect]` reason. Tests observe panics through a joined scoped thread.
 - Getters are `foo()`/`foo_mut()`, a fallible constructor is `try_new`, and type lifetimes have descriptive names. Every `unsafe` block has a `// SAFETY:` comment that says why it is sound.
+- Make kernel calls through `std` or `rustix`, which need no `unsafe`, and rename on import when a module name clashes with `std` (`use rustix::fs as rustix_fs`). Use raw `libc` calls only where neither fits: signal handlers, the post-`clone` broker stub, `fail_stop`, the zero-signal pidfd check, validating the broker's inherited descriptors, the inotify header parser, `dup2` onto a fixed descriptor number, and `localtime_r`. `libc` constants stay fine.
 - Convert numbers losslessly with `From` (`f64::from(width)`) wherever it can be called; `const` initializers keep `as`. Take the middle of two values with `midpoint` (`f64::midpoint(a, b)`), which cannot overflow.
 - Inline named format arguments: `format!("{name}: {err}")`.
 - Use `map_or`, `map_or_else`, `is_some_and`, or `is_ok_and` instead of `map(..).unwrap_or(..)`. Use `let ... else` for a `match` that only unwraps or leaves, and `if let ... else` for a `match` with one pattern and a fallback.
@@ -51,8 +52,10 @@
 - Config changes often require `config.example.toml`, `docs/CONFIG.md`, configurator models/views, schema behavior, and tests.
 - Tool/action/keybinding changes often require config defaults, action metadata, help/command UI, toolbar UI, configurator labels/search, docs, and tests.
 - Daemon, service, shortcut, path, and packaging changes often need updates across `src/daemon/`, `src/paths/`, `src/systemd_user_service.rs`, `src/shortcut_hint.rs`, `configurator/src/app/daemon_setup/`, and `packaging/`.
+- Dependency changes must satisfy `deny.toml`. A new license or duplicate version needs an entry there with its reason.
 
 ## Validation
+- For a fast full-suite run while iterating, use `cargo nextest run --workspace --all-features`. Each test gets its own process, so it runs in parallel despite the native-font race that keeps the gate serial. It skips doctests and the isolated render tests, so it does not replace the gate.
 - Full local CI is `./tools/lint-and-test.sh`. It needs the .NET SDK selected by `global.json`. Without it, `cargo test` still runs the Rust source guards in `tests/repository_guards` (process sites, config writers, shared dependencies, use statements, no Python), but not the C# checks, including the source-coverage check that finds `.rs` files Cargo never compiles.
 - That script runs the C# repository checks (assets, version, nixpkgs recipe, source coverage, legacy tools), the C# tool tests (which also run the packaging shell contracts), `cargo fmt --all -- --check`, clippy with all targets/features, all-feature tests, and no-default-feature tests.
 - Run `git diff --check` before handoff. When relevant files are untracked and the index must stay unchanged, check those files directly as well.

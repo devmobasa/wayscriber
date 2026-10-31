@@ -1,6 +1,8 @@
 use std::env;
 use std::time::Duration;
 
+use rustix::fs::FlockOperation;
+
 use crate::{test_env, test_temp};
 
 use super::super::BootClock;
@@ -208,7 +210,7 @@ fn contended_published_command_claim_is_deferred_and_retried() {
             &token,
         )
         .unwrap();
-        flock(&client.decision_lock, libc::LOCK_EX).unwrap();
+        flock(&client.decision_lock, FlockOperation::LockExclusive).unwrap();
 
         assert!(owner.claim_next().unwrap().is_none());
         let now = BootClock::now().unwrap();
@@ -252,7 +254,7 @@ fn contended_ref_less_recovery_is_deferred_and_retried() {
             &control.identity,
         ))
         .unwrap();
-        flock(&client.decision_lock, libc::LOCK_EX).unwrap();
+        flock(&client.decision_lock, FlockOperation::LockExclusive).unwrap();
 
         assert!(owner.claim_next().unwrap().is_none());
         unlock(&client.decision_lock).unwrap();
@@ -287,7 +289,7 @@ fn terminal_collection_defers_while_admission_is_busy() {
         drop(client);
 
         let admission = open_lock(&owner.root.join("admission.lock"), false).unwrap();
-        flock(&admission, libc::LOCK_EX).unwrap();
+        flock(&admission, FlockOperation::LockExclusive).unwrap();
         assert_eq!(owner.collect_terminal().unwrap(), 0);
         let now = BootClock::now().unwrap();
         let retry = owner
@@ -715,20 +717,20 @@ fn lock_deadline_is_reported_without_parsing_error_text() {
         let path = root.join("structured-timeout.lock");
         let held = open_lock(&path, true).unwrap();
         let contender = open_lock(&path, false).unwrap();
-        flock(&held, libc::LOCK_EX).unwrap();
+        flock(&held, FlockOperation::LockExclusive).unwrap();
 
         let deadline = BootClock::now()
             .unwrap()
             .checked_add(Duration::from_millis(5))
             .unwrap();
-        assert!(!try_lock_until(&contender, libc::LOCK_EX, deadline).unwrap());
+        assert!(!try_lock_until(&contender, FlockOperation::LockExclusive, deadline).unwrap());
 
         unlock(&held).unwrap();
         let deadline = BootClock::now()
             .unwrap()
             .checked_add(Duration::from_millis(5))
             .unwrap();
-        assert!(try_lock_until(&contender, libc::LOCK_EX, deadline).unwrap());
+        assert!(try_lock_until(&contender, FlockOperation::LockExclusive, deadline).unwrap());
         unlock(&contender).unwrap();
     });
 }

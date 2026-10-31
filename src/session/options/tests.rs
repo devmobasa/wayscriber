@@ -1,11 +1,7 @@
 #[cfg(unix)]
-use std::ffi::CString;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
-#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
-use std::{fs, io, process};
+use std::{fs, process};
 
 use crate::{test_env, test_temp};
 
@@ -250,7 +246,7 @@ fn named_file_validation_rejects_missing_directory_shaped_path() {
 fn named_file_validation_rejects_fifo_target() {
     let temp = test_temp::tempdir().unwrap();
     let path = temp.path().join("session-fifo.wayscriber-session");
-    make_fifo(&path);
+    test_temp::make_fifo(&path);
 
     for (label, result) in [
         (
@@ -393,18 +389,4 @@ fn can_create_probe(parent: &Path) -> bool {
         }
         Err(_) => false,
     }
-}
-
-#[cfg(unix)]
-fn make_fifo(path: &Path) {
-    let raw_path = CString::new(path.as_os_str().as_bytes()).expect("fifo path has no NUL bytes");
-    // SAFETY: raw_path is a valid, NUL-terminated filesystem path for this process.
-    let result = unsafe { libc::mkfifo(raw_path.as_ptr(), 0o600) };
-    assert_eq!(
-        result,
-        0,
-        "mkfifo {} failed: {}",
-        path.display(),
-        io::Error::last_os_error()
-    );
 }

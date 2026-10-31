@@ -114,21 +114,13 @@ pub(super) fn setup_signal_handlers(
 
 #[cfg(test)]
 mod tests {
-    use std::os::fd::AsRawFd;
+    use std::time::Duration;
 
     use super::*;
     use crate::backend::wayland::RuntimeWakeSource;
 
     fn wait_for_wake(source: &RuntimeWakeSource) {
-        let mut pollfd = libc::pollfd {
-            fd: source.poll_fd().as_raw_fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        // SAFETY: source retains the descriptor throughout this bounded wait.
-        let ready = unsafe { libc::poll(&raw mut pollfd, 1, 1_000) };
-        assert_eq!(ready, 1);
-        assert_ne!(pollfd.revents & libc::POLLIN, 0);
+        assert!(source.is_readable_within(Duration::from_secs(1)).unwrap());
         source.drain().unwrap();
     }
 
