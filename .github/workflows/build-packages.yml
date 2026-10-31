@@ -16,15 +16,15 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Cache repository tool packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
@@ -36,7 +36,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies package
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.1
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Install nfpm
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-nfpm
@@ -86,43 +86,43 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- package smoke-ubuntu --artifact-root dist
 
       - name: Upload tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-tar
           path: dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
 
       - name: Upload configurator tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-tar
           path: dist/wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
 
       - name: Upload deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-deb
           path: dist/wayscriber-amd64.deb
 
       - name: Upload configurator deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-deb
           path: dist/wayscriber-configurator-amd64.deb
 
       - name: Upload rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-rpm
           path: dist/wayscriber-x86_64.rpm
 
       - name: Upload configurator rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-rpm
           path: dist/wayscriber-configurator-x86_64.rpm
 
       - name: Upload manifests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-manifest
           path: |
@@ -147,10 +147,10 @@ jobs:
       PACKAGE_REPO_SSH_KNOWN_HOSTS: ${{ secrets.PACKAGE_REPO_SSH_KNOWN_HOSTS }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -161,7 +161,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies repositories
 
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -180,7 +180,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- package build-repositories
 
       - name: Upload repo bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ needs.package.outputs.version }}-repos
           path: |
@@ -204,13 +204,13 @@ jobs:
       contents: write
     steps:
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
       - name: Publish GitHub release (auto notes)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/**/*
           generate_release_notes: true
@@ -225,15 +225,15 @@ jobs:
       AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Cache repository tool packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
@@ -248,7 +248,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- aur prepare-ssh
 
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
