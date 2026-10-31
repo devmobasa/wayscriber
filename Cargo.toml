@@ -122,7 +122,7 @@ gtk4-layer-shell = { version = "0.8", optional = true }
 # System-wide input capture for the input HUD (opt-in `input-monitor`)
 input = { version = "0.10", optional = true }
 udev = { version = "0.9", optional = true }
-xkbcommon = { version = "0.8", optional = true }
+xkbcommon = { version = "0.9", optional = true }
 
 [build-dependencies]
 
