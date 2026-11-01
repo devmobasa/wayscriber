@@ -86,43 +86,43 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- package smoke-ubuntu --artifact-root dist
 
       - name: Upload tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-tar
           path: dist/wayscriber-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
 
       - name: Upload configurator tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-tar
           path: dist/wayscriber-configurator-v${{ steps.meta.outputs.version }}-linux-x86_64.tar.gz
 
       - name: Upload deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-deb
           path: dist/wayscriber-amd64.deb
 
       - name: Upload configurator deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-deb
           path: dist/wayscriber-configurator-amd64.deb
 
       - name: Upload rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-rpm
           path: dist/wayscriber-x86_64.rpm
 
       - name: Upload configurator rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-configurator-${{ steps.meta.outputs.version }}-rpm
           path: dist/wayscriber-configurator-x86_64.rpm
 
       - name: Upload manifests
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ steps.meta.outputs.version }}-manifest
           path: |
@@ -180,7 +180,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- package build-repositories
 
       - name: Upload repo bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-${{ needs.package.outputs.version }}-repos
           path: |

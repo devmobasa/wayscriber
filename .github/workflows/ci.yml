@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload code-health report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wayscriber-code-health
           path: code-health-report.txt
