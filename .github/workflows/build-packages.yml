@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
         uses: actions/setup-dotnet@v4
@@ -147,7 +147,7 @@ jobs:
       PACKAGE_REPO_SSH_KNOWN_HOSTS: ${{ secrets.PACKAGE_REPO_SSH_KNOWN_HOSTS }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
         uses: actions/setup-dotnet@v4
@@ -225,7 +225,7 @@ jobs:
       AUR_SSH_PASSPHRASE: ${{ secrets.AUR_SSH_PASSPHRASE }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
         uses: actions/setup-dotnet@v4
