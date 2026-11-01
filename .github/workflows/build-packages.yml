@@ -24,7 +24,7 @@ jobs:
           global-json-file: global.json
 
       - name: Cache repository tool packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
@@ -233,7 +233,7 @@ jobs:
           global-json-file: global.json
 
       - name: Cache repository tool packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'tools/**/*.cs') }}
