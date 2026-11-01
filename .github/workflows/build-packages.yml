@@ -161,7 +161,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies repositories
 
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -204,7 +204,7 @@ jobs:
       contents: write
     steps:
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -248,7 +248,7 @@ jobs:
         run: dotnet run tools/wayscriber.cs --no-build -- aur prepare-ssh
 
       - name: Download packaged artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
