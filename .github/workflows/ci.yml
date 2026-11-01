@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -125,7 +125,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up repository tool SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
