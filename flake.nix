@@ -22,7 +22,10 @@
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         version = cargoToml.package.version;
         rustVersion = cargoToml.package.rust-version;
-        rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
+        # Build with the pinned development toolchain. Cargo.toml's
+        # rust-version is only the oldest supported compiler.
+        rustChannel = (builtins.fromTOML (builtins.readFile ./rust-toolchain.toml)).toolchain.channel;
+        rustToolchain = pkgs.rust-bin.stable.${rustChannel}.default.override {
           extensions = [ "rust-analyzer" ];
         };
         rustPlatform = pkgs.makeRustPlatform {
