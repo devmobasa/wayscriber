@@ -59,6 +59,13 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
+            # CI runs the test suite through tools/lint-and-test.sh. Its tests
+            # need poppler, dbus-daemon, setsid, and installed fonts, which the
+            # build sandbox lacks, and they must run serially because parallel
+            # render tests race in the native font stack. cargoCheckHook runs
+            # them in parallel.
+            doCheck = false;
+
             nativeBuildInputs = with pkgs; [
               pkg-config
               wrapGAppsHook4
