@@ -96,6 +96,8 @@ pub(crate) struct AppWidgets {
     /// The language the pages were built in. When the active language moves
     /// away from it, the next refresh rebuilds them.
     language: Language,
+    /// What the latest rebuild is restoring, for a rebuild that starts first.
+    pending_restore: rebuild::PendingRestore,
     chrome: shell::Chrome,
 }
 

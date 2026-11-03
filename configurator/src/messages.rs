@@ -196,6 +196,10 @@ pub enum Message {
     ShortcutTextEditCanceled(KeybindingField),
     ShortcutConflictReplaceConfirmed,
     ShortcutConflictCanceled,
+    /// A layout that an open editor's popover was waiting for has happened:
+    /// rebuilt pages settled, or the edited row got its first allocation. It
+    /// changes no state; the refresh that follows opens the popover.
+    PagesLaidOut,
     /// Window-level Escape: cancel a confirmation unless a recorder owns the key.
     WindowEscapePressed,
     FontStyleOptionSelected(FontStyleOption),

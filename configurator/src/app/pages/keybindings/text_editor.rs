@@ -11,13 +11,16 @@ use crate::models::KeybindingField;
 
 use super::super::super::state::ConfiguratorApp;
 use super::super::set_text_blocked;
-use super::widgets::{field_canceled, set_accessible_label, set_label, unparent_on_destroy};
+use super::widgets::{
+    PopoverPresenter, field_canceled, set_accessible_label, set_label, unparent_on_destroy,
+};
 
 pub(super) struct TextEditorPopover {
     pub popover: gtk::Popover,
     entry: gtk::Entry,
     entry_handler: SignalHandlerId,
     error: gtk::Label,
+    presenter: PopoverPresenter,
 }
 
 impl TextEditorPopover {
@@ -92,10 +95,18 @@ impl TextEditorPopover {
             entry,
             entry_handler,
             error,
+            presenter: PopoverPresenter::new(sender),
         }
     }
 
-    pub(super) fn refresh(&self, open: bool, text: &str, parse_error: Option<&str>) {
+    /// `may_open` is false while a Leave confirmation is pending; see [`PopoverPresenter::present`].
+    pub(super) fn refresh(
+        &self,
+        open: bool,
+        may_open: bool,
+        text: &str,
+        parse_error: Option<&str>,
+    ) {
         set_text_blocked(&self.entry, &self.entry_handler, text);
         if let Some(message) = parse_error {
             set_label(&self.error, message);
@@ -105,12 +116,9 @@ impl TextEditorPopover {
             self.error.set_visible(false);
         }
         if open {
-            if !self.popover.is_visible() {
-                self.popover.popup();
-                self.entry.grab_focus();
-            }
-        } else if self.popover.is_visible() {
-            self.popover.popdown();
+            self.presenter.present(&self.popover, &self.entry, may_open);
+        } else {
+            self.presenter.close(&self.popover);
         }
     }
 }

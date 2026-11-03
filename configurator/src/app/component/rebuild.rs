@@ -10,6 +10,7 @@
 //! it, and how far the visible page is scrolled. This module carries those
 //! across.
 
+use std::cell::RefCell;
 use std::iter;
 
 use relm4::{ComponentSender, gtk};
@@ -19,7 +20,10 @@ use gtk::glib::GString;
 use gtk::prelude::{GtkWindowExt, *};
 use wayscriber::i18n;
 
+use crate::messages::Message;
+
 use super::super::pages;
+use super::super::pages::SettleTicket;
 use super::super::state::ConfiguratorApp;
 use super::{AppWidgets, shell};
 
@@ -79,6 +83,19 @@ pub(super) struct ViewState {
     focus: Option<(Option<WidgetPath>, Option<Caret>)>,
     scrolls: Vec<(WidgetPath, f64, f64)>,
     transition: gtk::StackTransitionType,
+    /// The rebuild these pages belong to; they settle once it is restored.
+    ticket: SettleTicket,
+}
+
+/// What the latest rebuild set out to restore, and the page it belongs to. A
+/// rebuild that starts before that restore finished reads these for the same
+/// page: the page's scroll still reads zero, and focus waiting for an editor
+/// to reopen is in no widget yet.
+#[derive(Default)]
+pub(super) struct PendingRestore {
+    page: Option<GString>,
+    focus: Option<(Option<WidgetPath>, Option<Caret>)>,
+    scrolls: Vec<(WidgetPath, f64, f64)>,
 }
 
 /// Rebuilds the pages when the active language differs from the one they
@@ -93,7 +110,18 @@ pub(super) fn rebuild_if_language_changed(
         return None;
     }
     widgets.language = language;
-    let state = capture(widgets);
+    let previous_unsettled = !pages::pages_settled();
+    let focus_waiting = pages::has_deferred_focus();
+    // Before the refresh writes the model into the new pages, so their editor
+    // popovers wait for the restored scroll instead of opening on a page
+    // without layout.
+    let ticket = pages::begin_settling();
+    let state = capture(widgets, previous_unsettled, focus_waiting, ticket);
+    widgets.pending_restore = PendingRestore {
+        page: state.page.clone(),
+        focus: state.focus.clone(),
+        scrolls: state.scrolls.clone(),
+    };
 
     {
         // Closing the old pages' popovers is the rebuild's doing, not a
@@ -115,7 +143,12 @@ pub(super) fn rebuild_if_language_changed(
     Some(state)
 }
 
-fn capture(widgets: &AppWidgets) -> ViewState {
+fn capture(
+    widgets: &AppWidgets,
+    previous_unsettled: bool,
+    focus_waiting: bool,
+    ticket: SettleTicket,
+) -> ViewState {
     let transition = widgets.stack.transition_type();
     let page_name = widgets.stack.visible_child_name();
     let Some(page) = widgets.stack.visible_child() else {
@@ -124,10 +157,11 @@ fn capture(widgets: &AppWidgets) -> ViewState {
             focus: None,
             scrolls: Vec::new(),
             transition,
+            ticket,
         };
     };
 
-    let focus = GtkWindowExt::focus(&widgets.root)
+    let live_focus = GtkWindowExt::focus(&widgets.root)
         .filter(|focused| focused.is_ancestor(&page))
         .map(|focused| {
             let caret = focused
@@ -138,7 +172,15 @@ fn capture(widgets: &AppWidgets) -> ViewState {
                 });
             (WidgetPath::of(&focused, &page), caret)
         });
-    let scrolls = descendants(&page)
+    let same_pending_page = widgets.pending_restore.page == page_name;
+    // Focus the previous rebuild still holds for an editor it has not
+    // reopened is in no widget yet; a focus the user moved since wins.
+    let focus = if focus_waiting && live_focus.is_none() && same_pending_page {
+        widgets.pending_restore.focus.clone()
+    } else {
+        live_focus
+    };
+    let live: Vec<_> = descendants(&page)
         .filter_map(|widget| {
             let scrolled = widget.downcast_ref::<gtk::ScrolledWindow>()?;
             let path = WidgetPath::of(&widget, &page)?;
@@ -150,12 +192,21 @@ fn capture(widgets: &AppWidgets) -> ViewState {
         })
         .filter(|(_, horizontal, vertical)| *horizontal > 0.0 || *vertical > 0.0)
         .collect();
+    // Pages that never settled still read zero where the previous rebuild was
+    // about to scroll; a scroll the user made on them in the meantime wins,
+    // and another page's offsets never apply.
+    let scrolls = if previous_unsettled && live.is_empty() && same_pending_page {
+        widgets.pending_restore.scrolls.clone()
+    } else {
+        live
+    };
 
     ViewState {
         page: page_name,
         focus,
         scrolls,
         transition,
+        ticket,
     }
 }
 
@@ -170,63 +221,142 @@ fn descendants(widget: &gtk::Widget) -> impl Iterator<Item = gtk::Widget> {
 
 /// Puts focus, caret and scroll back on the rebuilt page. Called after the
 /// refresh, so the page is the visible one and holds the model's values.
-pub(super) fn restore(widgets: &AppWidgets, state: ViewState) {
+pub(super) fn restore(
+    widgets: &AppWidgets,
+    state: ViewState,
+    sender: &ComponentSender<ConfiguratorApp>,
+) {
     let page = widgets.stack.visible_child();
     // A path means something only on the page it was read from.
     let same_page = widgets.stack.visible_child_name() == state.page;
 
     if let (Some(page), Some((path, caret))) = (page.as_ref(), state.focus) {
-        let target = path
+        let resolved = path
             .filter(|_| same_page)
-            .and_then(|path| path.resolve(page))
-            .filter(|widget| widget.is_visible() && (widget.is_focusable() || widget.can_focus()));
-        match target {
-            Some(widget) if widget.grab_focus() => {
-                if let (Some(editable), Some(caret)) =
-                    (widget.downcast_ref::<gtk::Editable>(), caret)
-                {
-                    // `select_region` puts the caret on its second argument,
-                    // and the bounds come back ordered: a selection made
-                    // backwards keeps its active end where the caret was.
-                    if let Some((start, end)) = caret.selection {
-                        let (anchor, active) = if caret.position == start {
-                            (end, start)
-                        } else {
-                            (start, end)
-                        };
-                        editable.select_region(anchor, active);
-                    } else {
-                        editable.select_region(caret.position, caret.position);
-                        editable.set_position(caret.position);
+            .and_then(|path| path.resolve(page));
+        // Focus was in an editor popover, which the rebuilt page reopens only
+        // once it settles: focus follows it then.
+        let waiting_popover = resolved
+            .as_ref()
+            .and_then(|widget| widget.ancestor(gtk::Popover::static_type()))
+            .and_then(|widget| widget.downcast::<gtk::Popover>().ok())
+            .filter(|popover| !popover.is_visible());
+        if let (Some(popover), Some(widget)) = (waiting_popover, resolved.clone()) {
+            // The presenter runs this right after its own focus grab, which
+            // may select the whole text.
+            pages::defer_focus_until_opened(
+                &popover,
+                Box::new(move || {
+                    if widget.grab_focus() {
+                        apply_caret(&widget, caret);
                     }
+                }),
+            );
+        } else {
+            let target = resolved.filter(|widget| {
+                widget.is_visible() && (widget.is_focusable() || widget.can_focus())
+            });
+            match target {
+                Some(widget) if widget.grab_focus() => apply_caret(&widget, caret),
+                // The control did not survive the transition (a load or
+                // Defaults changed the rows, or another page is showing now):
+                // the page's first control takes focus.
+                _ => {
+                    page.child_focus(gtk::DirectionType::TabForward);
                 }
-            }
-            // The control did not survive the transition (a load or Defaults
-            // changed the rows, or another page is showing now): the page's
-            // first control takes focus.
-            _ => {
-                page.child_focus(gtk::DirectionType::TabForward);
             }
         }
     }
 
-    if let Some(page) = page.as_ref().filter(|_| same_page) {
-        for (path, horizontal, vertical) in state.scrolls {
-            if let Some(scrolled) = path
-                .resolve(page)
-                .and_then(|widget| widget.downcast::<gtk::ScrolledWindow>().ok())
-            {
-                restore_scroll(&scrolled, horizontal, vertical);
-            }
-        }
-    }
+    let scrolls = page
+        .as_ref()
+        .filter(|_| same_page)
+        .map(|page| {
+            state
+                .scrolls
+                .into_iter()
+                .filter_map(|(path, horizontal, vertical)| {
+                    let scrolled = path
+                        .resolve(page)
+                        .and_then(|widget| widget.downcast::<gtk::ScrolledWindow>().ok())?;
+                    Some((scrolled, horizontal, vertical))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    settle(&widgets.stack, scrolls, state.ticket, sender);
 
     widgets.stack.set_transition_type(state.transition);
 }
 
-/// Scrolls once the new page has been laid out: before its first
-/// allocation an adjustment's range is empty and clamps every value to 0.
+/// Puts a captured caret and selection back on `widget` when it is editable.
+fn apply_caret(widget: &gtk::Widget, caret: Option<Caret>) {
+    let (Some(editable), Some(caret)) = (widget.downcast_ref::<gtk::Editable>(), caret) else {
+        return;
+    };
+
+    // `select_region` puts the caret on its second argument, and the bounds
+    // come back ordered: a selection made backwards keeps its active end where
+    // the caret was.
+    if let Some((start, end)) = caret.selection {
+        let (anchor, active) = if caret.position == start {
+            (end, start)
+        } else {
+            (start, end)
+        };
+        editable.select_region(anchor, active);
+    } else {
+        editable.select_region(caret.position, caret.position);
+        editable.set_position(caret.position);
+    }
+}
+
+/// Restores the scroll once the visible page is laid out, lets one more frame
+/// lay the page out at those offsets, then ends the rebuild's settling and
+/// sends `PagesLaidOut`. The refresh after it opens any editor popover whose
+/// edit the model kept, on a row that is back where the user left it.
+///
+/// A newer rebuild abandons this one. A scroller without layout yet, hidden
+/// inside the page, restores on its own and does not hold the page back.
+fn settle(
+    stack: &gtk::Stack,
+    scrolls: Vec<(gtk::ScrolledWindow, f64, f64)>,
+    ticket: SettleTicket,
+    sender: &ComponentSender<ConfiguratorApp>,
+) {
+    let sender = sender.clone();
+    let pending = RefCell::new(Some(scrolls));
+    stack.add_tick_callback(move |stack, _clock| {
+        if !pages::is_latest_rebuild(ticket) {
+            return glib::ControlFlow::Break;
+        }
+        let unrestored = pending.borrow_mut().take();
+        if let Some(scrolls) = unrestored {
+            if !stack.visible_child().is_some_and(|page| page.height() > 0) {
+                *pending.borrow_mut() = Some(scrolls);
+                return glib::ControlFlow::Continue;
+            }
+            for (scrolled, horizontal, vertical) in scrolls {
+                restore_scroll(&scrolled, horizontal, vertical);
+            }
+            return glib::ControlFlow::Continue;
+        }
+
+        if pages::finish_settling(ticket) {
+            sender.input(Message::PagesLaidOut);
+        }
+        glib::ControlFlow::Break
+    });
+}
+
+/// Scrolls now when the scroller has been laid out, or once it is: before its
+/// first allocation an adjustment's range is empty and clamps every value to 0.
 fn restore_scroll(scrolled: &gtk::ScrolledWindow, horizontal: f64, vertical: f64) {
+    if scrolled.height() > 0 {
+        scrolled.hadjustment().set_value(horizontal);
+        scrolled.vadjustment().set_value(vertical);
+        return;
+    }
     scrolled.add_tick_callback(move |scrolled, _clock| {
         if scrolled.height() == 0 {
             return glib::ControlFlow::Continue;
