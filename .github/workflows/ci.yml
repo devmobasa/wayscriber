@@ -148,6 +148,31 @@ jobs:
       - name: Build flake packages and development shell
         run: dotnet run tools/wayscriber.cs --no-build -- check nix-build
 
+  minimum-rust:
+    name: Minimum Rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up repository tool SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build repository tool once
+        run: dotnet build tools/wayscriber.cs
+
+      - name: Install system dependencies
+        run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies checks
+
+      - name: Build gtk4-layer-shell
+        run: dotnet run tools/wayscriber.cs --no-build -- ci prepare-gtk4-layer-shell --library-mode shared
+
+      - name: Check the workspace with the minimum Rust
+        run: dotnet run tools/wayscriber.cs --no-build -- ci minimum-rust
+
   dependency-policy:
     name: Dependency policy (${{ matrix.checks }})
     runs-on: ubuntu-latest

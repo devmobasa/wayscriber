@@ -85,6 +85,12 @@ shell version. Run `--help` for the complete command list and options.
   - Runs as a hard gate in local and GitHub CI
   - Usage: `dotnet run tools/wayscriber.cs --no-build -- check rust-source-coverage`
 
+- **ci minimum-rust** - Check the workspace with the minimum supported Rust
+  - Reads `rust-version` from both Cargo manifests, which must agree
+  - Installs that toolchain with rustup (minimal profile, no rustup self-update) and runs `cargo +<version> check --locked --workspace --all-targets` with `--all-features` and with `--no-default-features`, since `rust-toolchain.toml` would otherwise select the newer development toolchain
+  - Runs as the GitHub CI "Minimum Rust" job
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- ci minimum-rust`
+
 - **tests/repository_guards** - Rust source guards that run in every `cargo test`
   - `config_writers.rs` rejects `config.toml` write capability outside the configurator's Save and the overlay's pinned narrow editors
   - `process_sites.rs` keeps process creation inside the process broker and audits the broker's post-fork child stub
@@ -132,6 +138,7 @@ shell version. Run `--help` for the complete command list and options.
 
 - **version check** - Check release metadata alignment
   - Verifies Cargo manifests, the workspace lockfile, packaging metadata, flake version sourcing, and that the flake compares the selected Rust toolchain to Cargo.toml rust-version
+  - Requires both crates to declare the same `rust-version`, and `rust-toolchain.toml` to pin a channel no older than it
   - Keeps the configurator's libadwaita 1.4 floor aligned across Cargo, deb, rpm, PKGBUILD, and `.SRCINFO`
   - With `--release-version X.Y.Z[.N]`, rejects tags that do not match Cargo or an explicit packaging hotfix of Cargo
   - Usage: `dotnet run tools/wayscriber.cs --no-build -- version check [--release-version X.Y.Z[.N]]`

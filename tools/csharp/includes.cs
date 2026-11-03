@@ -6,6 +6,7 @@
 #:include Application/ToolApplication.cs
 #:include Commands/AssetsCommand.cs
 #:include Commands/DevelopmentCommands.cs
+#:include Commands/MinimumRustCommand.cs
 #:include Commands/ChecksCommand.cs
 #:include Commands/VersionCommands.cs
 #:include Commands/VersionConsistency.cs

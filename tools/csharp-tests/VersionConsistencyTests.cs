@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Wayscriber.Tools.Tests;
@@ -142,6 +143,32 @@ public sealed class VersionConsistencyTests
         var error = await fixture.CheckExpectingFailure( );
 
         Assert.Contains( WithCargo( expected ), error, StringComparison.Ordinal );
+    }
+
+    [Fact]
+    public async Task BothCratesDeclareOneMinimumRust( )
+    {
+        using var fixture = new VersionMetadataFixture( );
+        var minimum = VersionCommands.ReadCargoRustVersion( fixture.PathFor( "Cargo.toml" ) );
+        fixture.Replace( "configurator/Cargo.toml", $"rust-version = \"{minimum}\"", "rust-version = \"1.0.0\"" );
+
+        var error = await fixture.CheckExpectingFailure( );
+
+        Assert.Contains( $"configurator/Cargo.toml rust-version: expected {minimum}, got 1.0.0", error, StringComparison.Ordinal );
+    }
+
+    [Fact]
+    public async Task PinnedToolchainIsNotOlderThanTheMinimumRust( )
+    {
+        using var fixture = new VersionMetadataFixture( );
+        var minimum = VersionCommands.ReadCargoRustVersion( fixture.PathFor( "Cargo.toml" ) );
+        fixture.Write( "rust-toolchain.toml",
+            Regex.Replace( fixture.Read( "rust-toolchain.toml" ), "(?m)^channel = \"[^\"]+\"", "channel = \"1.0.0\"" ) );
+
+        var error = await fixture.CheckExpectingFailure( );
+
+        Assert.Contains( $"rust-toolchain.toml channel 1.0.0 is older than Cargo.toml rust-version {minimum}", error,
+            StringComparison.Ordinal );
     }
 
     [Fact]

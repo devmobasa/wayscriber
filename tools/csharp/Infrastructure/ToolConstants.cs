@@ -53,6 +53,7 @@ internal static class CommandNames
     public const string InstallNfpm = "install-nfpm";
     public const string LegacyTools = "legacy-tools";
     public const string LintAndTest = "lint-and-test";
+    public const string MinimumRust = "minimum-rust";
     public const string NixBuild = "nix-build";
     public const string NixInstantiation = "nix-instantiation";
     public const string NixpkgsRecipe = "nixpkgs-recipe";
@@ -230,6 +231,7 @@ internal static class Programs
     public const string Rpm = "rpm";
     public const string RpmSign = "rpmsign";
     public const string Rsync = "rsync";
+    public const string Rustup = "rustup";
     public const string Setsid = "setsid";
     public const string Ssh = "ssh";
     public const string SshAdd = "ssh-add";
@@ -256,6 +258,7 @@ internal static class RepositoryPaths
     public const string DebugDirectory = "debug";
     public const string PackagingDirectory = "packaging";
     public const string ReleaseDirectory = "release";
+    public const string RustToolchainFile = "rust-toolchain.toml";
     public const string TargetDirectory = "target";
     public const string ToolsDirectory = "tools";
 }

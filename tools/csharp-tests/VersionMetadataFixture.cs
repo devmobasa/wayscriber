@@ -9,7 +9,7 @@ internal sealed class VersionMetadataFixture : IDisposable
 {
     private static readonly string[] MetadataFiles =
     [
-        "Cargo.toml", "Cargo.lock", "README.md", "flake.nix", "global.json", "configurator/Cargo.toml",
+        "Cargo.toml", "Cargo.lock", "README.md", "flake.nix", "global.json", "rust-toolchain.toml", "configurator/Cargo.toml",
         "packaging/PKGBUILD", "packaging/.SRCINFO", "packaging/package.configurator.yaml",
         ".github/workflows/build-packages.yml", "tools/update-aur-from-manifest.sh",
     ];
