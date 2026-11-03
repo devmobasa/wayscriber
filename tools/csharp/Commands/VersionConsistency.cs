@@ -68,6 +68,7 @@ internal static partial class VersionCommands
 
         RequireEqual( errors, RepositoryPaths.ConfiguratorCargoManifest, configurator, cargo );
         RequireEqual( errors, $"{RepositoryNames.GlobalJsonFile} SDK", ReadToolSdk( Read, errors ), ToolSdkVersion );
+        ValidateRustVersions( PathFor, Read, errors );
         ValidateLibadwaitaFloors( Read, supportedLibadwaitaFloor, errors );
         ValidateReleaseRunner( Read( ReleaseWorkflow ), supportedLibadwaitaFloor, errors );
         ValidatePackageVersions( Read, cargo, releaseText, errors );
@@ -75,6 +76,45 @@ internal static partial class VersionCommands
         ValidateReadme( Read( RepositoryNames.ReadmeFile ), errors );
 
         return errors;
+    }
+
+    // Both crates declare one minimum Rust version, and the pinned development
+    // toolchain must be at least that version. `ci minimum-rust` builds with the minimum.
+    private static void ValidateRustVersions( Func<string, string> pathFor, Func<string, string> read, List<string> errors )
+    {
+        string minimum;
+        string configuratorMinimum;
+        try
+        {
+            minimum = ReadCargoRustVersion( pathFor( RepositoryPaths.CargoManifest ) );
+            configuratorMinimum = ReadCargoRustVersion( pathFor( RepositoryPaths.ConfiguratorCargoManifest ) );
+        }
+        catch ( ToolException error )
+        {
+            errors.Add( error.Message );
+            return;
+        }
+
+        RequireEqual( errors, $"{RepositoryPaths.ConfiguratorCargoManifest} rust-version", configuratorMinimum, minimum );
+
+        var channel = Regex.Match( read( RepositoryPaths.RustToolchainFile ), "(?m)^channel\\s*=\\s*\"([^\"]+)\"" );
+        var pinnedText = channel.Success ? channel.Groups[1].Value : "missing";
+        if ( !Version.TryParse( pinnedText, out var pinned ) )
+        {
+            errors.Add( $"{RepositoryPaths.RustToolchainFile}: expected a numeric channel, got {pinnedText}" );
+            return;
+        }
+        if ( !Version.TryParse( minimum, out var floor ) )
+        {
+            errors.Add( $"{RepositoryPaths.CargoManifest} rust-version: expected a numeric version, got {minimum}" );
+            return;
+        }
+
+        if ( pinned < floor )
+        {
+            errors.Add( $"{RepositoryPaths.RustToolchainFile} channel {pinnedText} is older than " +
+                        $"{RepositoryPaths.CargoManifest} rust-version {minimum}" );
+        }
     }
 
     private static string? ReadToolSdk( Func<string, string> read, List<string> errors )

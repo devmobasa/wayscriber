@@ -173,22 +173,26 @@ public sealed class VersionReleaseCommandTests
     // a two-member workspace whose registry is a vendored directory source.
     private static async Task WriteCargoWorkspace( VersionMetadataFixture fixture )
     {
-        fixture.Write( "Cargo.toml", """
+        // The copied rust-toolchain.toml stays real, so keep the real minimum Rust.
+        var minimum = VersionCommands.ReadCargoRustVersion( fixture.PathFor( "Cargo.toml" ) );
+        fixture.Write( "Cargo.toml", $$"""
 [package]
 name = "wayscriber"
 version = "1.0.0"
 edition = "2024"
+rust-version = "{{minimum}}"
 [workspace]
 members = ["configurator"]
 [dependencies]
 release-fixture = "1"
 
 """ );
-        fixture.Write( "configurator/Cargo.toml", """
+        fixture.Write( "configurator/Cargo.toml", $$"""
 [package]
 name = "wayscriber-configurator"
 version = "1.0.0"
 edition = "2024"
+rust-version = "{{minimum}}"
 [dependencies]
 wayscriber = { path = ".." }
 libadwaita = { version = "0.9", features = ["v1_4"] }

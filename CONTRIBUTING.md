@@ -18,7 +18,8 @@ module boundary.
 The repository is one Cargo workspace using edition 2024. Both manifests set
 `rust-version = "1.99.0"`, the oldest compiler the code supports. `nixpkgs` builds Wayscriber
 with the rustc it ships, so keep this floor at or below that version unless the code needs a
-newer one.
+newer one. The "Minimum Rust" CI job checks the workspace with that version, and
+`version check` requires both manifests to declare the same one.
 
 `rust-toolchain.toml` pins the 1.99.1 development toolchain, including Clippy and rustfmt;
 CI uses the same version. The Nix flake builds both crates and the development shell with

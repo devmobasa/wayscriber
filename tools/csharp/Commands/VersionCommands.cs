@@ -85,16 +85,23 @@ internal static partial class VersionCommands
         new(CommandAreas.Version, CommandNames.Bump, "Update Cargo and package versions atomically.", SideEffect.FixtureMutating, Bump),
     ];
 
-    internal static string ReadCargoVersion( string path )
+    internal static string ReadCargoVersion( string path ) => ReadCargoPackageString( path, "version" );
+
+    // The oldest Rust the crate supports. `rust-toolchain.toml` pins the newer development toolchain.
+    internal static string ReadCargoRustVersion( string path ) => ReadCargoPackageString( path, "rust-version" );
+
+    private static string ReadCargoPackageString( string path, string key )
     {
         var package = Regex.Match( Files.Read( path ), @"(?ms)^\[package\]\s*(.*?)(?:^\[|\z)" );
-        var version = package.Success ? Regex.Match( package.Groups[1].Value, "(?m)^version\\s*=\\s*\"([^\"]+)\"" ) : Match.Empty;
-        if ( !version.Success )
+        var value = package.Success
+            ? Regex.Match( package.Groups[1].Value, $"(?m)^{Regex.Escape( key )}\\s*=\\s*\"([^\"]+)\"" )
+            : Match.Empty;
+        if ( !value.Success )
         {
-            throw new ToolException( $"{path}: missing [package] version" );
+            throw new ToolException( $"{path}: missing [package] {key}" );
         }
 
-        return version.Groups[1].Value;
+        return value.Groups[1].Value;
     }
 
     private static Task<int> Check( ToolContext context, string[] args )

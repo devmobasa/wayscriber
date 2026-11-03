@@ -9,6 +9,7 @@ internal static class ToolApplication
     [
         .. AssetsCommand.Commands,
         .. DevelopmentCommands.Commands,
+        .. MinimumRustCommand.Commands,
         .. ChecksCommand.Commands,
         .. VersionCommands.Commands,
         .. NativeDesktopCommands.Commands,
