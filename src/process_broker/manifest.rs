@@ -50,7 +50,7 @@ pub(super) fn validate(
         .to_owned();
     let allowed = match kind {
         HelperKind::Overlay | HelperKind::InitialDetach | HelperKind::About => {
-            basename == "wayscriber" || basename.starts_with("wayscriber-")
+            names_wayscriber(&basename)
         }
         HelperKind::CapabilityProbe => matches!(
             basename.as_str(),
@@ -110,6 +110,20 @@ pub(super) fn validate(
         }
     }
     Ok(())
+}
+
+/// Whether `basename` is a Wayscriber binary that may relaunch itself.
+///
+/// Nix's `wrapProgram`, which `wrapGAppsHook4` runs, moves the binary to
+/// `.<name>-wrapped`, appending `_` for each further wrap, and installs a
+/// wrapper under the original name. `current_exe()` in a Nix build therefore
+/// names the moved file, so that form names the same binary.
+fn names_wayscriber(basename: &str) -> bool {
+    let unwrapped = basename
+        .strip_prefix('.')
+        .and_then(|hidden| hidden.trim_end_matches('_').strip_suffix("-wrapped"))
+        .unwrap_or(basename);
+    unwrapped == "wayscriber" || unwrapped.starts_with("wayscriber-")
 }
 
 /// Helper-specific argv gates.
