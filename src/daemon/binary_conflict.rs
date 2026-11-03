@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::env;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use log::warn;
@@ -31,6 +32,30 @@ fn canonicalize_file(path: &Path) -> Option<PathBuf> {
     path.canonicalize().ok()
 }
 
+/// Whether `candidate` is the wrapper that Nix's `wrapProgram` put in front of
+/// `current`, both canonical.
+///
+/// `wrapProgram`, which `wrapGAppsHook4` runs, moves the binary to
+/// `.<name>-wrapped` in the same directory, appending `_` for each further
+/// wrap, and installs a wrapper under the original name that execs it. The
+/// two files are one install, so the wrapper is not another copy.
+fn is_nix_wrapper_of(candidate: &Path, current: &Path) -> bool {
+    if candidate.parent() != current.parent() {
+        return false;
+    }
+    let (Some(wrapper_name), Some(current_name)) = (
+        candidate.file_name().and_then(OsStr::to_str),
+        current.file_name().and_then(OsStr::to_str),
+    ) else {
+        return false;
+    };
+
+    current_name
+        .strip_prefix('.')
+        .and_then(|hidden| hidden.trim_end_matches('_').strip_suffix("-wrapped"))
+        .is_some_and(|wrapped| wrapped == wrapper_name)
+}
+
 /// Other `wayscriber` files on `PATH` or in well-known prefixes besides this process.
 ///
 /// Overlay spawn follows `current_exe` first. A second copy is how `--version` or
@@ -45,13 +70,16 @@ pub(crate) fn other_installed_wayscriber_binaries(
     };
 
     let mut seen = HashSet::new();
-    seen.insert(current);
+    seen.insert(current.clone());
     let mut others = Vec::new();
 
     let mut consider = |candidate: &Path| {
         let Some(canonical) = canonicalize_file(candidate) else {
             return;
         };
+        if is_nix_wrapper_of(&canonical, &current) {
+            return;
+        }
         if seen.insert(canonical.clone()) {
             others.push(canonical);
         }
@@ -159,6 +187,104 @@ mod tests {
         symlink(&current, &alias).unwrap();
 
         assert!(other_installed_wayscriber_binaries(&current, None, &[&alias]).is_empty());
+    }
+
+    /// A Nix build's `bin/` after `wrapProgram`: the binary hidden as `payload`
+    /// and the wrapper that execs it under the original name.
+    fn nix_wrapped_install(bin: &Path, payload: &str) -> (PathBuf, PathBuf) {
+        fs::create_dir_all(bin).unwrap();
+        let wrapper = bin.join("wayscriber");
+        let current = bin.join(payload);
+        write_file(&wrapper);
+        write_file(&current);
+        (wrapper, current)
+    }
+
+    #[test]
+    fn a_nix_wrapper_and_the_binary_it_runs_are_one_install() {
+        let tmp = test_temp::tempdir().unwrap();
+        let bin = tmp.path().join("store-wayscriber").join("bin");
+        let (_, current) = nix_wrapped_install(&bin, ".wayscriber-wrapped");
+        let path_env = bin.display().to_string();
+
+        let others = other_installed_wayscriber_binaries(&current, Some(&path_env), &[]);
+
+        assert!(
+            others.is_empty(),
+            "the wrapper beside the running binary is the same install: {others:?}"
+        );
+    }
+
+    #[test]
+    fn a_profile_link_to_the_nix_wrapper_is_the_same_install() {
+        let tmp = test_temp::tempdir().unwrap();
+        let bin = tmp.path().join("store-wayscriber").join("bin");
+        let (wrapper, current) = nix_wrapped_install(&bin, ".wayscriber-wrapped");
+        let profile_bin = tmp.path().join("profile").join("bin");
+        fs::create_dir_all(&profile_bin).unwrap();
+        symlink(&wrapper, profile_bin.join("wayscriber")).unwrap();
+        let path_env = profile_bin.display().to_string();
+
+        let others = other_installed_wayscriber_binaries(&current, Some(&path_env), &[]);
+
+        assert!(
+            others.is_empty(),
+            "a profile entry resolves to the same wrapper: {others:?}"
+        );
+    }
+
+    #[test]
+    fn a_twice_wrapped_binary_is_still_one_install() {
+        let tmp = test_temp::tempdir().unwrap();
+        let bin = tmp.path().join("store-wayscriber").join("bin");
+        let (_, current) = nix_wrapped_install(&bin, ".wayscriber-wrapped_");
+        let path_env = bin.display().to_string();
+
+        let others = other_installed_wayscriber_binaries(&current, Some(&path_env), &[]);
+
+        assert!(
+            others.is_empty(),
+            "each further wrap appends `_` to the hidden name: {others:?}"
+        );
+    }
+
+    #[test]
+    fn another_nix_build_is_still_reported() {
+        let tmp = test_temp::tempdir().unwrap();
+        let running_bin = tmp.path().join("store-wayscriber-new").join("bin");
+        let older_bin = tmp.path().join("store-wayscriber-old").join("bin");
+        let (_, current) = nix_wrapped_install(&running_bin, ".wayscriber-wrapped");
+        let (older_wrapper, _) = nix_wrapped_install(&older_bin, ".wayscriber-wrapped");
+        let usr = tmp.path().join("usr-wayscriber");
+        write_file(&usr);
+        let path_env = format!("{}:{}", older_bin.display(), running_bin.display());
+
+        let others = other_installed_wayscriber_binaries(&current, Some(&path_env), &[&usr]);
+
+        assert_eq!(
+            others,
+            vec![
+                older_wrapper.canonicalize().unwrap(),
+                usr.canonicalize().unwrap()
+            ],
+            "a wrapper from another build directory and a system copy are separate installs"
+        );
+    }
+
+    #[test]
+    fn a_hidden_binary_of_another_name_does_not_claim_the_wrapper() {
+        let tmp = test_temp::tempdir().unwrap();
+        let bin = tmp.path().join("store-other").join("bin");
+        let (wrapper, current) = nix_wrapped_install(&bin, ".other-wrapped");
+        let path_env = bin.display().to_string();
+
+        let others = other_installed_wayscriber_binaries(&current, Some(&path_env), &[]);
+
+        assert_eq!(
+            others,
+            vec![wrapper.canonicalize().unwrap()],
+            "only `.wayscriber-wrapped` is the binary behind `wayscriber`"
+        );
     }
 
     #[test]
