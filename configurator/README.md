@@ -15,7 +15,7 @@ This file covers building and running the configurator from source. For screensh
 
 ## Prerequisites
 
-- Rust toolchain 1.99.1 or newer (`../rust-toolchain.toml` pins development builds).
+- Rust toolchain 1.99.0 or newer (`../rust-toolchain.toml` pins development builds to 1.99.1).
 - System development packages for GTK 4 and libadwaita.
 
 ## Run It

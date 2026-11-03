@@ -2,7 +2,7 @@
 name = "wayscriber"
 version = "0.9.28"
 edition = "2024"
-rust-version = "1.99.1"
+rust-version = "1.99.0"
 license = "MIT"
 description = "Screen annotation tool for Wayland compositors"
 homepage = "https://wayscriber.com"

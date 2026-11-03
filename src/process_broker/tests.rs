@@ -428,6 +428,44 @@ fn tesseract_manifest_allows_only_the_tesseract_basename() {
 }
 
 #[test]
+fn wayscriber_relaunches_accept_the_binary_a_nix_wrapper_hides() {
+    // Nix's `wrapProgram`, which `wrapGAppsHook4` runs, moves the binary to
+    // `.wayscriber-wrapped`, adding a `_` for each further wrap, and installs a
+    // wrapper under the original name. `current_exe()` then names the moved file.
+    let relaunches = [
+        HelperKind::Overlay,
+        HelperKind::InitialDetach,
+        HelperKind::About,
+    ];
+    let allowed = [
+        "/usr/bin/wayscriber",
+        "/usr/local/bin/wayscriber-dev",
+        "/nix/store/hash-wayscriber-0.9.28/bin/.wayscriber-wrapped",
+        "/nix/store/hash-wayscriber-0.9.28/bin/.wayscriber-wrapped__",
+    ];
+    let rejected = [
+        "/usr/bin/sh",
+        "/usr/bin/.wayscriber",
+        "/nix/store/hash-bash/bin/.sh-wrapped",
+        "/nix/store/hash-wayscriber-0.9.28/bin/.wayscriber-wrapped-sh",
+    ];
+
+    for kind in relaunches {
+        for program in allowed {
+            let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+            super::manifest::validate(kind, &program, &[], &[], &[]).unwrap();
+        }
+        for program in rejected {
+            let program = super::wire::OsWire::from_os(OsStr::new(program)).unwrap();
+            assert!(
+                super::manifest::validate(kind, &program, &[], &[], &[]).is_err(),
+                "{program:?} is not a Wayscriber binary, so {kind:?} must not run it"
+            );
+        }
+    }
+}
+
+#[test]
 fn tesseract_reads_the_complete_recognized_output_rather_than_a_prefix() {
     // Prefix mode stops the helper once the cap fills; OCR must instead see the
     // cap as a distinct "too much text" failure, which needs Complete mode.

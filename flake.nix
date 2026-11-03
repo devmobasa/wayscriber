@@ -22,7 +22,10 @@
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         version = cargoToml.package.version;
         rustVersion = cargoToml.package.rust-version;
-        rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
+        # Build with the pinned development toolchain. Cargo.toml's
+        # rust-version is only the oldest supported compiler.
+        rustChannel = (builtins.fromTOML (builtins.readFile ./rust-toolchain.toml)).toolchain.channel;
+        rustToolchain = pkgs.rust-bin.stable.${rustChannel}.default.override {
           extensions = [ "rust-analyzer" ];
         };
         rustPlatform = pkgs.makeRustPlatform {
@@ -58,6 +61,13 @@
             src = ./.;
 
             cargoLock.lockFile = ./Cargo.lock;
+
+            # CI runs the test suite through tools/lint-and-test.sh. Its tests
+            # need poppler, dbus-daemon, setsid, and installed fonts, which the
+            # build sandbox lacks, and they must run serially because parallel
+            # render tests race in the native font stack. cargoCheckHook runs
+            # them in parallel.
+            doCheck = false;
 
             nativeBuildInputs = with pkgs; [
               pkg-config

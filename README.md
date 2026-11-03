@@ -1,7 +1,7 @@
 # wayscriber
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.99.0%2B-orange.svg)](https://www.rust-lang.org/)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -572,7 +572,7 @@ sudo dnf install ./wayscriber-configurator-x86_64.rpm
 
 ### From source
 
-Rust 1.99.1 or newer is required. If `rustup` is not already installed, install it (this also installs `cargo`), then load Cargo into your current shell:
+Rust 1.99.0 or newer is required. If `rustup` is not already installed, install it (this also installs `cargo`), then load Cargo into your current shell:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh

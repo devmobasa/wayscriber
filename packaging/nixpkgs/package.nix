@@ -49,6 +49,11 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   cargoHash = lib.fakeHash;
 
+  # Upstream CI runs the test suite serially, with poppler, dbus-daemon, setsid,
+  # and installed fonts. The build sandbox has none of these, and
+  # cargoCheckHook runs the tests in parallel.
+  doCheck = false;
+
   postInstall = ''
     install -Dm644 packaging/wayscriber.desktop \
       $out/share/applications/wayscriber.desktop
