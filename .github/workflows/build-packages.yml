@@ -160,9 +160,12 @@ jobs:
       - name: Install repository tooling
         run: dotnet run tools/wayscriber.cs --no-build -- ci install-dependencies repositories
 
+      # Only the package job's artifacts: the repository bundle holds re-signed
+      # copies of the same package file names.
       - name: Download packaged artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: wayscriber*-${{ needs.package.outputs.version }}-{tar,deb,rpm,manifest}
           path: dist
           merge-multiple: true
 
@@ -203,16 +206,25 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Only the package job's artifacts: the repository bundle holds re-signed
+      # copies of the same package file names.
       - name: Download packaged artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: wayscriber*-${{ needs.package.outputs.version }}-{tar,deb,rpm,manifest}
           path: dist
           merge-multiple: true
 
       - name: Publish GitHub release (auto notes)
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/**/*
+          files: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/checksums.txt
+            dist/manifest.json
+          fail_on_unmatched_files: true
           generate_release_notes: true
 
   aur:
@@ -247,9 +259,12 @@ jobs:
       - name: Configure SSH for AUR and test it
         run: dotnet run tools/wayscriber.cs --no-build -- aur prepare-ssh
 
+      # Only the package job's artifacts: the repository bundle holds re-signed
+      # copies of the same package file names.
       - name: Download packaged artifacts
         uses: actions/download-artifact@v8
         with:
+          pattern: wayscriber*-${{ needs.package.outputs.version }}-{tar,deb,rpm,manifest}
           path: dist
           merge-multiple: true
 
