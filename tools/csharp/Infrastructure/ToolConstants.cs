@@ -53,6 +53,7 @@ internal static class CommandNames
     public const string InstallNfpm = "install-nfpm";
     public const string LegacyTools = "legacy-tools";
     public const string LintAndTest = "lint-and-test";
+    public const string NixBuild = "nix-build";
     public const string NixInstantiation = "nix-instantiation";
     public const string NixpkgsRecipe = "nixpkgs-recipe";
     public const string NixVersions = "nix-versions";

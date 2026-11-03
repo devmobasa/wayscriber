@@ -7,6 +7,9 @@ internal static class DevelopmentCommands
     private const string CsharpTestApp = "tools/wayscriber.tests.cs";
     private static readonly string[] CsharpFileApps = ["tools/wayscriber.cs", "tools/install.cs", CsharpTestApp];
     private static readonly string[] CsharpFormatModes = ["style", "whitespace"];
+    // Flake outputs that `check nix-instantiation` and `check nix-build` cover.
+    internal static readonly string[] NixFlakeTargets =
+        [".#wayscriber", ".#wayscriber-configurator", ".#devShells.x86_64-linux.default"];
     private static readonly string[] IsolatedRenderTests =
     [
         "ui::context_menu::engine_tests::retained_context_menu_owner_preserves_layout_pixels_and_row_hits",
@@ -38,6 +41,8 @@ internal static class DevelopmentCommands
         new(CommandAreas.Check, CommandNames.NixVersions, "Compare Nix package versions with Cargo.", SideEffect.ReadOnly, NixVersions),
         new(CommandAreas.Check, CommandNames.NixInstantiation, "Instantiate Nix packages and the development shell.", SideEffect.ReadOnly,
             NixInstantiation),
+        new(CommandAreas.Check, CommandNames.NixBuild, "Build the Nix packages and the development shell.", SideEffect.ReadOnly,
+            NixBuild),
     ];
 
     private static async Task<int> Build( ToolContext context, string[] args )
@@ -380,7 +385,15 @@ internal static class DevelopmentCommands
     private static async Task<int> NixInstantiation( ToolContext context, string[] args )
     {
         new Arguments( args ).RequireEmpty( "check nix-instantiation" );
-        await context.Run( Programs.Nix, ["build", ".#wayscriber", ".#wayscriber-configurator", ".#devShells.x86_64-linux.default", "--no-link", "--dry-run"] );
+        await context.Run( Programs.Nix, ["build", .. NixFlakeTargets, "--no-link", "--dry-run"] );
+        return ExitCodes.Success;
+    }
+
+    // A real build, including each package's check phase, which instantiation never reaches.
+    private static async Task<int> NixBuild( ToolContext context, string[] args )
+    {
+        new Arguments( args ).RequireEmpty( "check nix-build" );
+        await context.Run( Programs.Nix, ["build", .. NixFlakeTargets, "--no-link", "--print-build-logs"] );
         return ExitCodes.Success;
     }
 }

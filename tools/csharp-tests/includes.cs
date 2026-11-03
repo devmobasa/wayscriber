@@ -1,3 +1,4 @@
+#:include CiCommandTests.cs
 #:include CoreTests.cs
 #:include GtkGateParityTests.cs
 #:include RepositoryContractTests.cs

@@ -202,6 +202,13 @@ hashes, so build-level changes still need a pull request from us. See
   - Runs as a hard gate in GitHub CI and before release packaging
   - Usage: `dotnet run tools/wayscriber.cs --no-build -- check nixpkgs-recipe`
 
+- **check nix-instantiation** and **check nix-build** - Check the project flake
+  - Both cover `.#wayscriber`, `.#wayscriber-configurator`, and the x86_64-linux development shell
+  - `check nix-instantiation` runs `nix build --dry-run`, which evaluates the derivations without building them
+  - `check nix-build` builds them, including each package's check phase, and prints the build logs
+  - The GitHub CI "Nix flake" job runs both, after `check nix-versions`
+  - Usage: `dotnet run tools/wayscriber.cs --no-build -- check nix-build`
+
 ## AUR (Arch User Repository)
 
 - **wayscriber assets emit** - Desktop asset recipe generator used by CI
