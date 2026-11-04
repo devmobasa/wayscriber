@@ -52,6 +52,7 @@ impl ConfiguratorApp {
                     | Message::SearchCleared
                     | Message::SearchFocusRequested
                     | Message::StartupInteractionObserved
+                    | Message::PagesLaidOut
                     | Message::TabSelected(_)
                     | Message::UiTabSelected(_)
                     | Message::KeybindingsTabSelected(_)
@@ -72,6 +73,7 @@ impl ConfiguratorApp {
                 | Message::SearchCleared
                 | Message::SearchFocusRequested
                 | Message::StartupInteractionObserved
+                | Message::PagesLaidOut
                 | Message::TabSelected(_)
                 | Message::UiTabSelected(_)
                 | Message::KeybindingsTabSelected(_)
@@ -79,6 +81,8 @@ impl ConfiguratorApp {
             self.cancel_leave();
         }
         match message {
+            // A redraw trigger only: the refresh after it opens a waiting popover.
+            Message::PagesLaidOut => Vec::new(),
             Message::ReloadRequested => self.handle_reload_requested(),
             Message::CloseRequested => {
                 self.request_leave(super::document_workflow::LeaveAction::Close)

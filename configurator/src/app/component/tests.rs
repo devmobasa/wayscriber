@@ -7,7 +7,8 @@
 //!
 //! - a language-only change, delivered as the selection message itself,
 //!   loses no editor, recorder or conflict state, even after the popovers
-//!   the old pages owned have closed and every queued message has run;
+//!   the old pages owned have closed and every queued message has run, and
+//!   an open edit's popover reopens only once its row is back on screen;
 //! - focus returns to the control that had it, with its caret and
 //!   selection, and the visible page keeps its scroll;
 //! - navigation works in the new language (finding N1);
@@ -16,8 +17,10 @@
 //! - the Language row comes first on the UI tab, with its icon and a title in
 //!   every supported language, whichever language is active.
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::process::Command;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 use std::{env, fs, iter, thread};
 
@@ -26,15 +29,20 @@ use relm4::{adw, gtk};
 
 use adw::prelude::*;
 
-use gtk::glib::MainContext;
+use gtk::glib::{MainContext, SignalHandlerId};
+use gtk::graphene::Point;
 use gtk::prelude::GtkWindowExt;
 use wayscriber::domain::Language;
 use wayscriber::{env_vars, i18n};
 
 use crate::messages::{CommandMessage, Message};
-use crate::models::{KeybindingField, LanguageOption, StartupRequest, TabId, UiTabId};
+use crate::models::{
+    KeybindingField, KeybindingsTabId, LanguageOption, StartupRequest, TabId, UiTabId,
+    keybinding_tab,
+};
 use crate::test_temp;
 
+use super::super::pages;
 use super::super::state::ConfiguratorApp;
 
 const MARKER: &str = "EXECUTED: configurator GTK language rebuild assertions";
@@ -123,6 +131,7 @@ fn run_scenario() {
     let bindings = app.widgets().bindings.len();
 
     open_edits_survive_a_language_change(&app);
+    settling_keeps_cancels_and_leave_confirmations(&app);
     focus_caret_and_scroll_survive_a_language_change(&app);
     navigation_works_after_a_language_change(&app);
     repeated_switches_leave_nothing_behind(&app, pages, bindings);
@@ -234,7 +243,11 @@ fn service_buttons_describe_service_actions_in_each_language(app: &Controller<Co
 }
 
 fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
+    // A recording starts from a click on its row, so the row is on screen;
+    // Undo is far down the page.
     app.emit(Message::TabSelected(TabId::Keybindings));
+    settle();
+    scroll_row_into_view(app, KeybindingField::Undo);
     app.emit(Message::ShortcutRecordingStarted(KeybindingField::Undo));
     settle();
     assert!(app.model().shortcuts.recorder().is_some());
@@ -244,8 +257,14 @@ fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
         LanguageOption::English,
         LanguageOption::SimplifiedChinese,
     ] {
-        app.emit(Message::UiLanguageChanged(language));
-        settle();
+        let openings = switch_language_and_await_reopening(app, language);
+        // The rebuilt page starts unscrolled, and a translation moves rows;
+        // a recorder opened on a row off screen is one GTK may close.
+        assert_eq!(
+            openings,
+            vec![true],
+            "switching to {language:?} must reopen the recorder once, on its row on screen"
+        );
         assert_eq!(
             app.model()
                 .shortcuts
@@ -279,8 +298,14 @@ fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
         "Ctrl+Z, Bogus+".to_string(),
     ));
     settle();
-    app.emit(Message::UiLanguageChanged(LanguageOption::English));
-    settle();
+    // The caret inside the editor's entry survives the editor reopening.
+    focused_editable(app).select_region(2, 5);
+    let openings = switch_language_and_await_reopening(app, LanguageOption::English);
+    assert_eq!(
+        openings,
+        vec![true],
+        "the text editor must reopen once, on its row on screen"
+    );
     assert_eq!(
         app.model()
             .shortcuts
@@ -288,6 +313,17 @@ fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
             .map(|editor| editor.text.clone()),
         Some("Ctrl+Z, Bogus+".to_string()),
         "the language change dropped the text edit"
+    );
+    let editable = focused_editable(app);
+    assert_eq!(
+        editable.text(),
+        "Ctrl+Z, Bogus+",
+        "focus is in the reopened editor"
+    );
+    assert_eq!(
+        editable.selection_bounds(),
+        Some((2, 5)),
+        "the reopened editor keeps its selection"
     );
     app.emit(Message::ShortcutTextEditChanged("E".to_string()));
     app.emit(Message::ShortcutTextEditApplied);
@@ -310,6 +346,195 @@ fn open_edits_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
     app.emit(Message::ShortcutConflictCanceled);
     settle();
     assert!(app.model().shortcuts.conflict().is_none());
+}
+
+/// Rebuilt pages reopen an open edit a few frames after a language change.
+/// What happens in those frames still counts: a cancel stays a cancel, focus
+/// kept for a canceled editor does not reach the next edit, and a
+/// Leave confirmation asked meanwhile is not withdrawn by the reopening.
+fn settling_keeps_cancels_and_leave_confirmations(app: &Controller<ConfiguratorApp>) {
+    start_recording_on_screen(app, KeybindingField::Undo);
+    let openings = watch_popover_openings(app);
+    app.emit(Message::UiLanguageChanged(LanguageOption::English));
+    app.emit(Message::ShortcutRecordingCanceled(KeybindingField::Undo));
+    await_settled();
+    assert!(
+        app.model().shortcuts.recorder().is_none(),
+        "the cancel made while the pages settled was undone"
+    );
+    assert_eq!(
+        openings.finish(),
+        Vec::<bool>::new(),
+        "a canceled recording must not reopen"
+    );
+
+    // The open recording is unsaved work, so Reload asks first.
+    start_recording_on_screen(app, KeybindingField::Undo);
+    let openings = watch_popover_openings(app);
+    app.emit(Message::UiLanguageChanged(
+        LanguageOption::SimplifiedChinese,
+    ));
+    // A click on Reload comes after the rebuild's own refresh, which may move
+    // focus to the edited row and select it.
+    run_queued_messages();
+    assert!(
+        !pages::pages_settled(),
+        "Reload must be asked while the pages settle"
+    );
+    app.emit(Message::ReloadRequested);
+    await_settled();
+    assert!(
+        app.model().pending_leave().is_some(),
+        "reopening the recorder withdrew the Leave confirmation"
+    );
+    assert_eq!(
+        openings.seen(),
+        0,
+        "the recorder must wait while Leave asks"
+    );
+    app.emit(Message::LeaveCanceled);
+    pump_until("the recorder to reopen once Leave is answered", || {
+        openings.seen() > 0
+    });
+    settle();
+    assert_eq!(
+        openings.finish(),
+        vec![true],
+        "the recorder must reopen once, on its row on screen"
+    );
+    assert!(
+        app.model().shortcuts.recorder().is_some(),
+        "canceling Leave keeps the recording"
+    );
+    app.emit(Message::ShortcutRecordingCanceled(KeybindingField::Undo));
+    settle();
+
+    // Focus kept for an editor whose edit ends before it reopens must not
+    // land on the next edit opened there.
+    app.emit(Message::TabSelected(TabId::Keybindings));
+    settle();
+    scroll_row_into_view(app, KeybindingField::Undo);
+    app.emit(Message::ShortcutTextEditStarted(KeybindingField::Undo));
+    app.emit(Message::ShortcutTextEditChanged(
+        "Ctrl+Z, Bogus+".to_string(),
+    ));
+    settle();
+    focused_editable(app).select_region(2, 5);
+    app.emit(Message::UiLanguageChanged(LanguageOption::English));
+    app.emit(Message::ShortcutTextEditCanceled(KeybindingField::Undo));
+    await_settled();
+    app.emit(Message::ShortcutTextEditStarted(KeybindingField::Undo));
+    pump_until("the next text edit to open", || open_popover(app).is_some());
+    settle();
+    assert_ne!(
+        focused_editable(app).selection_bounds(),
+        Some((2, 5)),
+        "the canceled editor's selection landed on the next edit"
+    );
+    app.emit(Message::ShortcutTextEditCanceled(KeybindingField::Undo));
+    settle();
+
+    // A second rebuild before the editor reopens keeps the selection the
+    // first one saved for it.
+    app.emit(Message::TabSelected(TabId::Keybindings));
+    settle();
+    scroll_row_into_view(app, KeybindingField::Undo);
+    app.emit(Message::ShortcutTextEditStarted(KeybindingField::Undo));
+    app.emit(Message::ShortcutTextEditChanged(
+        "Ctrl+Z, Bogus+".to_string(),
+    ));
+    settle();
+    focused_editable(app).select_region(2, 5);
+    app.emit(Message::UiLanguageChanged(
+        LanguageOption::SimplifiedChinese,
+    ));
+    app.emit(Message::UiLanguageChanged(LanguageOption::English));
+    await_settled();
+    pump_until("the text editor to reopen", || open_popover(app).is_some());
+    settle();
+    assert_eq!(
+        focused_editable(app).selection_bounds(),
+        Some((2, 5)),
+        "two rebuilds before the editor reopened lost its selection"
+    );
+    app.emit(Message::ShortcutTextEditCanceled(KeybindingField::Undo));
+    settle();
+
+    // An edit whose category is hidden while the pages settle reopens when
+    // the category comes back.
+    let home = keybinding_tab(KeybindingField::Undo);
+    let other = KeybindingsTabId::ALL
+        .into_iter()
+        .find(|tab| *tab != home)
+        .expect("another category");
+    start_recording_on_screen(app, KeybindingField::Undo);
+    app.emit(Message::UiLanguageChanged(
+        LanguageOption::SimplifiedChinese,
+    ));
+    app.emit(Message::KeybindingsTabSelected(other));
+    await_settled();
+    assert!(
+        app.model().shortcuts.recorder().is_some(),
+        "hiding the category ended the recording"
+    );
+    assert!(
+        open_popover(app).is_none(),
+        "the recorder must not open on a hidden row"
+    );
+    app.emit(Message::KeybindingsTabSelected(home));
+    pump_until("the recorder to reopen with its category", || {
+        open_popover(app).is_some()
+    });
+    settle();
+    app.emit(Message::ShortcutRecordingCanceled(KeybindingField::Undo));
+    app.emit(Message::ShortcutManagerShowAll);
+    settle();
+
+    // Back to the language the scenarios after this one start from.
+    app.emit(Message::UiLanguageChanged(
+        LanguageOption::SimplifiedChinese,
+    ));
+    await_settled();
+}
+
+/// The editor popover open on the visible page, if any.
+fn open_popover(app: &Controller<ConfiguratorApp>) -> Option<gtk::Popover> {
+    visible_page_descendants(app)
+        .into_iter()
+        .filter_map(|widget| widget.downcast::<gtk::Popover>().ok())
+        .find(|popover| popover.is_visible())
+}
+
+/// Starts recording `field` the way a click does: on its row, on screen.
+fn start_recording_on_screen(app: &Controller<ConfiguratorApp>, field: KeybindingField) {
+    app.emit(Message::TabSelected(TabId::Keybindings));
+    settle();
+    scroll_row_into_view(app, field);
+    app.emit(Message::ShortcutRecordingStarted(field));
+    settle();
+    assert!(
+        app.model().shortcuts.recorder().is_some(),
+        "recording {field:?} started"
+    );
+}
+
+/// Runs the main loop until the latest rebuild has settled, then a little
+/// longer for the refresh that follows it. The queued messages run first:
+/// until the language change in them rebuilds the pages, the old pages
+/// still count as settled.
+fn await_settled() {
+    run_queued_messages();
+    pump_until("the rebuilt pages to settle", pages::pages_settled);
+    settle();
+}
+
+/// Runs the queued messages, their refreshes, and the messages those
+/// refreshes queue, without waiting for a frame.
+fn run_queued_messages() {
+    let context = MainContext::default();
+    while context.pending() {
+        context.iteration(false);
+    }
 }
 
 fn focus_caret_and_scroll_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
@@ -433,8 +658,14 @@ fn a_load_that_changes_the_language_keeps_its_resets(app: &Controller<Configurat
     // Back to what the file says, so the reload is a real language change.
     app.emit(Message::UiLanguageChanged(LanguageOption::English));
     app.emit(Message::TabSelected(TabId::Keybindings));
+    settle();
+    scroll_row_into_view(app, KeybindingField::Undo);
     app.emit(Message::ShortcutRecordingStarted(KeybindingField::Undo));
     settle();
+    assert!(
+        app.model().shortcuts.recorder().is_some(),
+        "Reload must find an open recording to ask about"
+    );
     write_config(
         Path::new(&env::var_os("XDG_CONFIG_HOME").expect("child config home")),
         "[ui]\nlanguage = \"zh-CN\"\n",
@@ -543,6 +774,116 @@ fn scrollable(app: &Controller<ConfiguratorApp>) -> Option<gtk::ScrolledWindow> 
             let adjustment = scrolled.vadjustment();
             adjustment.upper() - adjustment.page_size() > 1.0
         })
+}
+
+/// Scrolls the visible page so `field`'s row is on screen, as it is when the
+/// user clicks it.
+fn scroll_row_into_view(app: &Controller<ConfiguratorApp>, field: KeybindingField) {
+    let title = field.label().to_string();
+    let row = visible_page_descendants(app)
+        .into_iter()
+        .filter_map(|widget| widget.downcast::<adw::PreferencesRow>().ok())
+        .find(|row| row.title() == title.as_str())
+        .unwrap_or_else(|| panic!("no row titled {title:?}"));
+    let scrolled = scrollable(app).expect("a scrolled page");
+    // The row's offset from the top of the visible area, whatever the scroll.
+    let top = row
+        .compute_point(&scrolled, &Point::new(0.0, 0.0))
+        .expect("the row lies inside the scrolled page");
+    let adjustment = scrolled.vadjustment();
+    adjustment.set_value(adjustment.value() + f64::from(top.y()));
+    // A frame lays the page out at the new offset; frames can be slow here.
+    pump_until(&format!("{title:?} to scroll on screen"), || {
+        shown_in_viewport(row.upcast_ref())
+    });
+}
+
+/// Whether `widget` has a layout and overlaps the visible part of the
+/// scrolled page around it.
+fn shown_in_viewport(widget: &gtk::Widget) -> bool {
+    let Some(scrolled) = widget.ancestor(gtk::ScrolledWindow::static_type()) else {
+        return widget.height() > 0;
+    };
+    let Some(bounds) = widget.compute_bounds(&scrolled) else {
+        return false;
+    };
+    widget.height() > 0
+        && bounds.y() + bounds.height() > 0.0
+        && f64::from(bounds.y()) < f64::from(scrolled.height())
+}
+
+/// Records, for every popover the next rebuilt page opens, whether its row
+/// was on screen at that moment. Listeners attach when the rebuilt page
+/// becomes the visible one, which is before its first refresh writes the
+/// model into it, so a popover opened by that refresh is seen too.
+struct PopoverOpenings {
+    stack: gtk::Stack,
+    handler: SignalHandlerId,
+    openings: Rc<RefCell<Vec<bool>>>,
+}
+
+impl PopoverOpenings {
+    fn seen(&self) -> usize {
+        self.openings.borrow().len()
+    }
+
+    fn finish(self) -> Vec<bool> {
+        self.stack.disconnect(self.handler);
+        self.openings.take()
+    }
+}
+
+/// Switches the language with an edit open and waits until the rebuilt page
+/// reopens the edit's popover, which happens a few frames after the rebuild.
+/// Returns whether each popover the rebuilt page opened was on screen.
+fn switch_language_and_await_reopening(
+    app: &Controller<ConfiguratorApp>,
+    language: LanguageOption,
+) -> Vec<bool> {
+    let openings = watch_popover_openings(app);
+    app.emit(Message::UiLanguageChanged(language));
+    pump_until("the rebuilt page to reopen the open edit", || {
+        openings.seen() > 0
+    });
+    settle();
+    openings.finish()
+}
+
+fn watch_popover_openings(app: &Controller<ConfiguratorApp>) -> PopoverOpenings {
+    let stack = app.widgets().stack.clone();
+    let openings = Rc::new(RefCell::new(Vec::new()));
+    let watched = Rc::new(RefCell::new(Vec::<gtk::Popover>::new()));
+    let handler = {
+        let openings = openings.clone();
+        stack.connect_visible_child_notify(move |stack| {
+            let Some(page) = stack.visible_child() else {
+                return;
+            };
+            let popovers = descendants(page)
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Popover>().ok());
+            for popover in popovers {
+                if watched.borrow().contains(&popover) {
+                    continue;
+                }
+                watched.borrow_mut().push(popover.clone());
+                let openings = openings.clone();
+                popover.connect_visible_notify(move |popover| {
+                    if !popover.is_visible() {
+                        return;
+                    }
+                    let shown = popover.parent().is_some_and(|row| shown_in_viewport(&row));
+                    openings.borrow_mut().push(shown);
+                });
+            }
+        })
+    };
+
+    PopoverOpenings {
+        stack,
+        handler,
+        openings,
+    }
 }
 
 /// Runs the main loop until `done`, failing after a generous timeout.

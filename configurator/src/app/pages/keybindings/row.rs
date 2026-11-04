@@ -262,7 +262,9 @@ pub(super) fn binding_row(
             .shortcuts
             .recorder()
             .filter(|recorder| recorder.field == field);
-        recorder.refresh(recording);
+        // Opening an editor while a Leave confirmation is pending would withdraw it.
+        let may_open = app.pending_leave().is_none();
+        recorder.refresh(recording, may_open);
 
         let editing = app
             .shortcuts
@@ -270,7 +272,12 @@ pub(super) fn binding_row(
             .filter(|editor| editor.field == field);
         let editor_text = editing.map_or(value, |editor| editor.text.as_str());
         let editor_error = editing.and_then(|editor| editor.parse_error());
-        text_editor.refresh(editing.is_some(), editor_text, editor_error.as_deref());
+        text_editor.refresh(
+            editing.is_some(),
+            may_open,
+            editor_text,
+            editor_error.as_deref(),
+        );
 
         if let Some(manager_row) = summary.row(field) {
             let titles: Vec<String> = manager_row

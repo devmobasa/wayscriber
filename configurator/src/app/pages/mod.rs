@@ -24,7 +24,7 @@ mod session;
 mod tablet;
 mod ui;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use relm4::prelude::*;
 use relm4::{adw, gtk};
@@ -52,6 +52,117 @@ pub(crate) type Binding = Box<dyn FnMut(&ConfiguratorApp, &AppSearchSummary)>;
 
 thread_local! {
     static REPLACING_PAGES: Cell<bool> = const { Cell::new(false) };
+    /// The latest rebuild, and whether its pages are still settling.
+    static SETTLING: Cell<(u64, bool)> = const { Cell::new((0, false)) };
+    /// Focus waiting for an editor popover to reopen; see [`defer_focus_until_opened`].
+    static DEFERRED_FOCUS: RefCell<Option<DeferredFocus>> =
+        const { RefCell::new(None) };
+}
+
+/// Focus and caret to put back when `popover` reopens; see
+/// [`defer_focus_until_opened`].
+struct DeferredFocus {
+    popover: gtk::Popover,
+    restore: Box<dyn FnOnce()>,
+}
+
+/// One page rebuild that has not settled yet; see [`begin_settling`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SettleTicket(u64);
+
+/// Marks freshly rebuilt pages as settling until [`finish_settling`] runs
+/// with the returned ticket.
+///
+/// Rebuilt pages have no layout and no scroll yet. An editor popover opened
+/// on them points at a row the restored scroll has not reached, and GTK
+/// closes a popover it cannot place, which would read as the user canceling
+/// the edit. While the pages settle, editor popovers wait instead. A newer
+/// rebuild replaces the ticket, so a stale one finishes nothing.
+#[must_use]
+pub(crate) fn begin_settling() -> SettleTicket {
+    // What an older rebuild deferred belongs to pages that are gone.
+    DEFERRED_FOCUS.with(|deferred| deferred.borrow_mut().take());
+    SETTLING.with(|state| {
+        let rebuild = state.get().0.wrapping_add(1);
+        state.set((rebuild, true));
+        SettleTicket(rebuild)
+    })
+}
+
+/// Holds `restore` until `popover`, an editor the rebuilt pages reopen once
+/// they settle, opens again: focus and caret were inside it when the rebuild
+/// started. Only the opening that resumes that edit may use it, so it is
+/// dropped when the edit closes first.
+pub(crate) fn defer_focus_until_opened(popover: &gtk::Popover, restore: Box<dyn FnOnce()>) {
+    let held = DeferredFocus {
+        popover: popover.clone(),
+        restore,
+    };
+    DEFERRED_FOCUS.with(|deferred| *deferred.borrow_mut() = Some(held));
+}
+
+/// Runs the restore held for `popover`, which has just opened.
+pub(crate) fn run_deferred_focus(popover: &gtk::Popover) {
+    let restore = DEFERRED_FOCUS.with(|deferred| {
+        let mut deferred = deferred.borrow_mut();
+        let resumes_this_edit = deferred
+            .as_ref()
+            .is_some_and(|waiting| waiting.popover == *popover);
+        if resumes_this_edit {
+            deferred.take()
+        } else {
+            None
+        }
+    });
+    if let Some(DeferredFocus { restore, .. }) = restore {
+        restore();
+    }
+}
+
+/// Whether a restore is still waiting for its editor to reopen. A rebuild that
+/// starts meanwhile carries the focus it was going to restore.
+#[must_use]
+pub(crate) fn has_deferred_focus() -> bool {
+    DEFERRED_FOCUS.with(|deferred| deferred.borrow().is_some())
+}
+
+/// Drops the restore held for `popover`: its edit ended before it reopened.
+pub(crate) fn drop_deferred_focus(popover: &gtk::Popover) {
+    DEFERRED_FOCUS.with(|deferred| {
+        let mut deferred = deferred.borrow_mut();
+        if deferred
+            .as_ref()
+            .is_some_and(|waiting| waiting.popover == *popover)
+        {
+            deferred.take();
+        }
+    });
+}
+
+/// Ends settling when `ticket` belongs to the latest rebuild. Returns whether
+/// it did.
+pub(crate) fn finish_settling(ticket: SettleTicket) -> bool {
+    SETTLING.with(|state| {
+        let (rebuild, settling) = state.get();
+        if !settling || rebuild != ticket.0 {
+            return false;
+        }
+
+        state.set((rebuild, false));
+        true
+    })
+}
+
+/// Whether `ticket` belongs to the latest rebuild.
+#[must_use]
+pub(crate) fn is_latest_rebuild(ticket: SettleTicket) -> bool {
+    SETTLING.with(|state| state.get().0 == ticket.0)
+}
+
+/// Whether no rebuilt pages are waiting to settle.
+#[must_use]
+pub(crate) fn pages_settled() -> bool {
+    SETTLING.with(|state| !state.get().1)
 }
 
 /// Marks the pages as being replaced for as long as it lives.

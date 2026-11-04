@@ -327,6 +327,7 @@ pub(super) fn build(
         seen_focus_serial: 0,
         bindings,
         language: i18n::language(),
+        pending_restore: super::rebuild::PendingRestore::default(),
         chrome: Chrome {
             build_identity,
             content_page,

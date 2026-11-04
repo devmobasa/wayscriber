@@ -20,7 +20,7 @@ pub(super) fn refresh(
     write_widgets(app, widgets);
 
     if let Some(state) = rebuilt {
-        rebuild::restore(widgets, state);
+        rebuild::restore(widgets, state, sender);
     }
 }
 

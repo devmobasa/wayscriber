@@ -22,7 +22,7 @@ use crate::models::keybindings::{
 
 use super::super::super::state::ConfiguratorApp;
 use super::widgets::{
-    field_canceled, set_accessible_label, set_label, set_sensitive, set_visible,
+    PopoverPresenter, field_canceled, set_accessible_label, set_label, set_sensitive, set_visible,
     unparent_on_destroy,
 };
 
@@ -31,6 +31,7 @@ pub(super) struct RecorderPopover {
     prompt: gtk::Label,
     finish: gtk::Button,
     remove_last: gtk::Button,
+    presenter: PopoverPresenter,
 }
 
 impl RecorderPopover {
@@ -114,10 +115,12 @@ impl RecorderPopover {
             prompt,
             finish,
             remove_last,
+            presenter: PopoverPresenter::new(sender),
         }
     }
 
-    pub(super) fn refresh(&self, recorder: Option<&ShortcutRecorderState>) {
+    /// `may_open` is false while a Leave confirmation is pending; see [`PopoverPresenter::present`].
+    pub(super) fn refresh(&self, recorder: Option<&ShortcutRecorderState>, may_open: bool) {
         let recording = recorder.is_some();
         set_label(
             &self.prompt,
@@ -137,12 +140,10 @@ impl RecorderPopover {
             recorder.is_some_and(ShortcutRecorderState::can_remove_last),
         );
         if recording {
-            if !self.popover.is_visible() {
-                self.popover.popup();
-                self.prompt.grab_focus();
-            }
-        } else if self.popover.is_visible() {
-            self.popover.popdown();
+            self.presenter
+                .present(&self.popover, &self.prompt, may_open);
+        } else {
+            self.presenter.close(&self.popover);
         }
     }
 }
