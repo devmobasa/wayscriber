@@ -374,6 +374,13 @@ fn settling_keeps_cancels_and_leave_confirmations(app: &Controller<ConfiguratorA
     app.emit(Message::UiLanguageChanged(
         LanguageOption::SimplifiedChinese,
     ));
+    // A click on Reload comes after the rebuild's own refresh, which may move
+    // focus to the edited row and select it.
+    run_queued_messages();
+    assert!(
+        !pages::pages_settled(),
+        "Reload must be asked while the pages settle"
+    );
     app.emit(Message::ReloadRequested);
     await_settled();
     assert!(
@@ -516,12 +523,18 @@ fn start_recording_on_screen(app: &Controller<ConfiguratorApp>, field: Keybindin
 /// until the language change in them rebuilds the pages, the old pages
 /// still count as settled.
 fn await_settled() {
+    run_queued_messages();
+    pump_until("the rebuilt pages to settle", pages::pages_settled);
+    settle();
+}
+
+/// Runs the queued messages, their refreshes, and the messages those
+/// refreshes queue, without waiting for a frame.
+fn run_queued_messages() {
     let context = MainContext::default();
     while context.pending() {
         context.iteration(false);
     }
-    pump_until("the rebuilt pages to settle", pages::pages_settled);
-    settle();
 }
 
 fn focus_caret_and_scroll_survive_a_language_change(app: &Controller<ConfiguratorApp>) {
