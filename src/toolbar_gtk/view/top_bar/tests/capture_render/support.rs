@@ -47,7 +47,7 @@ pub(super) fn assert_fixture(pixels: &[[u8; 4]]) {
             .filter(|pixel| **pixel == [17, 232, 17, 255])
             .count()
             > 10,
-        "opaque green user border must override application CSS"
+        "opaque green user border must paint where the toolbar CSS sets none"
     );
 }
 

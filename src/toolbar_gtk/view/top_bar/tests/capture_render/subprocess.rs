@@ -98,6 +98,7 @@ pub(super) fn run_cases(name: &str) {
             "menu-default",
             "menu-long",
             "lifecycle",
+            "user-theme",
         ] {
             if let Err(error) = run(name, renderer, case) {
                 failures.push(format!("{renderer}/{case}: {error}"));

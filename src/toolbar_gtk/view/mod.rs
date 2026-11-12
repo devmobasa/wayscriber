@@ -296,18 +296,32 @@ fn set_capture_transparent_class(widget: &impl IsA<gtk4::Widget>, transparent: b
     }
 }
 
-fn install_capture_css_provider(scale: f64) -> gtk4::CssProvider {
+/// GTK takes each property from the highest-priority provider that sets it,
+/// whatever the selector specificity. The toolbars are the overlay's own
+/// chrome, so their stylesheet sits above user CSS: otherwise a GTK theme
+/// imported from `~/.config/gtk-4.0/gtk.css`, as home-manager does, paints
+/// the transparent window and recolors the glyphs.
+const TOOLBAR_CSS_PRIORITY: u32 = gtk4::STYLE_PROVIDER_PRIORITY_USER + 1;
+
+/// Capture suppression must also clear what the toolbar stylesheet paints.
+const CAPTURE_CSS_PRIORITY: u32 = TOOLBAR_CSS_PRIORITY + 1;
+
+fn install_css_provider(css: &str, priority: u32) -> gtk4::CssProvider {
     let provider = gtk4::CssProvider::new();
-    provider.load_from_string(&super::css::capture_stylesheet(scale));
+    provider.load_from_string(css);
     if let Some(display) = Display::default() {
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_USER + 1,
-        );
+        gtk4::style_context_add_provider_for_display(&display, &provider, priority);
     }
 
     provider
+}
+
+fn install_toolbar_css_provider(scale: f64) -> gtk4::CssProvider {
+    install_css_provider(&super::css::stylesheet(scale), TOOLBAR_CSS_PRIORITY)
+}
+
+fn install_capture_css_provider(scale: f64) -> gtk4::CssProvider {
+    install_css_provider(&super::css::capture_stylesheet(scale), CAPTURE_CSS_PRIORITY)
 }
 
 #[derive(Clone)]
@@ -495,15 +509,7 @@ pub(super) struct Windows {
 
 impl Windows {
     pub(super) fn new(feedback: FeedbackSender) -> Self {
-        let css_provider = gtk4::CssProvider::new();
-        css_provider.load_from_string(&super::css::stylesheet(1.0));
-        if let Some(display) = Display::default() {
-            gtk4::style_context_add_provider_for_display(
-                &display,
-                &css_provider,
-                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
-        }
+        let css_provider = install_toolbar_css_provider(1.0);
         Self {
             top: top_bar::TopBar::new(feedback.clone()),
             tooltip_capture: capture_suppression::TooltipCapture::new(),

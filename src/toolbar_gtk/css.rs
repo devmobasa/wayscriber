@@ -422,12 +422,13 @@ tooltip {{
 }
 
 /// Capture is required to clear every painted native root, including user CSS
-/// that overrides the ordinary application stylesheet. Install this separately
-/// above user priority. Popup shadow geometry is stable even outside capture:
-/// GTK may withdraw a native popup when its shadow extents change, losing the
-/// mapped surface whose transparent presentation the capture barrier requires.
-/// User shadow overrides are intentionally replaced by the application shadow;
-/// other user decoration returns when the capture class is removed.
+/// for the properties the toolbar stylesheet leaves unset. Install this
+/// separately, above the toolbar stylesheet. Popup shadow geometry is stable
+/// even outside capture: GTK may withdraw a native popup when its shadow
+/// extents change, losing the mapped surface whose transparent presentation
+/// the capture barrier requires. User shadow overrides are intentionally
+/// replaced by the application shadow; other user decoration returns when the
+/// capture class is removed.
 pub(super) fn capture_stylesheet(scale: f64) -> String {
     let v = GtkStylesheetValues::new(scale);
     format!(
