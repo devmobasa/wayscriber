@@ -104,6 +104,13 @@ impl WaylandState {
         conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
+        if self.light_output_session_pending() {
+            if key == Key::Escape {
+                self.input_state.should_exit = true;
+            }
+            return;
+        }
+
         // Report the physical press to the input HUD before any subsystem
         // routing consumes it, so the HUD always shows what was pressed rather
         // than what happened to reach the canvas. Compositor-synced modifier

@@ -46,10 +46,17 @@ fn toolbar_event_blocked_by_modal(input_state: &InputState) -> bool {
 
 /// Toolbar events the shared dispatch drops: anything under the command
 /// palette, and a click landing right after the minimized tab (or micro chip)
-/// restored the strip, whose controls now sit under the pointer. Both
-/// frontends deliver clicks through this one path.
-fn toolbar_event_dropped(input_state: &InputState, now: Instant) -> bool {
-    toolbar_event_blocked_by_modal(input_state) || input_state.toolbar_restore_guard_blocks(now)
+/// restored the strip, whose controls now sit under the pointer. A pending
+/// output session accepts only Exit. Both frontends share this policy.
+fn toolbar_event_dropped(
+    input_state: &InputState,
+    event: &ToolbarEvent,
+    output_session_pending: bool,
+    now: Instant,
+) -> bool {
+    (output_session_pending && !matches!(event, ToolbarEvent::ExitOverlay))
+        || toolbar_event_blocked_by_modal(input_state)
+        || input_state.toolbar_restore_guard_blocks(now)
 }
 
 fn finalize_pointer_gestures_before_toolbar_dispatch(
@@ -207,7 +214,12 @@ impl WaylandState {
         // GTK toolbar feedback bypasses the built-in pointer modal gate, so
         // enforce the same rule in the shared event path as well. The same
         // path drops the second click of a double-click on the restore tab.
-        if toolbar_event_dropped(&self.input_state, Instant::now()) {
+        if toolbar_event_dropped(
+            &self.input_state,
+            &event,
+            self.light_output_session_pending(),
+            Instant::now(),
+        ) {
             return;
         }
         // A toolbar interaction replaces the modal sampler. Do this before

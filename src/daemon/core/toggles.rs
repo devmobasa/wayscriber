@@ -11,7 +11,8 @@ use super::super::types::OverlayState;
 use super::{DUPLICATE_SHORTCUT_SUPPRESSION_WINDOW, Daemon};
 use crate::tray_action::TrayAction;
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, info, warn};
+use std::mem;
 use std::path::Path;
 use std::time::Instant;
 
@@ -167,6 +168,52 @@ impl Daemon {
         );
 
         Ok(())
+    }
+
+    /// Asks a light-capable overlay to move its editor instead of hiding.
+    ///
+    /// The move travels through the action journal and wakes the overlay with
+    /// `SIGUSR2`, so the raw `SIGUSR1` a legacy shortcut sends to every
+    /// Wayscriber process cannot trigger it a second time.
+    pub(in crate::daemon) fn request_light_editor_move(&mut self) -> Result<()> {
+        let Some(journal) = self.v2_action_journal.clone() else {
+            // Legacy v1 has no ordered action delivery; keep its plain toggle.
+            info!("Hiding overlay");
+            return self.hide_overlay();
+        };
+
+        let action = TrayAction::MoveLightEditor;
+        let prepared = journal
+            .publish_anonymous(&self.instance_token, action)
+            .context("failed to queue light-mode editor move")?;
+        if let Err(error) = self.signal_overlay_action_ready(action) {
+            let reason = format!("overlay action delivery failed: {error:#}");
+            if let Err(abandon_error) = journal.abandon(&prepared, &reason) {
+                warn!("Failed to abandon light-mode editor move: {abandon_error:#}");
+            }
+            return Err(error);
+        }
+
+        info!("Moving the light-mode overlay editor");
+        self.light_editor_moves.push(prepared);
+        Ok(())
+    }
+
+    /// A move the previous overlay never claimed must not reach the next one,
+    /// which would read it as a toggle and close right after opening.
+    pub(in crate::daemon) fn abandon_unclaimed_light_editor_moves(&mut self) {
+        let moves = mem::take(&mut self.light_editor_moves);
+        let Some(journal) = self.v2_action_journal.as_ref() else {
+            return;
+        };
+
+        for prepared in moves {
+            if let Err(error) = journal.abandon(&prepared, "the overlay exited before claiming it")
+            {
+                // Claimed, applied, or collected moves need nothing more.
+                debug!("Light-mode editor move needs no abandonment: {error:#}");
+            }
+        }
     }
 
     pub(super) fn signal_overlay_action_ready(&self, action: TrayAction) -> Result<()> {

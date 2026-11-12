@@ -10,6 +10,9 @@ use super::super::state::{FullDamageReason, WaylandState};
 
 impl LayerShellHandler for WaylandState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        if self.light_outputs.close_layer(layer) {
+            return;
+        }
         if self.toolbar.is_toolbar_layer(layer) {
             info!("Toolbar surface closed by compositor; hiding toolbar");
             let _ = self.input_state.set_toolbar_visible_with_resources(
@@ -22,6 +25,9 @@ impl LayerShellHandler for WaylandState {
             return;
         }
 
+        if !self.surface.is_surface(layer.wl_surface()) {
+            return;
+        }
         info!("Layer surface closed by compositor");
         self.input_state.should_exit = true;
     }
@@ -34,6 +40,12 @@ impl LayerShellHandler for WaylandState {
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
+        if self
+            .light_outputs
+            .configure_layer(layer, configure.new_size.0, configure.new_size.1)
+        {
+            return;
+        }
         if self.toolbar.handle_configure(&configure, layer) {
             log::info!(
                 "Toolbar layer configure: size={}x{}, layer={}",
@@ -45,6 +57,9 @@ impl LayerShellHandler for WaylandState {
             return;
         }
 
+        if !self.surface.is_surface(layer.wl_surface()) {
+            return;
+        }
         if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
             let prev_dims = (self.surface.width(), self.surface.height());
             debug!(

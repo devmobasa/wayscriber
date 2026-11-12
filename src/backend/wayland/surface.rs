@@ -314,6 +314,14 @@ impl SurfaceState {
         grew
     }
 
+    /// Lets a surface that changes owner size its next pool for that owner.
+    ///
+    /// The compositor keeps showing a buffer it still holds: storage released
+    /// here is never written again.
+    pub(super) fn release_buffer_pool(&mut self) {
+        self.drop_pool();
+    }
+
     /// Releases the pool and every slot held for it.
     ///
     /// Dropping the slots is what returns their memory to the pool's free

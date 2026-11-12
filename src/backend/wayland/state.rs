@@ -68,6 +68,7 @@ mod helpers;
 mod input_actions;
 mod input_hud;
 mod key_repeat;
+mod light_outputs;
 pub(in crate::backend::wayland) use key_repeat::{KeyRepeatTiming, KeyboardId};
 mod keybindings;
 pub(in crate::backend::wayland) use keybindings::queue_keybinding_edit;
@@ -159,6 +160,7 @@ pub(super) struct WaylandState {
 
     // Surface and buffer management
     pub(super) surface: SurfaceState,
+    pub(super) light_outputs: light_outputs::LightOutputOverlays,
     pub(super) toolbar: ToolbarSurfaceManager,
     pub(super) toolbar_chrome: toolbar::ToolbarChrome,
     pub(super) toolbar_drag: toolbar::ToolbarDrag,

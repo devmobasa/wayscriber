@@ -15,6 +15,10 @@ impl WaylandState {
         event: &PointerEvent,
         routed: RoutedInput,
     ) {
+        if routed.surface == InputSurface::Foreign {
+            return;
+        }
+
         self.pointer.reconcile_contacts(
             &self.input_state,
             self.zoom.panning,

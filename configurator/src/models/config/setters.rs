@@ -196,6 +196,9 @@ impl ConfigDraft {
                 self.ui_show_page_badge_with_status_bar = value;
             }
             ToggleField::UiHelpOverlayContextFilter => self.help_context_filter = value,
+            ToggleField::UiKeepLightOverlaysOnAllOutputs => {
+                self.ui_keep_light_overlays_on_all_outputs = value;
+            }
             ToggleField::UiContextMenuEnabled => self.ui_context_menu_enabled = value,
             ToggleField::UiXdgFullscreen => self.ui_xdg_fullscreen = value,
             ToggleField::UiXdgKeepOnFocusLoss => self.ui_xdg_keep_on_focus_loss = value,

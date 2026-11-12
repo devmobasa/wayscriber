@@ -107,33 +107,41 @@ impl WaylandState {
         }
 
         info!("Switching layer overlay to {target_label}");
-        self.teardown_keyboard_focus();
-        self.recreate_layer_surface_for_output(qh, &target_output);
+        if !self.recreate_layer_surface_for_output(qh, Some(&target_output)) {
+            return;
+        }
         self.refresh_surface_output(current_output.as_ref(), None);
         self.input_state.needs_redraw = true;
         self.sync_toolbar_visibility(qh);
     }
 
-    fn recreate_layer_surface_for_output(
+    pub(in crate::backend::wayland) fn recreate_layer_surface_for_output(
         &mut self,
         qh: &QueueHandle<Self>,
-        output: &wl_output::WlOutput,
-    ) {
+        output: Option<&wl_output::WlOutput>,
+    ) -> bool {
+        if let Err(error) = self.retain_light_output() {
+            log::warn!("Cannot retain light output: {error:#}");
+            self.input_state.push_toast(
+                ToastPriority::Critical,
+                "light.outputs",
+                Toast::warning(tr(
+                    "Could not keep this monitor's drawings visible; the editor stayed here.",
+                )),
+            );
+            return false;
+        }
+        self.teardown_keyboard_focus();
         self.focus.begin_main_layer_acquisition();
         let Some(layer_shell) = self.protocol.layer_shell() else {
-            return;
+            return false;
         };
 
         let wl_surface = self.protocol.compositor().create_surface(qh);
         wl_surface.set_buffer_scale(self.surface.scale().max(1));
         let layer = self.surface.placement().layer();
-        let layer_surface = layer_shell.create_layer_surface(
-            qh,
-            wl_surface,
-            layer,
-            Some("wayscriber"),
-            Some(output),
-        );
+        let layer_surface =
+            layer_shell.create_layer_surface(qh, wl_surface, layer, Some("wayscriber"), output);
 
         layer_surface.set_anchor(Anchor::all());
         let desired_keyboard_mode = self.desired_keyboard_interactivity();
@@ -143,13 +151,14 @@ impl WaylandState {
         layer_surface.commit();
 
         self.surface
-            .set_layer_surface(layer_surface, Some(output.clone()));
+            .set_layer_surface(layer_surface, output.cloned());
         self.focus
             .set_keyboard_interactivity(Some(desired_keyboard_mode));
         self.force_sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::LayerSurfaceRecreated);
         self.toolbar_chrome.set_needs_recreate(true);
+        true
     }
 }
 

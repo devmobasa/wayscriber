@@ -516,6 +516,11 @@ command_palette_toast_duration_ms = 1500
 # Enable output-cycling shortcuts on layer-shell compositors.
 multi_monitor_enabled = true
 
+# Keep light-mode annotations visible on monitors the editor leaves.
+# In light mode, the daemon toggle then moves the editor instead of hiding it.
+# Requires layer-shell, multi_monitor_enabled, session.per_output, and persist_transparent.
+keep_light_overlays_on_all_outputs = false
+
 # Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
 #xdg_fullscreen = false
 

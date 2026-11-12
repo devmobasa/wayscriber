@@ -72,10 +72,14 @@ impl WaylandState {
         debug!("=== RENDER START ===");
         // Suppression and surface geometry precede acquisition; animation time,
         // layout, damage history and profile selection follow it.
-        let visibility = FrameVisibility::new(
+        let mut visibility = FrameVisibility::new(
             self.suppression.reason(),
             self.input_state.board_is_transparent(),
         );
+        if self.light_output_session_pending() {
+            visibility.render_canvas = false;
+            visibility.render_transients = false;
+        }
         let geometry = FrameGeometry::new(
             self.surface.width(),
             self.surface.height(),

@@ -25,6 +25,28 @@ fn sanitize_identifier_empty_defaults_to_default() {
 }
 
 #[test]
+fn targeted_output_identity_matches_what_setting_it_would_keep() {
+    let mut options = SessionOptions::new(PathBuf::from("/tmp/sessions"), "display");
+    options.per_output = true;
+    options.set_output_identity(Some("DP-1"));
+
+    for identity in [Some("DP-1"), Some("DP-2"), None] {
+        let mut changed = options.clone();
+        assert_eq!(
+            options.targets_output_identity(identity),
+            !changed.set_output_identity(identity),
+            "{identity:?} is targeted exactly when setting it changes nothing"
+        );
+    }
+
+    options.per_output = false;
+    assert!(
+        options.targets_output_identity(Some("DP-2")),
+        "a shared session targets every output"
+    );
+}
+
+#[test]
 fn resolve_display_id_prefers_argument_and_uses_env_fallback() {
     use std::env;
 

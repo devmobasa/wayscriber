@@ -1057,6 +1057,11 @@ status_bar_position = "bottom-left"
 # Enable output-cycling shortcuts on layer-shell compositors
 multi_monitor_enabled = true
 
+# Keep light-mode annotations visible on monitors the editor leaves.
+# In light mode, the daemon toggle then moves the editor instead of hiding it.
+# Requires layer-shell, multi_monitor_enabled, session.per_output, and persist_transparent.
+keep_light_overlays_on_all_outputs = false
+
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
@@ -1150,6 +1155,7 @@ to save it.
 - **Highlight tool ring**: `show_on_highlight_tool = true` keeps a persistent halo visible while the highlight tool is active
 - **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
+- **Light overlays on other monitors**: `keep_light_overlays_on_all_outputs = true` keeps light-mode drawings visible on monitors the editor leaves (see [Keeping light-mode drawings on other monitors](#keeping-light-mode-drawings-on-other-monitors))
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar once two or more outputs are connected (`active_output_badge_always = true` keeps it with a single output)
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay
 - **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
@@ -1324,6 +1330,31 @@ wayscriber --light-draw-off
 ```
 
 Use `--light-draw-on` on key/button press and `--light-draw-off` on release for a non-sticky draw-while-held shortcut. The raw `--daemon-action` form remains available for scripts.
+
+#### Keeping light-mode drawings on other monitors
+
+Set `ui.keep_light_overlays_on_all_outputs = true` to keep drawings visible on a monitor after the editor leaves it in light passthrough. The option is off by default. It takes effect the next time the overlay opens.
+
+The option needs all of these:
+
+- A layer-shell compositor. The GNOME XDG fallback keeps one overlay.
+- `ui.multi_monitor_enabled = true`, `session.per_output = true`, and `session.persist_transparent = true`.
+- The per-output home sessions. A named session file keeps one overlay.
+
+To keep notes on monitor A while you draw on monitor B:
+
+1. Draw on A and enter light mode.
+2. Focus B and run `wayscriber --daemon-toggle`. The editor opens on B. The drawing on A stays visible, and clicks pass through it.
+3. To close every overlay, run the toggle while you edit. Escape and Exit also close every overlay.
+
+With the option on, the daemon toggle moves the editor while it is in light mode, instead of hiding the overlay. Next/Previous Output keep the drawing on the monitor you leave only when that monitor is in light passthrough.
+
+- Only the editor takes input and writes sessions. When the editor arrives on a monitor, it ignores input until that monitor's session loads. Escape and Exit still work.
+- A kept drawing shows no toolbar, selection, or transient effects. It repaints when its monitor changes size or scale. It closes when its monitor disconnects. Open the overlay on that monitor again to restore its saved session.
+- Each kept drawing uses two display buffers, and all of them share a 256 MiB budget. For example, two 4K monitors at scale 1.5 fit. If a move would go over the budget, Wayscriber refuses it and the editor stays where it is.
+- Clean desktop captures, such as freeze, zoom, and screenshots, hide every kept drawing. They wait until each monitor confirms, then capture, then show the drawings again. A screenshot from another tool can include drawings on other monitors.
+- A legacy `pkill -SIGUSR1 wayscriber` shortcut keeps working, because only the daemon acts on that signal.
+- If the daemon started before you upgraded Wayscriber, restart the daemon before you turn the option on.
 
 ### `[ui.toolbar]` - Floating Toolbar
 

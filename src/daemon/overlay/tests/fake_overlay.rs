@@ -91,7 +91,11 @@ fn serve(ignore_term: bool) -> Result<Infallible> {
     }
 
     publish_ready_from_environment()?;
-    publish_signal_ready_from_environment()?;
+    let light_activation = fs::read(runtime_root()?.join(SESSION_INSTRUCTION))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|instruction| instruction["light_activation"] == true);
+    publish_signal_ready_from_environment(light_activation)?;
     while !matches!(
         active_generation_from_environment()?,
         ActiveGeneration::Enabled { .. }

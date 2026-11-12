@@ -4,7 +4,7 @@ use crate::daemon::protocol_v2;
 use crate::notification;
 use log::{info, warn};
 use std::time::{Duration, Instant};
-use wayland_client::{Connection, EventQueue};
+use wayland_client::{Connection, EventQueue, QueueHandle};
 
 use super::super::state::WaylandState;
 use super::runtime_wake::RuntimeWakeSource;
@@ -17,8 +17,8 @@ mod interaction;
 mod render;
 pub(in crate::backend::wayland) mod session_save;
 
-fn process_tray_actions_and_sync(state: &mut WaylandState) {
-    if process_tray_action(state) {
+fn process_tray_actions_and_sync(state: &mut WaylandState, qh: &QueueHandle<WaylandState>) {
+    if process_tray_action(state, qh) {
         state.sync_overlay_interactivity();
     }
 }
@@ -47,17 +47,23 @@ pub(super) fn run_event_loop(
     // Install signal authority before the first durable tray-action scan. An
     // action published before installation is found here; later publications
     // signal the installed listener and wake the shared runtime descriptor.
+    // The daemon delivers light-editor moves only to a child that advertises
+    // them. That support lasts for this child's lifetime: a named session at
+    // startup may return to per-output home sessions later, so the move
+    // handler checks current eligibility on every request.
+    let light_activation = state.config.ui.keep_light_overlays_on_all_outputs;
     let mut signals = match install_then_scan(
         || {
             let signals = setup_signal_handlers(runtime_wake.handle())?;
-            if let Err(error) = protocol_v2::publish_signal_ready_from_environment() {
+            if let Err(error) = protocol_v2::publish_signal_ready_from_environment(light_activation)
+            {
                 return Err(io::Error::other(format!(
                     "failed to publish overlay signal readiness: {error:#}"
                 )));
             }
             Ok(signals)
         },
-        || process_tray_actions_and_sync(state),
+        || process_tray_actions_and_sync(state, qh),
     ) {
         Ok(signals) => Some(signals),
         Err(err) => {
@@ -81,10 +87,10 @@ pub(super) fn run_event_loop(
     // Main event loop.
     while let Some(signal_state) = signals.as_mut() {
         if durable_action_retry_due(state, Instant::now()) {
-            process_tray_actions_and_sync(state);
+            process_tray_actions_and_sync(state, qh);
         }
         if let Some(failure) =
-            terminal_signal_failure(signal_state, || process_tray_actions_and_sync(state))
+            terminal_signal_failure(signal_state, || process_tray_actions_and_sync(state, qh))
         {
             loop_error = Some(failure);
             break;
@@ -324,6 +330,7 @@ fn event_loop_timeout(
         || state.toolbar_persistence_drain_ready())
     .then_some(Duration::ZERO);
     [
+        state.light_outputs.needs_render().then_some(Duration::ZERO),
         state.toolbar_drag_handoff_timeout(now),
         state.input_state.command_palette_repeat_timeout(now),
         state.input_state.font_picker_repeat_timeout(now),
@@ -456,6 +463,63 @@ mod tests {
         XdgExitContext, finalize_event_loop, install_then_scan, min_timeout,
         should_defer_xdg_unfocused_exit,
     };
+
+    #[test]
+    fn named_session_startup_advertises_the_opted_in_activation_protocol() {
+        use std::ffi::OsStr;
+        use std::fs;
+
+        use crate::backend::wayland::backend::runtime_wake::RuntimeWakeSource;
+        use crate::backend::wayland::handlers::test_support::HandlerFixture;
+        use crate::backend::wayland::session::SessionState;
+        use crate::config::Config;
+        use crate::daemon::protocol_v2;
+        use crate::env_vars;
+        use crate::session::SessionOptions;
+        use crate::{test_env, test_temp};
+
+        let mut config = Config::default();
+        config.ui.keep_light_overlays_on_all_outputs = true;
+        config.session.persist_transparent = true;
+        let mut fixture = HandlerFixture::with_layer_outputs(config, 2);
+        let temp = test_temp::tempdir().unwrap();
+        let mut options = SessionOptions::new(temp.path().join("sessions"), "activation-test");
+        options.set_named_file_target(temp.path().join("named.wayscriber-session"));
+        fixture.state.session = SessionState::new(Some(options));
+        fixture.state.input_state.should_exit = true;
+        let generation = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        test_env::with_env_vars(
+            &[
+                (env_vars::XDG_RUNTIME_DIR_ENV, Some(temp.path().as_os_str())),
+                (
+                    env_vars::OVERLAY_CHILD_GENERATION_ENV,
+                    Some(OsStr::new(generation)),
+                ),
+            ],
+            || {
+                protocol_v2::publish_ready_from_environment().unwrap();
+                let wake = RuntimeWakeSource::try_new().unwrap();
+                let qh = fixture.queue.handle();
+                let outcome = super::run_event_loop(
+                    &fixture.conn,
+                    &mut fixture.queue,
+                    &qh,
+                    &mut fixture.state,
+                    &wake,
+                );
+                assert!(outcome.loop_error.is_none());
+                let signal_proof = protocol_v2::command_root()
+                    .join("children")
+                    .join(format!("{generation}.signals"));
+                let record: serde_json::Value =
+                    serde_json::from_slice(&fs::read(signal_proof).unwrap()).unwrap();
+                assert_eq!(
+                    record["light_activation"], true,
+                    "the daemon must delegate activation after this overlay returns from a named session to per-output home sessions"
+                );
+            },
+        );
+    }
 
     #[test]
     fn runtime_deadlines_choose_the_earliest_deadline() {

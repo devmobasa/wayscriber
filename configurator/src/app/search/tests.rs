@@ -684,6 +684,8 @@ fn exact_general_ui_field_labels_match_general_ui_section() {
         "language",
         "simplified chinese",
         "focus loss",
+        "keep light-mode drawings on other monitors",
+        "keep_light_overlays_on_all_outputs",
         "show automatic guidance and tips",
         "onboarding",
         "tutorial",

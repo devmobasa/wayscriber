@@ -29,6 +29,26 @@ impl PointerHandler for WaylandState {
     ) {
         for event in events {
             let routed = self.route_input(&event.surface, event.position);
+            if self.light_output_session_pending() {
+                match event.kind {
+                    // Focus and hover must survive the load. Releases still
+                    // finish source contacts so they cannot hold off its save.
+                    PointerEventKind::Enter { .. }
+                    | PointerEventKind::Leave { .. }
+                    | PointerEventKind::Release { .. } => {}
+                    PointerEventKind::Motion { .. } => {
+                        if let Some((x, y)) = routed.screen {
+                            self.pointer
+                                .set_position((x.round() as i32, y.round() as i32));
+                        }
+                        // Track the cursor without sending motion to a drawing
+                        // interaction that still belongs to the source session.
+                        continue;
+                    }
+                    _ => continue,
+                }
+            }
+
             if debug_toolbar_drag_logging_enabled() {
                 debug!(
                     "pointer {:?}: seat={:?}, surface={}, on_toolbar={}, inline_active={}, pos=({:.1}, {:.1}), drag_active={}, toolbar_dragging={}, pointer_over_toolbar={}",

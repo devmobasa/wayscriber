@@ -84,6 +84,15 @@ impl WaylandState {
                 Instant::now(),
             );
             wl_surface.commit();
+            // Keep the old drawing mapped until its editor has submitted a
+            // canvas for this output. A configured surface or a loaded session
+            // alone does not prove a replacement frame was committed.
+            if plan.render_canvas
+                && !self.light_output_session_pending()
+                && let Some(output) = self.surface.current_output()
+            {
+                self.light_outputs.remove_output(&output);
+            }
             Ok::<(), anyhow::Error>(())
         })?;
         debug!("=== RENDER COMPLETE ===");

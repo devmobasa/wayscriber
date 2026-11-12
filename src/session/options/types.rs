@@ -225,6 +225,17 @@ impl SessionOptions {
     pub fn output_identity(&self) -> Option<&str> {
         self.output_identity.as_deref()
     }
+
+    /// Whether these options already target `identity`, meaning
+    /// [`Self::set_output_identity`] would report no change.
+    #[must_use]
+    pub fn targets_output_identity(&self, identity: Option<&str>) -> bool {
+        if !self.per_output {
+            return true;
+        }
+
+        self.output_identity.as_deref() == identity.map(sanitize_identifier).as_deref()
+    }
 }
 
 pub(crate) fn session_file_parent_dir(path: &Path) -> PathBuf {
