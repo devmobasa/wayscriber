@@ -1981,3 +1981,26 @@ fn config_draft_numeric_policy_accepts_bounds_and_rejects_invalid_values() {
         assert_eq!(draft.click_highlight_radius, radius);
     }
 }
+
+#[test]
+fn keeping_light_drawings_round_trips_through_the_editable_draft() {
+    let config = Config::default();
+    assert!(!config.ui.keep_light_overlays_on_all_outputs);
+    let mut draft = ConfigDraft::from_config(&config);
+    draft.set_toggle(ToggleField::UiKeepLightOverlaysOnAllOutputs, true);
+    let saved = draft.to_config(&config).unwrap();
+    assert!(saved.ui.keep_light_overlays_on_all_outputs);
+    let temp = test_temp::tempdir().unwrap();
+    let path = temp.path().join("config.toml");
+    let document = ConfigDocument::load_from_path(&path).unwrap();
+    document.save_with_backup(saved.clone()).unwrap();
+    assert!(
+        fs::read_to_string(&path)
+            .unwrap()
+            .contains("keep_light_overlays_on_all_outputs = true"),
+        "the checkbox saves the documented config key"
+    );
+    let reloaded = ConfigDocument::load_from_path(&path).unwrap();
+    assert!(reloaded.config().ui.keep_light_overlays_on_all_outputs);
+    assert!(ConfigDraft::from_config(&saved).ui_keep_light_overlays_on_all_outputs);
+}

@@ -8,6 +8,7 @@ use crate::daemon::protocol_v2::{
 };
 use crate::tray_action::TrayAction;
 use std::time::{Duration, Instant};
+use wayland_client::QueueHandle;
 
 const DURABLE_ACTION_RETRY_DELAY: Duration = Duration::from_millis(10);
 const MAX_DURABLE_ACTIONS_PER_DRAIN: usize = 64;
@@ -29,11 +30,14 @@ fn defer_durable_action(state: &mut WaylandState, action: Option<ClaimedAction>)
     state.durable_action_retry_at = Some(Instant::now() + DURABLE_ACTION_RETRY_DELAY);
 }
 
-pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
+pub(super) fn process_tray_action(
+    state: &mut WaylandState,
+    qh: &QueueHandle<WaylandState>,
+) -> bool {
     let actions = tray_action::take_pending_legacy_actions(DaemonControlProtocolMode::production());
     let mut processed = !actions.is_empty();
     for action in actions {
-        apply_tray_action(state, action);
+        apply_tray_action(state, action, qh);
     }
 
     let now = Instant::now();
@@ -63,7 +67,7 @@ pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
     for _ in 0..MAX_DURABLE_ACTIONS_PER_DRAIN {
         match daemon::try_claim_overlay_action() {
             Ok(ActionClaimOutcome::Claimed(action)) => {
-                apply_tray_action(state, action.action());
+                apply_tray_action(state, action.action(), qh);
                 processed = true;
                 match action.try_finish(true, None) {
                     Ok(ActionFinishOutcome::Complete) => {}
@@ -93,8 +97,9 @@ pub(super) fn process_tray_action(state: &mut WaylandState) -> bool {
     processed
 }
 
-fn apply_tray_action(state: &mut WaylandState, action: TrayAction) {
+fn apply_tray_action(state: &mut WaylandState, action: TrayAction, qh: &QueueHandle<WaylandState>) {
     match action {
+        TrayAction::MoveLightEditor => state.toggle_light_output_editor(qh),
         TrayAction::ToggleFreeze => {
             state.input_state.request_frozen_toggle();
             state.input_state.needs_redraw = true;

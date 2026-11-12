@@ -10,6 +10,7 @@ use smithay_client_toolkit::registry::RegistryState;
 use smithay_client_toolkit::seat::SeatState;
 use smithay_client_toolkit::seat::pointer_constraints::PointerConstraintsState;
 use smithay_client_toolkit::seat::relative_pointer::RelativePointerState;
+use smithay_client_toolkit::shell::wlr_layer::{Layer, LayerShell};
 use smithay_client_toolkit::shell::xdg::window::WindowDecorations;
 use smithay_client_toolkit::shell::xdg::{XdgShell, XdgSurface};
 use smithay_client_toolkit::shm::Shm;
@@ -33,6 +34,7 @@ use crate::capture::CaptureManager;
 use crate::config::Config;
 use crate::draw::TextMeasurer;
 use crate::input::InputState;
+use crate::input::state::ShellMode;
 use crate::onboarding::OnboardingStore;
 use crate::palette_recents::{PaletteRecentsStore, PaletteRecentsWriter};
 use crate::test_temp;
@@ -45,6 +47,7 @@ pub(in crate::backend::wayland) struct HandlerFixture {
     pub queue: EventQueue<WaylandState>,
     peer: UnixStream,
     direct_capture_manager: Option<u32>,
+    pending_callbacks: Vec<(u32, u32)>,
     _wake: RuntimeWakeSource,
     _runtime: Runtime,
     _data: TempDir,
@@ -53,6 +56,7 @@ pub(in crate::backend::wayland) struct HandlerFixture {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::backend::wayland) enum CaptureFixtureBackend {
     Unavailable,
+    LayerShell,
     Portal,
     ExtImageCopy,
     WlrScreencopy,
@@ -61,6 +65,10 @@ pub(in crate::backend::wayland) enum CaptureFixtureBackend {
 impl HandlerFixture {
     pub fn new(config: Config) -> Self {
         Self::new_inner(config, 0, CaptureFixtureBackend::Unavailable)
+    }
+
+    pub fn with_layer_outputs(config: Config, output_count: u32) -> Self {
+        Self::new_inner(config, output_count, CaptureFixtureBackend::LayerShell)
     }
 
     pub fn with_outputs(config: Config, output_count: u32) -> Self {
@@ -81,23 +89,7 @@ impl HandlerFixture {
                 let id = request.first_word();
                 match request.opcode {
                     1 => {
-                        let mut advertised = vec![
-                            (1, "wl_compositor", 6),
-                            (2, "wl_shm", 1),
-                            (3, "xdg_wm_base", 1),
-                        ];
-                        for index in 0..output_count {
-                            advertised.push((4 + index, "wl_output", 4));
-                        }
-
-                        if backend == CaptureFixtureBackend::ExtImageCopy {
-                            advertised.push((20, "ext_image_copy_capture_manager_v1", 1));
-                            advertised.push((21, "ext_output_image_capture_source_manager_v1", 1));
-                        }
-                        if backend == CaptureFixtureBackend::WlrScreencopy {
-                            advertised.push((22, "zwlr_screencopy_manager_v1", 3));
-                        }
-
+                        let advertised = advertised_globals(backend, output_count);
                         for (name, interface, version) in advertised {
                             let mut body = Vec::new();
                             body.extend_from_slice(&u32::to_ne_bytes(name));
@@ -124,7 +116,8 @@ impl HandlerFixture {
             compositor: CompositorState::bind(&globals, &qh).unwrap(),
             shm: Shm::bind(&globals, &qh).unwrap(),
             xdg_shell: Some(XdgShell::bind(&globals, &qh).unwrap()),
-            layer_shell: None,
+            layer_shell: (backend == CaptureFixtureBackend::LayerShell)
+                .then(|| LayerShell::bind(&globals, &qh).unwrap()),
             activation: None,
             pointer_constraints: PointerConstraintsState::bind(&globals, &qh),
             relative_pointer: RelativePointerState::bind(&globals, &qh),
@@ -140,9 +133,11 @@ impl HandlerFixture {
         let palette_recents =
             PaletteRecentsStore::load_from_path(data.path().join("palette_recents.toml"));
 
-        let screencopy_manager: Option<ZwlrScreencopyManagerV1> = (backend
-            == CaptureFixtureBackend::WlrScreencopy)
-            .then(|| globals.bind(&qh, 1..=3, ()).unwrap());
+        let screencopy_manager: Option<ZwlrScreencopyManagerV1> = matches!(
+            backend,
+            CaptureFixtureBackend::WlrScreencopy | CaptureFixtureBackend::LayerShell
+        )
+        .then(|| globals.bind(&qh, 1..=3, ()).unwrap());
         let ext_capture_manager: Option<ExtImageCopyCaptureManagerV1> = (backend
             == CaptureFixtureBackend::ExtImageCopy)
             .then(|| globals.bind(&qh, 1..=1, ()).unwrap());
@@ -201,13 +196,29 @@ impl HandlerFixture {
             #[cfg(feature = "tablet-input")]
             tablet_manager: None,
         });
+        if backend == CaptureFixtureBackend::LayerShell {
+            state.input_state.compositor_capabilities.layer_shell = true;
+            state.input_state.compositor_capabilities.shell_mode = ShellMode::LayerShell;
+        }
         let surface = state.protocol.compositor().create_surface(&qh);
-        let window = state.protocol.xdg_shell().unwrap().create_window(
-            surface,
-            WindowDecorations::None,
-            &qh,
-        );
-        state.surface.set_xdg_window(window);
+        if let Some(layer_shell) = state.protocol.layer_shell() {
+            let output = state.protocol.output().outputs().next();
+            let layer = layer_shell.create_layer_surface(
+                &qh,
+                surface,
+                Layer::Overlay,
+                Some("wayscriber-test"),
+                output.as_ref(),
+            );
+            state.surface.set_layer_surface(layer, output);
+        } else {
+            let window = state.protocol.xdg_shell().unwrap().create_window(
+                surface,
+                WindowDecorations::None,
+                &qh,
+            );
+            state.surface.set_xdg_window(window);
+        }
         state.surface.update_dimensions(1000, 800);
         state.surface.set_configured(true);
         state.input_state.update_screen_dimensions(1000, 800);
@@ -217,6 +228,7 @@ impl HandlerFixture {
             queue,
             peer,
             direct_capture_manager,
+            pending_callbacks: Vec::new(),
             _wake: wake,
             _runtime: runtime,
             _data: data,
@@ -314,12 +326,41 @@ impl HandlerFixture {
     /// Complete the callback requested by the real hidden-frame render path.
     /// This peer never connects to the user's compositor.
     pub fn complete_main_frame(&mut self) {
-        self.conn.flush().unwrap();
         let surface = self.state.surface.wl_surface().unwrap().id().protocol_id();
-        let callback = loop {
+        self.complete_surface_frame(surface);
+    }
+
+    pub fn requests_until_commit(&mut self, surface: u32) -> Vec<(u32, u32, Vec<u8>)> {
+        self.conn.flush().unwrap();
+        let mut requests = Vec::new();
+        loop {
             let request = read_request(&mut self.peer);
-            if request.object == surface && request.opcode == 3 {
-                break request.first_word();
+            let committed = request.object == surface && request.opcode == 6;
+            requests.push((request.object, request.opcode, request.payload));
+            if committed {
+                return requests;
+            }
+        }
+    }
+
+    pub fn complete_surface_frame(&mut self, surface: u32) {
+        self.conn.flush().unwrap();
+        let callback = if let Some(index) = self
+            .pending_callbacks
+            .iter()
+            .position(|(host, _)| *host == surface)
+        {
+            self.pending_callbacks.remove(index).1
+        } else {
+            loop {
+                let request = read_request(&mut self.peer);
+                if request.opcode == 3 && request.payload.len() == 4 {
+                    if request.object == surface {
+                        break request.first_word();
+                    }
+                    self.pending_callbacks
+                        .push((request.object, request.first_word()));
+                }
             }
         };
 
@@ -370,4 +411,34 @@ fn send(peer: &mut UnixStream, object: u32, opcode: u32, payload: &[u8]) {
     peer.write_all(&(((payload.len() + 8) as u32) << 16 | opcode).to_ne_bytes())
         .unwrap();
     peer.write_all(payload).unwrap();
+}
+
+fn advertised_globals(
+    backend: CaptureFixtureBackend,
+    output_count: u32,
+) -> Vec<(u32, &'static str, u32)> {
+    let mut advertised = vec![
+        (1, "wl_compositor", 6),
+        (2, "wl_shm", 1),
+        (3, "xdg_wm_base", 1),
+    ];
+    if backend == CaptureFixtureBackend::LayerShell {
+        advertised.push((23, "zwlr_layer_shell_v1", 4));
+    }
+    for index in 0..output_count {
+        advertised.push((4 + index, "wl_output", 4));
+    }
+
+    if backend == CaptureFixtureBackend::ExtImageCopy {
+        advertised.push((20, "ext_image_copy_capture_manager_v1", 1));
+        advertised.push((21, "ext_output_image_capture_source_manager_v1", 1));
+    }
+    if matches!(
+        backend,
+        CaptureFixtureBackend::WlrScreencopy | CaptureFixtureBackend::LayerShell
+    ) {
+        advertised.push((22, "zwlr_screencopy_manager_v1", 3));
+    }
+
+    advertised
 }

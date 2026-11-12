@@ -82,6 +82,7 @@ pub(super) fn maybe_render(
     consecutive_render_failures: &mut u32,
     last_render_time: &mut Option<Instant>,
 ) -> Option<anyhow::Error> {
+    state.render_light_outputs(qh);
     // Render if configured and needs redraw, but only if no frame callback pending.
     // This throttles rendering to display refresh rate (when vsync is enabled).
     // When VSync is disabled, enforce a minimum frame time to prevent CPU spinning.

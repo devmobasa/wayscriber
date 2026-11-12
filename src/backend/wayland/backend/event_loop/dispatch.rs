@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use wayland_client::EventQueue;
+use wayland_client::{EventQueue, QueueHandle};
 
 use super::super::super::state::WaylandState;
 use super::super::helpers::dispatch_with_timeout;
@@ -27,6 +27,7 @@ fn route_woken_persistence(state: &mut impl PersistenceWakeDrain) {
 fn route_woken_sources(
     state: &mut WaylandState,
     signals: &mut OverlaySignalState,
+    qh: &QueueHandle<WaylandState>,
 ) -> Result<(), anyhow::Error> {
     route_woken_persistence(state);
     state.drain_font_catalog_prewarm();
@@ -37,7 +38,7 @@ fn route_woken_sources(
         state.input_state.should_exit = true;
     }
     if signals.take_tray_action_requested() {
-        process_tray_actions_and_sync(state);
+        process_tray_actions_and_sync(state, qh);
     }
     if let Some(failure) = signals.failure() {
         return Err(anyhow::anyhow!("overlay signal listener failed: {failure}"));
@@ -52,11 +53,12 @@ pub(super) fn dispatch_events(
     signals: &mut OverlaySignalState,
     animation_timeout: Option<Duration>,
 ) -> Result<(), anyhow::Error> {
+    let qh = event_queue.handle();
     dispatch_with_timeout(
         event_queue,
         state,
         runtime_wake,
-        |state| route_woken_sources(state, signals),
+        |state| route_woken_sources(state, signals, &qh),
         animation_timeout,
     )
     .map_err(|e| anyhow::anyhow!("Wayland event queue error: {e}"))

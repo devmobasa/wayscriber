@@ -35,7 +35,9 @@ pub(crate) use wire::{DaemonRequestV2, DaemonRuntimeRecordV2, EffectKind};
 
 #[cfg(test)]
 mod tests;
-pub(crate) use action::{ActionClaimOutcome, ActionFinishOutcome, ActionJournal, ClaimedAction};
+pub(crate) use action::{
+    ActionClaimOutcome, ActionFinishOutcome, ActionJournal, ClaimedAction, PreparedAction,
+};
 
 use crate::paths;
 

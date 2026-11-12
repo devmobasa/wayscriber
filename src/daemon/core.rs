@@ -38,7 +38,8 @@ use super::overlay::lifecycle::OverlayLifecycle;
 use super::overlay::{ShowOutcome, overlay_start_backoff_reason};
 use super::protocol_v2::{
     ActionJournal, BootClock, BootDeadline, BootDeadlineSource, CommandOwner, CommandQueueWatcher,
-    DaemonControlProtocolMode, DaemonRuntimeRecordV2, EffectKind, FinalEffect, ProtocolToken,
+    DaemonControlProtocolMode, DaemonRuntimeRecordV2, EffectKind, FinalEffect, PreparedAction,
+    ProtocolToken,
 };
 use super::tray::{TrayRuntime, start_system_tray};
 #[cfg(feature = "tray")]
@@ -114,6 +115,9 @@ pub struct Daemon {
     v2_command_watcher: Option<CommandQueueWatcher>,
     v2_deadline_source: Option<BootDeadlineSource>,
     v2_action_journal: Option<ActionJournal>,
+    /// Light-editor moves sent to the current overlay. Any it never claimed
+    /// are abandoned before the next overlay starts.
+    light_editor_moves: Vec<PreparedAction>,
     pending_action_admission_retry: Vec<TrayAction>,
     action_admission_retry_at: Option<BootDeadline>,
     #[cfg(unix)]
@@ -157,6 +161,7 @@ impl Daemon {
             v2_command_watcher: None,
             v2_deadline_source: None,
             v2_action_journal: None,
+            light_editor_moves: Vec::new(),
             pending_action_admission_retry: Vec::new(),
             action_admission_retry_at: None,
             #[cfg(unix)]
@@ -175,6 +180,12 @@ impl Daemon {
         daemon.backend_runner = Some(backend_runner);
 
         daemon
+    }
+
+    /// Installs the action journal that [`Daemon::run`] would open.
+    #[cfg(test)]
+    pub(super) fn install_action_journal_for_test(&mut self, journal: ActionJournal) {
+        self.v2_action_journal = Some(journal);
     }
 
     pub fn set_freeze_on_show(&mut self, enabled: bool) {

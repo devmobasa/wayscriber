@@ -36,6 +36,7 @@ impl ConfigDraft {
         config.ui.show_capabilities_warning = self.ui_show_capabilities_warning;
         config.ui.show_onboarding_hints = self.ui_show_onboarding_hints;
         config.ui.show_shape_size_readout = self.ui_show_shape_size_readout;
+        config.ui.keep_light_overlays_on_all_outputs = self.ui_keep_light_overlays_on_all_outputs;
         config.ui.context_menu.enabled = self.ui_context_menu_enabled;
         let preferred_output = self.ui_preferred_output.trim();
         config.ui.preferred_output = if preferred_output.is_empty() {

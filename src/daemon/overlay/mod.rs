@@ -55,6 +55,9 @@ impl Daemon {
                 info!("Showing overlay");
                 self.show_overlay()?.require_shown()?;
             }
+            OverlayState::Visible if self.overlay.light_activation() => {
+                self.request_light_editor_move()?;
+            }
             OverlayState::Visible => {
                 info!("Hiding overlay");
                 self.hide_overlay()?;
@@ -71,6 +74,7 @@ impl Daemon {
             return Ok(ShowOutcome::Shown);
         }
 
+        self.abandon_unclaimed_light_editor_moves();
         let request = self.take_pending_launch();
         if let Some(runner) = self.backend_runner.clone() {
             self.clear_overlay_spawn_error();

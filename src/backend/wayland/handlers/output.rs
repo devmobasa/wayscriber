@@ -83,6 +83,7 @@ impl OutputHandler for WaylandState {
         _qh: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
+        self.light_outputs.remove_output(&output);
         let previous_output = self.surface.current_output();
         self.surface.clear_output(&output);
         // SCTK 0.20 calls this before removing the output from OutputState, so

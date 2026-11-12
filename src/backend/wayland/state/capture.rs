@@ -387,7 +387,7 @@ impl WaylandState {
         self.accept_capture_submission(submission, ImageOperationKind::CanvasExport);
     }
 
-    fn canvas_export_snapshot(&self) -> CanvasExportSnapshot {
+    pub(in crate::backend::wayland) fn canvas_export_snapshot(&self) -> CanvasExportSnapshot {
         let (origin_x, origin_y) = self.board_view_offset();
         CanvasExportSnapshot {
             viewport: CanvasExportViewport {

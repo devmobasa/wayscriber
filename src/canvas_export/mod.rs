@@ -18,6 +18,7 @@ pub use pdf::{
     BoardPdfExportSnapshot, PdfPageExportSnapshot, PdfPageLayout, PdfPageMetadata,
     render_board_pdf, resolve_pdf_page_layout,
 };
+pub(crate) use png::render_canvas_surface;
 pub use png::{BoardExportSnapshot, CanvasExportSnapshot, CanvasExportViewport, render_canvas_png};
 pub(crate) use region::{
     CanvasRegionExportSnapshot, CanvasRegionSource, render_canvas_region_pixels,

@@ -139,6 +139,31 @@ mod tests {
         signals.stop_and_join().unwrap();
     }
 
+    /// `pkill -SIGUSR1 wayscriber` reaches the daemon and its overlay child
+    /// alike. Only the daemon may act on it, or one shortcut press would act
+    /// twice.
+    #[cfg(unix)]
+    #[test]
+    fn raw_daemon_toggle_signal_is_ignored_by_the_overlay() {
+        let _guard = unix_signals::test_signal_lock();
+        let wake = RuntimeWakeSource::try_new().unwrap();
+        let mut signals = setup_signal_handlers(wake.handle()).unwrap();
+
+        unix_signals::deliver_signal_for_test(SIGUSR1);
+        wait_for_wake(&wake);
+
+        assert!(
+            !signals.exit_requested(),
+            "a raw toggle signal does not close the overlay"
+        );
+        assert!(
+            !signals.take_tray_action_requested(),
+            "a raw toggle signal does not claim daemon actions"
+        );
+        assert!(signals.failure().is_none());
+        signals.stop_and_join().unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn listener_failure_is_published_before_overlay_owner_wake() {

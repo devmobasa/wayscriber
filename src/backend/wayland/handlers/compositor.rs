@@ -20,6 +20,10 @@ impl Dispatch<wl_callback::WlCallback, MainSurfaceFrameCallback> for WaylandStat
         let wl_callback::Event::Done { callback_data } = event else {
             unreachable!("wl_callback has no event other than done");
         };
+        if state.light_outputs.complete_frame(data) {
+            state.begin_ready_overlay_capture(qh);
+            return;
+        }
         if !state.surface.is_surface(&data.surface) {
             return;
         }
@@ -43,6 +47,9 @@ impl CompositorHandler for WaylandState {
         surface: &wl_surface::WlSurface,
         new_factor: i32,
     ) {
+        if self.light_outputs.scale_surface(surface, new_factor) {
+            return;
+        }
         if !self.surface.is_surface(surface) {
             return;
         }

@@ -715,14 +715,26 @@ fn command_palette_and_shortcut_capture_block_shared_toolbar_events() {
 fn a_click_right_after_restoring_the_strip_is_dropped() {
     let mut input_state = make_test_input_state();
     input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(true));
-    assert!(!toolbar_event_dropped(&input_state, Instant::now()));
+    assert!(!toolbar_event_dropped(
+        &input_state,
+        &ToolbarEvent::Undo,
+        false,
+        Instant::now()
+    ));
 
     input_state.apply_toolbar_event(ToolbarEvent::SetTopMinimized(false));
 
     let now = Instant::now();
-    assert!(toolbar_event_dropped(&input_state, now));
+    assert!(toolbar_event_dropped(
+        &input_state,
+        &ToolbarEvent::Undo,
+        false,
+        now
+    ));
     assert!(!toolbar_event_dropped(
         &input_state,
+        &ToolbarEvent::Undo,
+        false,
         now + Duration::from_secs(1)
     ));
 }

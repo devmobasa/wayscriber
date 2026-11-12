@@ -44,6 +44,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |app| app.draft.ui_reduced_motion,
             Message::UiReducedMotionChanged,
         )
+        .switch_row(
+            tr("Keep light-mode drawings on other monitors"),
+            tr("Leaves drawings visible and clicks passing through when the editor moves. In light mode, the daemon toggle moves the editor to the focused monitor instead of hiding it. Requires layer-shell, multi-monitor focus, and separate saved transparent sessions per output. Takes effect when the overlay next opens."),
+            |app| app.draft.ui_keep_light_overlays_on_all_outputs,
+            |value| Message::ToggleChanged(ToggleField::UiKeepLightOverlaysOnAllOutputs, value),
+        )
         .entry_row(
             tr("Preferred output (GNOME fallback)"),
             |app| app.draft.ui_preferred_output.clone(),

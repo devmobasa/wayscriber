@@ -5,6 +5,7 @@ use std::{env, thread};
 use crate::daemon::protocol_v2;
 use crate::daemon::protocol_v2::ProtocolToken;
 use crate::domain::Language;
+use crate::tray_action::TrayAction;
 use crate::{env_vars, i18n, paths, process_broker, test_env, test_temp};
 
 use super::*;
@@ -523,5 +524,58 @@ fn preparation_error_keeps_only_the_token_and_does_not_replay_options() {
                 .environment
                 .contains(&(crate::RESUME_SESSION_ENV.into(), Some("on".into())))
         );
+    });
+}
+
+#[test]
+fn a_light_capable_child_moves_its_editor_through_the_action_journal() {
+    with_fixture(false, |daemon, _, root| {
+        fs::write(
+            root.join(fake_overlay::SESSION_INSTRUCTION),
+            br#"{"light_activation":true}"#,
+        )
+        .unwrap();
+        let token = daemon.instance_token.clone();
+
+        let _receipt = show(daemon, root);
+        // The journal lives under the command root the child records created.
+        let journal = protocol_v2::ActionJournal::open().unwrap();
+        daemon.install_action_journal_for_test(journal.clone());
+        assert!(
+            daemon.overlay.light_activation(),
+            "capability is learned from the child's identity-checked readiness"
+        );
+
+        daemon.toggle_overlay().unwrap();
+        daemon.update_overlay_process_state().unwrap();
+        assert_eq!(
+            daemon.overlay.state(),
+            OverlayState::Visible,
+            "a move does not retire the child"
+        );
+        let claimed = journal
+            .claim_next(&token, |_, _| Ok(true))
+            .unwrap()
+            .expect("the move waits in the action journal");
+        assert_eq!(claimed.action(), TrayAction::MoveLightEditor);
+        claimed.finish(true, None).unwrap();
+
+        daemon.toggle_overlay().unwrap();
+        daemon.hide_overlay().unwrap();
+        assert_eq!(
+            daemon.overlay.state(),
+            OverlayState::Hidden,
+            "explicit hide still retires every overlay"
+        );
+        let _receipt = show(daemon, root);
+        assert!(
+            journal
+                .claim_next(&token, |_, _| Ok(true))
+                .unwrap()
+                .is_none(),
+            "a move the exited overlay never claimed cannot close the next one"
+        );
+
+        daemon.hide_overlay().unwrap();
     });
 }

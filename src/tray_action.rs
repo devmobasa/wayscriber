@@ -27,6 +27,10 @@ pub(crate) enum TrayAction {
     LightDrawToggle,
     LightDrawOn,
     LightDrawOff,
+    /// Moves a light-mode editor to the compositor-chosen output and keeps
+    /// the drawing it leaves visible. The daemon sends it only to an overlay
+    /// that advertised support, in place of hiding that overlay.
+    MoveLightEditor,
 }
 
 impl TrayAction {
@@ -43,9 +47,13 @@ impl TrayAction {
             TrayAction::LightDrawToggle => "light_draw_toggle",
             TrayAction::LightDrawOn => "light_draw_on",
             TrayAction::LightDrawOff => "light_draw_off",
+            TrayAction::MoveLightEditor => "move_light_editor",
         }
     }
 
+    /// Parses an action a user or legacy queue file may request. The daemon
+    /// alone decides when to move a light-mode editor, so that action has no
+    /// name here.
     pub(crate) fn parse(action: &str) -> Option<Self> {
         match action {
             "toggle_freeze" => Some(TrayAction::ToggleFreeze),
@@ -238,6 +246,15 @@ mod tests {
         }
 
         assert_eq!(TrayAction::parse("not-a-tray-action"), None);
+    }
+
+    #[test]
+    fn light_editor_moves_cannot_be_requested_by_name() {
+        assert_eq!(
+            TrayAction::parse(TrayAction::MoveLightEditor.as_str()),
+            None,
+            "only the daemon may decide to move the editor instead of hiding it"
+        );
     }
 
     #[test]

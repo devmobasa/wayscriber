@@ -54,6 +54,7 @@ pub(crate) struct OverlayChildOwner {
     phase: OverlayChildPhase,
     generation: Option<String>,
     owned: Option<OwnedOverlayChild>,
+    light_activation: bool,
 }
 
 impl Default for OverlayChildOwner {
@@ -62,6 +63,7 @@ impl Default for OverlayChildOwner {
             phase: OverlayChildPhase::Stopped,
             generation: None,
             owned: None,
+            light_activation: false,
         }
     }
 }
@@ -70,6 +72,10 @@ impl OverlayChildOwner {
     #[cfg(test)]
     pub(crate) fn phase(&self) -> OverlayChildPhase {
         self.phase
+    }
+
+    pub(crate) fn light_activation(&self) -> bool {
+        self.owned.is_some() && self.light_activation
     }
 
     pub(crate) fn display_pid(&self) -> Option<u32> {
@@ -227,6 +233,7 @@ impl OverlayChildOwner {
                     {
                         bail!("overlay signal-authority proof does not match readiness");
                     }
+                    self.light_activation = signals.light_activation == Some(true);
                     let enabled = OverlayEnabledRecord {
                         protocol_version: record.protocol_version,
                         generation: record.generation.clone(),
@@ -374,6 +381,8 @@ struct OverlayActiveRecord {
     generation: String,
     pid: u32,
     process_start_ticks: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    light_activation: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -578,6 +587,7 @@ pub(crate) fn publish_ready_from_environment() -> Result<()> {
         generation: generation.to_owned(),
         pid: process::id(),
         process_start_ticks,
+        light_activation: None,
     };
     let active_bytes = super::wire::canonical_json(&active, 1024)?;
     durable_io::write_atomic(
@@ -612,7 +622,7 @@ pub(crate) fn publish_ready_from_environment() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn publish_signal_ready_from_environment() -> Result<()> {
+pub(crate) fn publish_signal_ready_from_environment(light_activation: bool) -> Result<()> {
     let Some(generation) = env::var_os(env_vars::OVERLAY_CHILD_GENERATION_ENV) else {
         return Ok(());
     };
@@ -621,16 +631,18 @@ pub(crate) fn publish_signal_ready_from_environment() -> Result<()> {
         .ok_or_else(|| anyhow!("overlay generation is not UTF-8"))?;
     super::wire::validate_id(generation)?;
     let active_bytes = super::linux::read_bounded_regular_file(&active_path(generation), 1024)?;
-    let active: OverlayActiveRecord = super::wire::parse_canonical_json(&active_bytes, 1024)?;
+    let mut active: OverlayActiveRecord = super::wire::parse_canonical_json(&active_bytes, 1024)?;
     if active.pid != process::id()
         || active.process_start_ticks != super::linux::current_process_start_ticks()?
         || active.generation != generation
     {
         bail!("cannot publish signal readiness for a different overlay child");
     }
+    active.light_activation = light_activation.then_some(true);
+    let signals_bytes = super::wire::canonical_json(&active, 1024)?;
     durable_io::write_atomic(
         &signals_path(generation),
-        &active_bytes,
+        &signals_bytes,
         AtomicWriteOptions {
             overwrite: OverwriteMode::CreateNew,
             permissions: PermissionPolicy::FixedMode(0o600),
@@ -799,6 +811,7 @@ mod tests {
             generation: record.generation.clone(),
             pid: record.pid,
             process_start_ticks: record.process_start_ticks,
+            light_activation: None,
         };
         let bytes = super::super::wire::canonical_json(&signals, 1024).unwrap();
         fs::write(signals_path(&record.generation), bytes).unwrap();
@@ -834,6 +847,7 @@ mod tests {
             generation: generation.clone(),
             pid: u32::MAX,
             process_start_ticks: 1,
+            light_activation: None,
         };
         let bytes = super::super::wire::canonical_json(&active, 1024).unwrap();
         fs::write(active_path(&generation), bytes).unwrap();

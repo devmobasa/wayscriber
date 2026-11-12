@@ -25,6 +25,10 @@ impl TouchHandler for WaylandState {
         id: i32,
         position: (f64, f64),
     ) {
+        if self.light_output_session_pending() {
+            return;
+        }
+
         let routed = self.route_input(&surface, position);
         if !self
             .pointer
@@ -69,6 +73,10 @@ impl TouchHandler for WaylandState {
         id: i32,
         position: (f64, f64),
     ) {
+        if self.light_output_session_pending() {
+            return;
+        }
+
         let Some((surface, target)) = self.pointer.touch_position(id, position) else {
             return;
         };

@@ -130,6 +130,7 @@ impl WaylandState {
         Self {
             protocol: globals,
             surface: SurfaceState::new(placement),
+            light_outputs: Default::default(),
             toolbar: ToolbarSurfaceManager::new(),
             toolbar_chrome,
             toolbar_drag: super::super::toolbar::ToolbarDrag::new(),

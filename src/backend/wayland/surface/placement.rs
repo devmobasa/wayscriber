@@ -13,7 +13,7 @@ enum XdgFrozenFullscreenState {
     Active,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(in crate::backend::wayland) struct XdgFrozenFullscreen {
     state: XdgFrozenFullscreenState,
     requested_at: Option<Instant>,
@@ -57,7 +57,7 @@ impl XdgFrozenFullscreen {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(in crate::backend::wayland) struct SurfacePlacement {
     preferred_output_identity: Option<String>,
     xdg_fullscreen: bool,

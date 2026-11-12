@@ -147,6 +147,11 @@ pub struct UiConfig {
     #[serde(default = "default_multi_monitor_enabled")]
     pub multi_monitor_enabled: bool,
 
+    /// Keep drawing-only, click-through overlays on outputs left in light mode.
+    /// Requires layer-shell and persisted, separate transparent output sessions.
+    #[serde(default)]
+    pub keep_light_overlays_on_all_outputs: bool,
+
     /// Show active output identity in the status bar. It appears only while
     /// two or more outputs are connected, unless `active_output_badge_always`
     /// is set.
@@ -224,6 +229,7 @@ impl Default for UiConfig {
             show_shape_size_readout: default_show_shape_size_readout(),
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
+            keep_light_overlays_on_all_outputs: false,
             active_output_badge: default_active_output_badge(),
             active_output_badge_always: false,
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),

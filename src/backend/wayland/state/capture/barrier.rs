@@ -129,7 +129,7 @@ impl OverlayCaptureBarrier {
             && active.main_surface_phase == MainSurfaceCapturePhase::AwaitingFrame
         {
             active.main_surface_phase = MainSurfaceCapturePhase::Ready;
-            active.main_surface_frame_deadline = None;
+            // Keep the deadline until every passive output also acknowledges.
             log::info!(
                 "capture.preflight id={} component=main-surface reason={:?} phase=frame-callback elapsed_ms={}",
                 active.generation,
@@ -202,7 +202,7 @@ impl OverlayCaptureBarrier {
 
     fn frame_timeout(&self, now: Instant) -> Option<Duration> {
         let active = self.active?;
-        if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame {
+        if active.main_surface_phase == MainSurfaceCapturePhase::AwaitingRender {
             return None;
         }
         active
@@ -213,7 +213,7 @@ impl OverlayCaptureBarrier {
     fn take_frame_timeout(&mut self, now: Instant) -> Option<OverlayCaptureBarrierTimeout> {
         let active = self.active?;
         let deadline = active.main_surface_frame_deadline?;
-        if active.main_surface_phase != MainSurfaceCapturePhase::AwaitingFrame || now < deadline {
+        if active.main_surface_phase == MainSurfaceCapturePhase::AwaitingRender || now < deadline {
             return None;
         }
         self.active = None;
@@ -361,7 +361,13 @@ impl WaylandState {
         }
     }
 
-    fn begin_ready_overlay_capture(&mut self, qh: &QueueHandle<Self>) {
+    pub(in crate::backend::wayland) fn begin_ready_overlay_capture(
+        &mut self,
+        qh: &QueueHandle<Self>,
+    ) {
+        if !self.light_outputs.ready_for_capture() {
+            return;
+        }
         let barrier_id = self.suppression.barrier.active_generation();
         let Some(reason) = self.suppression.barrier.take_ready() else {
             return;

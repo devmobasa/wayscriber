@@ -49,6 +49,10 @@ impl Default for OverlayLifecycle {
 }
 
 impl OverlayLifecycle {
+    pub(in crate::daemon) fn light_activation(&self) -> bool {
+        self.child.light_activation()
+    }
+
     pub(in crate::daemon) fn state(&self) -> OverlayState {
         self.state
     }

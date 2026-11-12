@@ -65,6 +65,13 @@ impl WaylandState {
         if pending.is_empty() {
             return;
         }
+        if self.light_output_session_pending() {
+            if pending.up {
+                self.commit_stylus_up();
+            }
+            return;
+        }
+
         // Modal ownership is captured at frame entry. A tip-up action may
         // close help during this same frame, but barrel presses queued while
         // help was visible must still not dispatch behind it.

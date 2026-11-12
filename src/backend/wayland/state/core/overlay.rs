@@ -221,6 +221,7 @@ impl WaylandState {
             );
             return false;
         }
+        self.light_outputs.set_suppressed(true);
         self.sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::OverlaySuppression);
@@ -240,6 +241,7 @@ impl WaylandState {
             );
             return;
         }
+        self.light_outputs.set_suppressed(false);
         self.sync_overlay_interactivity();
         self.buffer_damage
             .mark_all_full(FullDamageReason::OverlayRestored);
