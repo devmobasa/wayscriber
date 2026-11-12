@@ -5,6 +5,7 @@ mod lifecycle;
 mod popups;
 mod subprocess;
 mod support;
+mod user_theme;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,7 +17,7 @@ use gtk4::gdk::Display;
 use crate::toolbar_gtk::css;
 
 use super::super::{FeedbackSender, TopBar};
-use crate::toolbar_gtk::view::install_capture_css_provider;
+use crate::toolbar_gtk::view::{install_capture_css_provider, install_toolbar_css_provider};
 use gtk4::prelude::*;
 use subprocess::{CHILD_ENV, Outcome};
 use support::*;
@@ -52,13 +53,7 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
         .unwrap()
         .set_gtk_xft_dpi(96 * 1024);
     let display = Display::default().unwrap();
-    let application = gtk4::CssProvider::new();
-    application.load_from_string(&css::stylesheet(1.0));
-    gtk4::style_context_add_provider_for_display(
-        &display,
-        &application,
-        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
+    let application = install_toolbar_css_provider(1.0);
     let capture = install_capture_css_provider(1.0);
     let user = gtk4::CssProvider::new();
     let errors = Rc::new(RefCell::new(Vec::new()));
@@ -97,6 +92,7 @@ fn capture_roots_override_user_css_and_restore_rendered_pixels() {
         case if case.starts_with("menu") => popups::menu(&user, case),
         "lifecycle" => lifecycle::apply_paths(&user),
         case if case.starts_with("popup-") => popups::popup(&user, case),
+        "user-theme" => user_theme::strip(&user),
         case => roots(&user, case),
     }
     assert!(
