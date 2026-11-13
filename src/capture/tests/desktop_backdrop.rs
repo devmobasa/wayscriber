@@ -1,4 +1,5 @@
 use crate::capture::desktop_backdrop::desktop_backdrop_from_argb;
+use crate::capture::desktop_raster::UniformDesktopDensity;
 use crate::capture::{
     DesktopBackdropCaptureRequest, DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
     ImageOperationKind,
@@ -15,8 +16,39 @@ fn request(
         logical_height,
         scale,
         geometry,
+        outputs: Vec::new(),
+        uniform_density: UniformDesktopDensity::Highest,
         operation: ImageOperationKind::BoardPdfExport,
     }
+}
+
+/// A request for `active` that lists every output of the layout.
+fn layout_request(
+    active: DesktopBackdropOutputGeometry,
+    outputs: &[DesktopBackdropOutputGeometry],
+    uniform_density: UniformDesktopDensity,
+) -> DesktopBackdropCaptureRequest {
+    DesktopBackdropCaptureRequest {
+        outputs: outputs.to_vec(),
+        uniform_density,
+        ..request(
+            active.logical_width,
+            active.logical_height,
+            1,
+            DesktopBackdropGeometry::from_outputs(active, outputs),
+        )
+    }
+}
+
+/// Opaque gray pixels whose value is the column index.
+fn columns(width: u8, height: u8) -> Vec<u8> {
+    let mut data = Vec::new();
+    for _ in 0..height {
+        for x in 0..width {
+            data.extend_from_slice(&[x, x, x, 255]);
+        }
+    }
+    data
 }
 
 #[test]
@@ -222,6 +254,102 @@ fn desktop_backdrop_rejects_a_screenshot_whose_layout_size_does_not_match() {
     assert!(
         err.to_string().contains("does not match output layout"),
         "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn desktop_backdrop_crops_cosmic_logical_composite_at_its_own_density() {
+    // COSMIC resizes each output to its logical size: a 2x and a 1.5x output
+    // side by side give an 8x2 image of the 8x2 logical desktop.
+    let outputs = [output(0, 0, 4, 2, 8, 4), output(4, 0, 4, 2, 6, 3)];
+    let cosmic = layout_request(
+        outputs[1],
+        &outputs,
+        UniformDesktopDensity::HighestOrLogical,
+    );
+
+    let result = desktop_backdrop_from_argb(columns(8, 2), 8, 2, &cosmic).expect("COSMIC image");
+
+    assert_eq!(
+        (result.width, result.height),
+        (4, 2),
+        "the crop keeps the image's density instead of resampling to 6x3"
+    );
+    assert_eq!(
+        (
+            result.logical_to_image_scale_x,
+            result.logical_to_image_scale_y
+        ),
+        (1.0, 1.0),
+        "the PDF scales the logical-size crop onto the page"
+    );
+    assert_eq!(
+        result.data.as_ref(),
+        &columns(8, 2)
+            .chunks(8 * 4)
+            .flat_map(|row| row[4 * 4..].to_vec())
+            .collect::<Vec<_>>()[..],
+        "only the right output's columns 4..8 remain"
+    );
+}
+
+#[test]
+fn desktop_backdrop_rejects_a_logical_size_image_outside_cosmic() {
+    let outputs = [output(0, 0, 4, 2, 8, 4), output(4, 0, 4, 2, 6, 3)];
+    let other = layout_request(outputs[1], &outputs, UniformDesktopDensity::Highest);
+
+    let error = desktop_backdrop_from_argb(columns(8, 2), 8, 2, &other)
+        .expect_err("an area screenshot can have the logical desktop's size");
+
+    assert!(
+        error.to_string().contains("does not match output layout"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn desktop_backdrop_crops_a_highest_density_desktop_image() {
+    // KWin's CaptureWorkspace and grim draw the whole desktop at the highest
+    // output density: 16x4 for this 8x2 logical desktop. The packed layout
+    // would be 12x4.
+    let outputs = [output(0, 0, 4, 2, 8, 4), output(4, 0, 4, 2, 4, 2)];
+    let request = layout_request(outputs[1], &outputs, UniformDesktopDensity::Highest);
+
+    let result = desktop_backdrop_from_argb(columns(16, 4), 16, 4, &request).expect("uniform");
+
+    assert_eq!(
+        (result.width, result.height),
+        (8, 4),
+        "the 1x output's 4x2 logical area at density 2"
+    );
+    assert_eq!(
+        (
+            result.logical_to_image_scale_x,
+            result.logical_to_image_scale_y
+        ),
+        (2.0, 2.0),
+        "the PDF scales the density-2 crop onto the page"
+    );
+    assert_eq!(
+        &result.data[..8 * 4],
+        &columns(16, 1)[8 * 4..],
+        "the crop starts at the active output's left edge"
+    );
+}
+
+#[test]
+fn desktop_backdrop_rejects_an_image_that_fits_packed_and_uniform_layouts_differently() {
+    // A smaller low-density output overlaps the high-density desktop bounds,
+    // so packed and uniform screenshots have the same 16x8 size.
+    let outputs = [output(0, 0, 8, 4, 16, 8), output(2, 1, 4, 2, 4, 2)];
+    let request = layout_request(outputs[1], &outputs, UniformDesktopDensity::Highest);
+
+    let error = desktop_backdrop_from_argb(vec![0; 16 * 8 * 4], 16, 8, &request)
+        .expect_err("the active output's crop is ambiguous");
+
+    assert!(
+        error.to_string().contains("fits two output layouts"),
+        "unexpected error: {error}"
     );
 }
 

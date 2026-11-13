@@ -8,6 +8,7 @@
 - `pipeline.rs` owns capture, image delivery, document delivery, save, and clipboard flows.
 - `dependencies.rs` provides traits for testable capture sources, savers, and clipboard implementations.
 - `sources/` chooses compositor-specific or portal capture sources.
+- `desktop_backdrop.rs` crops the active output out of a full-desktop screenshot for PDF desktop backgrounds. `desktop_raster.rs` holds the packed-versus-uniform density rules it shares with Zoom and Freeze: a uniform screenshot is accepted at the highest output density, and at density 1 only on COSMIC, whose portal combines outputs at their logical size.
 
 ## Invariants
 - Preserve cancellation semantics; user cancellation is not a hard failure.

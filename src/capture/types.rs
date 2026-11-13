@@ -3,6 +3,7 @@
 use std::time::Duration;
 use std::{error, io};
 
+use crate::capture::desktop_raster::UniformDesktopDensity;
 use crate::capture::file::FileSaveConfig;
 use crate::i18n::tr;
 use std::fmt;
@@ -407,6 +408,11 @@ pub struct DesktopBackdropCaptureRequest {
     pub logical_height: u32,
     pub scale: i32,
     pub geometry: Option<DesktopBackdropGeometry>,
+    /// Every output in the layout `geometry` came from, for a screenshot drawn
+    /// at one density. Empty when unknown, which allows only packed screenshots.
+    pub outputs: Vec<DesktopBackdropOutputGeometry>,
+    /// Densities a uniform screenshot may have on this desktop.
+    pub uniform_density: UniformDesktopDensity,
     pub operation: ImageOperationKind,
 }
 

@@ -87,6 +87,14 @@ impl WaylandState {
         DesktopBackdropGeometry::from_outputs(active, &outputs)
     }
 
+    /// Every output's logical and native geometry, or `None` while any
+    /// output's metadata is incomplete.
+    pub(in crate::backend::wayland) fn desktop_output_geometries(
+        &self,
+    ) -> Option<Vec<DesktopBackdropOutputGeometry>> {
+        self.portal_output_geometries_excluding(None)
+    }
+
     /// Densities a uniform full-desktop screenshot may have here. Only
     /// COSMIC's portal is known to combine outputs at density 1.
     pub(in crate::backend::wayland) fn uniform_desktop_density(&self) -> UniformDesktopDensity {
