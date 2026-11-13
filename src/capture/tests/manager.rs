@@ -10,6 +10,7 @@ use tokio::time::{Duration, sleep};
 
 use crate::backend::wayland::RuntimeWakeSource;
 use crate::capture::dependencies::{CaptureDependencies, CaptureFuture, CaptureSource};
+use crate::capture::desktop_raster::UniformDesktopDensity;
 use crate::capture::file::FileSaveConfig;
 use crate::capture::manager::{CaptureManager, CapturePoll, CaptureSubmitError};
 use crate::capture::types::{
@@ -427,6 +428,8 @@ async fn desktop_backdrop_completion_releases_the_manager_for_pdf_delivery() {
                 screenshot_width: Some(100),
                 screenshot_height: Some(100),
             }),
+            outputs: Vec::new(),
+            uniform_density: UniformDesktopDensity::Highest,
             operation: ImageOperationKind::BoardPdfExport,
         })
         .unwrap();

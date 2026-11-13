@@ -252,6 +252,8 @@ impl WaylandState {
             logical_height: self.surface.height(),
             scale: self.surface.scale(),
             geometry: Some(geometry),
+            outputs: self.desktop_output_geometries()?,
+            uniform_density: self.uniform_desktop_density(),
             operation,
         };
         Some((request, layout_context))

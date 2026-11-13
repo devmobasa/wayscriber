@@ -2,7 +2,9 @@ use smithay_client_toolkit::output::OutputInfo;
 
 use super::super::WaylandState;
 use crate::backend::wayland::frozen_geometry::OutputGeometry;
+use crate::capture::desktop_raster::UniformDesktopDensity;
 use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
+use crate::input::state::DesktopEnvironment;
 use wayland_client::protocol::wl_output;
 
 pub(super) fn desktop_backdrop_output_geometry_from_info(
@@ -85,6 +87,26 @@ impl WaylandState {
         DesktopBackdropGeometry::from_outputs(active, &outputs)
     }
 
+    /// Every output's logical and native geometry, or `None` while any
+    /// output's metadata is incomplete.
+    pub(in crate::backend::wayland) fn desktop_output_geometries(
+        &self,
+    ) -> Option<Vec<DesktopBackdropOutputGeometry>> {
+        self.portal_output_geometries_excluding(None)
+    }
+
+    /// Densities a uniform full-desktop screenshot may have here. Only
+    /// COSMIC's portal is known to combine outputs at density 1.
+    pub(in crate::backend::wayland) fn uniform_desktop_density(&self) -> UniformDesktopDensity {
+        if self.input_state.compositor_capabilities.desktop_environment
+            == DesktopEnvironment::Cosmic
+        {
+            UniformDesktopDensity::HighestOrLogical
+        } else {
+            UniformDesktopDensity::Highest
+        }
+    }
+
     fn portal_output_geometries_excluding(
         &self,
         exclude: Option<&wl_output::WlOutput>,
@@ -128,10 +150,12 @@ impl WaylandState {
         let backdrop_geometry = self.desktop_backdrop_geometry_excluding(exclude);
         let known_output_count = self.known_output_count_excluding(exclude);
         let portal_outputs = self.portal_output_geometries_excluding(exclude);
+        let uniform_desktop_density = self.uniform_desktop_density();
         let geometry = geometry.map(|geo| {
             geo.with_desktop_backdrop_geometry(backdrop_geometry)
                 .with_known_output_count(known_output_count)
                 .with_portal_outputs(portal_outputs)
+                .with_uniform_desktop_density(uniform_desktop_density)
         });
         self.frozen.set_active_geometry(geometry.clone());
         self.zoom.set_active_geometry(geometry);

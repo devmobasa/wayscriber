@@ -1,111 +1,10 @@
 //! Verified mapping from a portal desktop raster into one output's native pixels.
+use crate::capture::desktop_raster::{LogicalDesktop, RasterCrop};
 use crate::capture::{CaptureError, DesktopBackdropOutputGeometry};
 use crate::screen_pixels::ScreenImage;
 
 use super::frozen_geometry::OutputGeometry;
 use super::portal_capture::crop_argb;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Crop {
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-}
-
-#[derive(Debug)]
-struct LogicalDesktop {
-    x: i64,
-    y: i64,
-    width: u32,
-    height: u32,
-    density_min: f64,
-    density_max: f64,
-}
-
-impl LogicalDesktop {
-    fn from_outputs(outputs: &[DesktopBackdropOutputGeometry]) -> Option<Self> {
-        let first = outputs.first()?;
-        let (mut x, mut y) = (i64::from(first.logical_x), i64::from(first.logical_y));
-        let (mut right, mut bottom) = (x, y);
-        // KWin CaptureWorkspace uses at least 1x, then the maximum output scale.
-        let (mut density_min, mut density_max) = (1.0_f64, 1.0_f64);
-
-        for output in outputs {
-            if output.logical_width == 0
-                || output.logical_height == 0
-                || output.physical_width == 0
-                || output.physical_height == 0
-            {
-                return None;
-            }
-
-            x = x.min(i64::from(output.logical_x));
-            y = y.min(i64::from(output.logical_y));
-            right = right.max(i64::from(output.logical_x) + i64::from(output.logical_width));
-            bottom = bottom.max(i64::from(output.logical_y) + i64::from(output.logical_height));
-
-            // xdg-output rounds logical sizes to integers. Intersect both axes'
-            // scale intervals instead of treating wl_output's integer scale as native density.
-            let lower = (f64::from(output.physical_width)
-                / (f64::from(output.logical_width) + 0.5))
-                .max(f64::from(output.physical_height) / (f64::from(output.logical_height) + 0.5));
-            let upper = (f64::from(output.physical_width)
-                / (f64::from(output.logical_width) - 0.5))
-                .min(f64::from(output.physical_height) / (f64::from(output.logical_height) - 0.5));
-            if lower > upper {
-                return None;
-            }
-
-            density_min = density_min.max(lower);
-            density_max = density_max.max(upper);
-        }
-
-        Some(Self {
-            x,
-            y,
-            width: u32::try_from(right.checked_sub(x)?).ok()?,
-            height: u32::try_from(bottom.checked_sub(y)?).ok()?,
-            density_min,
-            density_max,
-        })
-    }
-
-    fn crop(&self, geometry: &OutputGeometry, raster: (u32, u32)) -> Option<Crop> {
-        let (width, height) = raster;
-        if self.width == 0 || self.height == 0 || width == 0 || height == 0 {
-            return None;
-        }
-
-        let lower = ((f64::from(width) - 0.5) / f64::from(self.width))
-            .max((f64::from(height) - 0.5) / f64::from(self.height));
-        let upper = ((f64::from(width) + 0.5) / f64::from(self.width))
-            .min((f64::from(height) + 0.5) / f64::from(self.height));
-        if lower > upper || lower > self.density_max || upper < self.density_min {
-            return None;
-        }
-
-        let x = i64::from(geometry.logical_x).checked_sub(self.x)?;
-        let y = i64::from(geometry.logical_y).checked_sub(self.y)?;
-        let right = x.checked_add(i64::from(geometry.logical_width))?;
-        let bottom = y.checked_add(i64::from(geometry.logical_height))?;
-        if x < 0 || y < 0 || right > i64::from(self.width) || bottom > i64::from(self.height) {
-            return None;
-        }
-
-        let map_x =
-            |edge: i64| (edge as f64 * f64::from(width) / f64::from(self.width)).round() as u32;
-        let map_y =
-            |edge: i64| (edge as f64 * f64::from(height) / f64::from(self.height)).round() as u32;
-
-        Some(Crop {
-            x: map_x(x),
-            y: map_y(y),
-            width: map_x(right).checked_sub(map_x(x))?,
-            height: map_y(bottom).checked_sub(map_y(y))?,
-        })
-    }
-}
 
 pub(super) fn crop_portal_raster(
     data: &[u8],
@@ -133,7 +32,7 @@ pub(super) fn crop_portal_raster(
 
     let packed = geometry
         .portal_crop_origin(width, height)
-        .map(|(x, y)| Crop {
+        .map(|(x, y)| RasterCrop {
             x,
             y,
             width: target.0,
@@ -145,10 +44,20 @@ pub(super) fn crop_portal_raster(
         .portal_outputs
         .as_deref()
         .and_then(LogicalDesktop::from_outputs);
+    let active = DesktopBackdropOutputGeometry {
+        logical_x: geometry.logical_x,
+        logical_y: geometry.logical_y,
+        logical_width: geometry.logical_width,
+        logical_height: geometry.logical_height,
+        physical_width: target.0,
+        physical_height: target.1,
+    };
     let uniform = desktop
         .as_ref()
         .filter(|_| geometry.active_output_is_in_portal_snapshot())
-        .and_then(|desktop| desktop.crop(geometry, (width, height)));
+        .and_then(|desktop| {
+            desktop.crop(&active, (width, height), geometry.uniform_desktop_density)
+        });
     let crop = match (packed, uniform) {
         (Some(packed), Some(uniform)) if packed != uniform => None,
         (Some(crop), _) | (_, Some(crop)) => Some(crop),
@@ -156,11 +65,12 @@ pub(super) fn crop_portal_raster(
     };
 
     log::info!(
-        "portal.raster image={}x{} packed_expected={:?} logical_desktop={:?} crop={:?} target={:?}",
+        "portal.raster image={}x{} packed_expected={:?} logical_desktop={:?} uniform_density={:?} crop={:?} target={:?}",
         width,
         height,
         geometry.screenshot_size,
         desktop,
+        geometry.uniform_desktop_density,
         crop,
         target,
     );
@@ -178,7 +88,7 @@ pub(super) fn crop_portal_raster(
     resample(data, (crop.width, crop.height), target)
 }
 
-fn contains_crop(raster: (u32, u32), crop: Crop) -> bool {
+fn contains_crop(raster: (u32, u32), crop: RasterCrop) -> bool {
     crop.width > 0
         && crop.height > 0
         && crop
@@ -269,6 +179,7 @@ fn resample(
 #[cfg(test)]
 mod tests {
     use crate::capture::DesktopBackdropGeometry;
+    use crate::capture::desktop_raster::UniformDesktopDensity;
 
     use super::*;
     use wayland_client::protocol::wl_output;
@@ -307,6 +218,14 @@ mod tests {
         .with_known_output_count(Some(outputs.len() as u32))
     }
 
+    fn cosmic_geometry(
+        active: DesktopBackdropOutputGeometry,
+        outputs: &[DesktopBackdropOutputGeometry],
+    ) -> OutputGeometry {
+        geometry(active, outputs)
+            .with_uniform_desktop_density(UniformDesktopDensity::HighestOrLogical)
+    }
+
     #[test]
     fn negative_vertical_and_gapped_layout_maps_both_crop_edges() {
         let outputs = [
@@ -314,17 +233,6 @@ mod tests {
             output(-8, -14, (2, 4), (4, 8)),
         ];
         let geo = geometry(outputs[1], &outputs);
-        let desktop = LogicalDesktop::from_outputs(&outputs).unwrap();
-        assert_eq!((desktop.width, desktop.height), (8, 10));
-        assert_eq!(
-            desktop.crop(&geo, (16, 20)),
-            Some(Crop {
-                x: 4,
-                y: 12,
-                width: 4,
-                height: 8
-            })
-        );
         let mut data = 0xff000000_u32.to_ne_bytes().repeat(16 * 20);
         for y in 12..20 {
             for x in 4..8 {
@@ -418,28 +326,61 @@ mod tests {
     }
 
     #[test]
-    fn fractional_uniform_raster_accepts_integer_logical_rounding() {
-        // 1.3x output with xdg-output's rounded 1477x831 logical dimensions.
+    fn cosmic_logical_composite_zooms_the_scaled_output() {
+        // Issue #442: two 3840x2160 outputs at 1.75 and 1.5. COSMIC's portal
+        // resizes each to its logical size, giving a 4754x1440 image.
         let outputs = [
-            output(0, 0, (1477, 831), (1920, 1080)),
-            output(1477, 0, (1280, 720), (1280, 720)),
+            output(0, 0, (2194, 1234), (3840, 2160)),
+            output(2194, 0, (2560, 1440), (3840, 2160)),
         ];
-        let geo = geometry(outputs[1], &outputs);
-        let desktop = LogicalDesktop::from_outputs(&outputs).unwrap();
+        let raster = vec![0; 4754 * 1440 * 4];
+        let geo = geometry(outputs[0], &outputs);
+        assert_eq!(
+            geo.screenshot_size,
+            Some((7680, 2469)),
+            "the packed size from the report's log"
+        );
 
-        let crop = desktop.crop(&geo, (3584, 1080)).unwrap();
+        assert!(
+            crop_portal_raster(&raster, 4754, 1440, &geo).is_err(),
+            "density 1 is only trusted from COSMIC's portal"
+        );
+
+        let image = crop_portal_raster(&raster, 4754, 1440, &cosmic_geometry(outputs[0], &outputs))
+            .unwrap();
 
         assert_eq!(
-            crop,
-            Crop {
-                x: 1920,
-                y: 0,
-                width: 1664,
-                height: 936
-            }
+            (image.width, image.height),
+            (3840, 2160),
+            "the logical crop is resampled to the output's native pixels"
         );
-        assert_eq!(desktop.crop(&geo, (4000, 1200)), None);
-        assert_eq!(desktop.crop(&geo, (3584, 1100)), None);
+    }
+
+    #[test]
+    fn logical_composite_resamples_only_the_active_output() {
+        let outputs = [output(0, 0, (4, 2), (8, 4)), output(4, 0, (4, 2), (6, 3))];
+        let left = 0xff102030_u32.to_ne_bytes();
+        let right = 0xff405060_u32.to_ne_bytes();
+        let mut pixels = Vec::new();
+        for _ in 0..2 {
+            for x in 0..8 {
+                pixels.extend_from_slice(if x < 4 { &left } else { &right });
+            }
+        }
+
+        let image =
+            crop_portal_raster(&pixels, 8, 2, &cosmic_geometry(outputs[1], &outputs)).unwrap();
+
+        assert_eq!(
+            (image.width, image.height),
+            (6, 3),
+            "the crop is resampled to the 1.5x output's native size"
+        );
+        assert_eq!(
+            image.data,
+            right.repeat(6 * 3),
+            "no pixel of the left output reaches the right one"
+        );
     }
 
     #[test]
@@ -473,12 +414,5 @@ mod tests {
         let geo = geometry(outputs[0], &outputs);
         assert!(crop_portal_raster(&[0; 16], 3840, 1440, &geo).is_err());
         assert!(crop_portal_raster(&vec![0; 1920 * 720 * 4], 1920, 720, &geo).is_err());
-        assert!(
-            LogicalDesktop::from_outputs(&[
-                output(i32::MIN, 0, (1, 1), (1, 1)),
-                output(i32::MAX, 0, (1, 1), (1, 1))
-            ])
-            .is_none()
-        );
     }
 }

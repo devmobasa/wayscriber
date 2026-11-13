@@ -3,9 +3,10 @@ use std::sync::Arc;
 use tokio::task;
 
 use crate::capture::dependencies::CaptureDependencies;
+use crate::capture::desktop_raster::{LogicalDesktop, RasterCrop};
 use crate::capture::types::{
     CaptureError, CaptureType, DesktopBackdropCaptureRequest, DesktopBackdropCaptureResult,
-    DesktopBackdropGeometry,
+    DesktopBackdropGeometry, DesktopBackdropOutputGeometry,
 };
 use crate::image_decode::{DecodeLimits, decode_rgba, format_from_mime_or_bytes};
 
@@ -73,16 +74,26 @@ pub(crate) fn desktop_backdrop_from_argb(
     validate_argb_buffer(&data, width, height)?;
     let (geometry, expected_width, expected_height) = expected_backdrop_dimensions(request)?;
 
-    if let Some(expected_layout_size) = geometry.screenshot_size()
-        && (width, height) != expected_layout_size
-    {
-        return Err(CaptureError::ImageError(format!(
-            "Desktop backdrop capture {width}x{height} does not match output layout {}x{}",
-            expected_layout_size.0, expected_layout_size.1
-        )));
-    }
+    let raster = (width, height);
+    let packed = packed_crop(geometry, raster, (expected_width, expected_height));
+    let uniform = uniform_crop(geometry, request, raster);
+    log::info!(
+        "desktop_backdrop.raster image={width}x{height} packed_expected={:?} uniform_density={:?} packed={:?} uniform={uniform:?}",
+        geometry.screenshot_size(),
+        request.uniform_density,
+        packed.as_ref().ok(),
+    );
+    let crop = match (packed, uniform) {
+        (Ok(packed), Some(uniform)) if packed != uniform => {
+            return Err(CaptureError::ImageError(format!(
+                "Desktop backdrop capture {width}x{height} fits two output layouts with different active output crops"
+            )));
+        }
+        (Ok(crop), _) | (Err(_), Some(crop)) => crop,
+        (Err(error), None) => return Err(error),
+    };
 
-    if width == expected_width && height == expected_height {
+    if crop == full_raster(raster) {
         return desktop_backdrop_result(
             data,
             width,
@@ -92,33 +103,106 @@ pub(crate) fn desktop_backdrop_from_argb(
         );
     }
 
-    let (origin_x, origin_y) = geometry.physical_origin().ok_or_else(|| {
-        CaptureError::ImageError(
-            "Active output crop origin is unavailable for desktop capture".to_string(),
-        )
-    })?;
-
     let cropped = crop_argb_strict(
         &data,
         width,
         height,
-        origin_x,
-        origin_y,
-        expected_width,
-        expected_height,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
     )
     .ok_or_else(|| {
         CaptureError::ImageError(format!(
-            "Desktop backdrop capture {width}x{height} does not contain active output crop {origin_x},{origin_y} {expected_width}x{expected_height}"
+            "Desktop backdrop capture {width}x{height} does not contain active output crop {},{} {}x{}",
+            crop.x, crop.y, crop.width, crop.height
         ))
     })?;
     desktop_backdrop_result(
         cropped,
-        expected_width,
-        expected_height,
+        crop.width,
+        crop.height,
         geometry.logical_width,
         geometry.logical_height,
     )
+}
+
+/// Locates the active output in a packed screenshot, which keeps each output
+/// at its native density.
+fn packed_crop(
+    geometry: DesktopBackdropGeometry,
+    raster: (u32, u32),
+    expected: (u32, u32),
+) -> Result<RasterCrop, CaptureError> {
+    let (width, height) = raster;
+    if let Some(layout) = geometry.screenshot_size()
+        && raster != layout
+    {
+        return Err(CaptureError::ImageError(format!(
+            "Desktop backdrop capture {width}x{height} does not match output layout {}x{}",
+            layout.0, layout.1
+        )));
+    }
+
+    if raster == expected {
+        return Ok(full_raster(raster));
+    }
+
+    let (x, y) = geometry.physical_origin().ok_or_else(|| {
+        CaptureError::ImageError(
+            "Active output crop origin is unavailable for desktop capture".to_string(),
+        )
+    })?;
+    let crop = RasterCrop {
+        x,
+        y,
+        width: expected.0,
+        height: expected.1,
+    };
+    let fits = |start: u32, length: u32, limit: u32| {
+        start
+            .checked_add(length)
+            .is_some_and(|end| start < limit && end <= limit)
+    };
+    if !fits(crop.x, crop.width, width) || !fits(crop.y, crop.height, height) {
+        return Err(CaptureError::ImageError(format!(
+            "Desktop backdrop capture {width}x{height} does not contain active output crop {x},{y} {}x{}",
+            expected.0, expected.1
+        )));
+    }
+
+    Ok(crop)
+}
+
+/// Locates the active output in a screenshot of the whole logical desktop at
+/// one density, when `request` lists every output and allows that density.
+fn uniform_crop(
+    geometry: DesktopBackdropGeometry,
+    request: &DesktopBackdropCaptureRequest,
+    raster: (u32, u32),
+) -> Option<RasterCrop> {
+    let active = DesktopBackdropOutputGeometry {
+        logical_x: geometry.logical_x,
+        logical_y: geometry.logical_y,
+        logical_width: geometry.logical_width,
+        logical_height: geometry.logical_height,
+        physical_width: geometry.physical_width?,
+        physical_height: geometry.physical_height?,
+    };
+    if !request.outputs.contains(&active) {
+        return None;
+    }
+
+    LogicalDesktop::from_outputs(&request.outputs)?.crop(&active, raster, request.uniform_density)
+}
+
+fn full_raster(raster: (u32, u32)) -> RasterCrop {
+    RasterCrop {
+        x: 0,
+        y: 0,
+        width: raster.0,
+        height: raster.1,
+    }
 }
 
 fn expected_backdrop_dimensions(

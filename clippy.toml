@@ -17,4 +17,4 @@ disallowed-methods = [
 
 # Product and library names that docs may write without backticks. The `..`
 # keeps Clippy's default list.
-doc-valid-idents = ["GLib", "HarfBuzz", "HiDPI", "JetBrains", "MSBuild", "StatusNotifierItem", "VSync", ".."]
+doc-valid-idents = ["GLib", "HarfBuzz", "HiDPI", "JetBrains", "KWin", "MSBuild", "StatusNotifierItem", "VSync", ".."]

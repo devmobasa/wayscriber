@@ -285,6 +285,7 @@ mod tests {
     };
     use crate::backend::wayland::frozen::FrozenState;
     use crate::backend::wayland::portal_task::PORTAL_CAPTURE_TIMEOUT;
+    use crate::capture::desktop_raster::UniformDesktopDensity;
     use crate::input::state::test_support::make_test_input_state;
 
     fn image(byte: u8) -> FrozenImage {
@@ -310,6 +311,7 @@ mod tests {
             screenshot_size: None,
             known_output_count: None,
             portal_outputs: None,
+            uniform_desktop_density: UniformDesktopDensity::default(),
         }
     }
 

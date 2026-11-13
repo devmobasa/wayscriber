@@ -1,5 +1,6 @@
 use wayland_client::protocol::wl_output;
 
+use crate::capture::desktop_raster::UniformDesktopDensity;
 use crate::capture::{DesktopBackdropGeometry, DesktopBackdropOutputGeometry};
 
 /// Geometry and scale details for the active output, used for cropping fallback captures.
@@ -29,6 +30,8 @@ pub struct OutputGeometry {
     pub(super) known_output_count: Option<u32>,
     /// Complete, sorted logical/native output snapshot for uniform portal rasters.
     pub(super) portal_outputs: Option<Vec<DesktopBackdropOutputGeometry>>,
+    /// Densities a uniform portal raster may have on this desktop.
+    pub(super) uniform_desktop_density: UniformDesktopDensity,
 }
 
 impl OutputGeometry {
@@ -121,6 +124,7 @@ impl OutputGeometry {
             screenshot_size: None,
             known_output_count: None,
             portal_outputs: None,
+            uniform_desktop_density: UniformDesktopDensity::default(),
         })
     }
 }
@@ -517,6 +521,11 @@ impl OutputGeometry {
             });
             outputs
         });
+        self
+    }
+
+    pub(super) fn with_uniform_desktop_density(mut self, density: UniformDesktopDensity) -> Self {
+        self.uniform_desktop_density = density;
         self
     }
 
