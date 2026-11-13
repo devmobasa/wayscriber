@@ -9,6 +9,7 @@
 
 pub(crate) mod band_cut;
 pub mod clipboard;
+pub(crate) mod desktop_raster;
 pub mod file;
 pub(crate) mod png;
 #[cfg(feature = "portal")]

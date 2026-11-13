@@ -478,6 +478,8 @@ pub struct CompositorCapabilities {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DesktopEnvironment {
     Gnome,
+    /// COSMIC, whose screenshot portal combines several outputs at their logical size.
+    Cosmic,
     #[default]
     Unknown,
 }

@@ -287,15 +287,35 @@ fn apply_initial_mode(
 }
 
 fn desktop_environment_from_env() -> DesktopEnvironment {
-    let values = [
-        env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default(),
-        env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default(),
-        env::var(DESKTOP_SESSION_ENV).unwrap_or_default(),
-    ];
-    if values
-        .iter()
-        .any(|value| value.to_ascii_uppercase().contains("GNOME"))
-    {
+    desktop_environment_from_values(
+        &env::var(XDG_CURRENT_DESKTOP_ENV).unwrap_or_default(),
+        &[
+            env::var(XDG_SESSION_DESKTOP_ENV).unwrap_or_default(),
+            env::var(DESKTOP_SESSION_ENV).unwrap_or_default(),
+        ],
+    )
+}
+
+/// Classifies the session. COSMIC needs `XDG_CURRENT_DESKTOP` to start with
+/// `COSMIC`, as COSMIC's session sets it: xdg-desktop-portal picks its
+/// backend from those names in order, and the screenshot rules rely on
+/// COSMIC's portal.
+fn desktop_environment_from_values(
+    current_desktop: &str,
+    session_values: &[String],
+) -> DesktopEnvironment {
+    let leads_with_cosmic = current_desktop
+        .split(':')
+        .next()
+        .is_some_and(|name| name.trim().eq_ignore_ascii_case("COSMIC"));
+    let mentions_gnome = [current_desktop]
+        .into_iter()
+        .chain(session_values.iter().map(String::as_str))
+        .any(|value| value.to_ascii_uppercase().contains("GNOME"));
+
+    if leads_with_cosmic {
+        DesktopEnvironment::Cosmic
+    } else if mentions_gnome {
         DesktopEnvironment::Gnome
     } else {
         DesktopEnvironment::Unknown
@@ -305,6 +325,44 @@ fn desktop_environment_from_env() -> DesktopEnvironment {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desktop_environment_names_gnome_and_cosmic_sessions() {
+        let detect = |current: &str, session: [&str; 2]| {
+            desktop_environment_from_values(current, &session.map(str::to_string))
+        };
+
+        assert_eq!(
+            detect("ubuntu:GNOME", ["ubuntu", "ubuntu"]),
+            DesktopEnvironment::Gnome,
+            "GNOME is still found anywhere in the session variables"
+        );
+        assert_eq!(
+            detect("COSMIC", ["COSMIC", "gnome"]),
+            DesktopEnvironment::Cosmic,
+            "the portal follows XDG_CURRENT_DESKTOP, not DESKTOP_SESSION"
+        );
+        assert_eq!(
+            detect("COSMIC:GNOME", ["", ""]),
+            DesktopEnvironment::Cosmic,
+            "the first desktop name chooses the portal backend"
+        );
+        assert_eq!(
+            detect("GNOME:COSMIC", ["", ""]),
+            DesktopEnvironment::Gnome,
+            "a later COSMIC name does not choose COSMIC's portal"
+        );
+        assert_eq!(
+            detect("KDE", ["plasma", "cosmic"]),
+            DesktopEnvironment::Unknown,
+            "COSMIC outside XDG_CURRENT_DESKTOP does not count"
+        );
+        assert_eq!(
+            detect("not-cosmic", ["", ""]),
+            DesktopEnvironment::Unknown,
+            "COSMIC must be a whole desktop name"
+        );
+    }
 
     #[test]
     fn runtime_ui_start_failure_remains_visible_to_toolbar_frontends() {

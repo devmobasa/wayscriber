@@ -480,6 +480,7 @@ mod tests {
         ScreenAcquisitionCompletion, ScreenAcquisitionOutcome, ScreenAcquisitionOwner,
         ScreenAcquisitionRegistry,
     };
+    use crate::capture::desktop_raster::UniformDesktopDensity;
     use crate::input::state::test_support::make_test_input_state;
 
     fn verified_output_geometry(
@@ -750,6 +751,7 @@ mod tests {
             screenshot_size: None,
             known_output_count: None,
             portal_outputs: None,
+            uniform_desktop_density: UniformDesktopDensity::default(),
         }
     }
 
