@@ -277,13 +277,100 @@ fn saved_line_snapshot(with_tool_state: bool) -> SessionSnapshot {
     }
 }
 
-fn wayscriber_cmd() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_wayscriber"))
+#[path = "support/wayscriber.rs"]
+mod wayscriber_process;
+use wayscriber_process::{in_isolated_process, wayscriber_cmd};
+
+#[test]
+fn named_session_command_does_not_touch_inherited_user_directories() {
+    const SENTINEL: &str = "WAYSCRIBER_TEST_SENTINEL_HOME";
+    let temp = TempDir::new().expect("isolated named session");
+    if let Some(sentinel) = env::var_os(SENTINEL) {
+        let selected = temp.path().join("lecture-04.wayscriber-session");
+        let mut options = SessionOptions::new(temp.path().to_path_buf(), "display");
+        options.persist_transparent = true;
+        options.restore_tool_state = true;
+        // Configured fixture saves have no named-catalog side effect.
+        session::save_snapshot(&saved_line_snapshot(true), &options).expect("save named fixture");
+        fs::rename(options.session_file_path(), &selected).expect("place named fixture");
+
+        let mut command = wayscriber_cmd(&temp);
+        for key in [
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_STATE_HOME",
+            "XDG_CACHE_HOME",
+            "XDG_RUNTIME_DIR",
+        ] {
+            let value = command
+                .get_envs()
+                .find(|(name, _)| *name == key)
+                .and_then(|(_, value)| value);
+            assert!(
+                value.is_some_and(|value| Path::new(value).starts_with(temp.path())),
+                "{key} must be explicitly inside the test directory"
+            );
+        }
+        run_command(
+            command
+                .args(["--clear-tool-state", "--session-file"])
+                .arg(&selected),
+        )
+        .success()
+        .stdout_contains("Cleared saved tool state");
+        let catalog = temp.path().join("data/wayscriber/sessions.json");
+        let contents =
+            fs::read_to_string(catalog).expect("named command writes its isolated catalog");
+        assert!(
+            contents.contains("lecture-04.wayscriber-session"),
+            "catalog must record the named session"
+        );
+        assert_eq!(
+            fs::read_dir(sentinel).expect("read sentinel").count(),
+            0,
+            "inherited user directories must remain empty"
+        );
+        return;
+    }
+
+    let sentinel = temp.path().join("sentinel");
+    fs::create_dir(&sentinel).expect("create sentinel user directory");
+    let mut child = Command::new(env::current_exe().expect("CLI test executable"));
+    child
+        .args([
+            "named_session_command_does_not_touch_inherited_user_directories",
+            "--exact",
+            "--test-threads=1",
+        ])
+        .env(SENTINEL, &sentinel);
+    for key in [
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_RUNTIME_DIR",
+    ] {
+        child.env(key, &sentinel);
+    }
+    let output = child.output().expect("run sentinel child");
+    assert!(
+        output.status.success(),
+        "sentinel child failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("1 passed;"),
+        "the sentinel child must actually run the regression"
+    );
 }
 
 #[test]
 fn wayscriber_help_prints_usage() {
-    run_command(wayscriber_cmd().arg("--help"))
+    let temp = TempDir::new().expect("isolated application directories");
+    run_command(wayscriber_cmd(&temp).arg("--help"))
         .success()
         .code(0)
         .stdout_contains("Screen annotation tool for Wayland compositors")
@@ -295,8 +382,9 @@ fn wayscriber_help_prints_usage() {
 
 #[test]
 fn wayscriber_version_prints_binary_name() {
+    let temp = TempDir::new().expect("isolated application directories");
     for arg in ["--version", "-V"] {
-        run_command(wayscriber_cmd().arg(arg))
+        run_command(wayscriber_cmd(&temp).arg(arg))
             .success()
             .code(0)
             .stdout_starts_with("wayscriber ")
@@ -306,6 +394,7 @@ fn wayscriber_version_prints_binary_name() {
 
 #[test]
 fn wayscriber_runtime_capabilities_reports_portal_feature() {
+    let temp = TempDir::new().expect("isolated application directories");
     let expected = runtime_capabilities::render_runtime_capabilities(
         runtime_capabilities::current_runtime_capabilities(),
     );
@@ -316,14 +405,15 @@ fn wayscriber_runtime_capabilities_reports_portal_feature() {
         )),
         "the rendered report must lead with the portal capability"
     );
-    run_command(wayscriber_cmd().arg(RUNTIME_CAPABILITIES_FLAG))
+    run_command(wayscriber_cmd(&temp).arg(RUNTIME_CAPABILITIES_FLAG))
         .success()
         .stdout_eq(&expected);
 }
 
 #[test]
 fn bare_usage_mentions_freeze_on_show() {
-    run_command(&mut wayscriber_cmd())
+    let temp = TempDir::new().expect("isolated application directories");
+    run_command(&mut wayscriber_cmd(&temp))
         .success()
         .code(0)
         .stdout_contains("--freeze-on-show")
@@ -332,22 +422,32 @@ fn bare_usage_mentions_freeze_on_show() {
 
 #[test]
 fn clustered_help_and_version_exit_zero_without_runtime_startup() {
-    run_command(wayscriber_cmd().env_remove(WAYLAND_DISPLAY_ENV).arg("-dh"))
-        .success()
-        .code(0)
-        .stdout_contains("Screen annotation tool for Wayland compositors");
+    let temp = TempDir::new().expect("isolated application directories");
+    run_command(
+        wayscriber_cmd(&temp)
+            .env_remove(WAYLAND_DISPLAY_ENV)
+            .arg("-dh"),
+    )
+    .success()
+    .code(0)
+    .stdout_contains("Screen annotation tool for Wayland compositors");
 
-    run_command(wayscriber_cmd().env_remove(WAYLAND_DISPLAY_ENV).arg("-aV"))
-        .success()
-        .code(0)
-        .stdout_starts_with("wayscriber ");
+    run_command(
+        wayscriber_cmd(&temp)
+            .env_remove(WAYLAND_DISPLAY_ENV)
+            .arg("-aV"),
+    )
+    .success()
+    .code(0)
+    .stdout_starts_with("wayscriber ");
 }
 
 #[cfg(unix)]
 #[test]
 fn internal_broker_entry_rejects_descriptors_that_are_not_broker_sockets() {
+    let temp = TempDir::new().expect("isolated application directories");
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_FD", "3")
             .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_SHUTDOWN_FD", "4")
             .env("WAYSCRIBER_INTERNAL_PROCESS_BROKER_TOKEN", "a".repeat(64)),
@@ -358,11 +458,12 @@ fn internal_broker_entry_rejects_descriptors_that_are_not_broker_sockets() {
 
 #[test]
 fn invalid_arguments_exit_two() {
+    let temp = TempDir::new().expect("isolated application directories");
     for (args, diagnostic) in [
         (vec!["--not-a-real-option"], "unknown argument"),
         (vec!["--mode"], "--mode requires a value"),
     ] {
-        run_command(wayscriber_cmd().args(args))
+        run_command(wayscriber_cmd(&temp).args(args))
             .failure()
             .code(2)
             .stderr_contains(diagnostic)
@@ -372,8 +473,9 @@ fn invalid_arguments_exit_two() {
 
 #[test]
 fn active_mode_requires_wayland_env() {
+    let temp = TempDir::new().expect("isolated application directories");
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active"),
     )
@@ -389,7 +491,7 @@ fn daemon_toggle_without_a_daemon_reports_that_it_is_not_running() {
     let runtime_dir = temp.path().join("runtime");
     fs::create_dir_all(&runtime_dir).unwrap();
 
-    let mut command = wayscriber_cmd();
+    let mut command = wayscriber_cmd(&temp);
     command
         .env(XDG_RUNTIME_DIR_ENV, &runtime_dir)
         .env(XDG_CONFIG_HOME_ENV, temp.path().join("config"))
@@ -428,7 +530,7 @@ fn daemon_lock_conflict_exits_seventy_five_without_starting_runtime_services() {
         .unwrap();
     session::try_lock_exclusive(&lock_file).unwrap();
 
-    let mut command = wayscriber_cmd();
+    let mut command = wayscriber_cmd(&temp);
     command
         .env(XDG_RUNTIME_DIR_ENV, &runtime_dir)
         .env(XDG_CONFIG_HOME_ENV, &config_dir)
@@ -459,7 +561,7 @@ fn session_clear_command_succeeds_without_files() {
     write_session_config(&temp, &session_dir);
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session"),
@@ -501,7 +603,7 @@ fn rename_session_ignores_invalid_configuration() {
     fs::write(&catalog_path, serde_json::to_vec(&catalog).unwrap()).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, &config_dir)
             .env(XDG_DATA_HOME_ENV, &data_dir)
             .env_remove(WAYLAND_DISPLAY_ENV)
@@ -527,7 +629,7 @@ fn named_session_info_missing_parent_reports_not_found() {
         .join("lecture-04.wayscriber-session");
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
@@ -547,7 +649,7 @@ fn named_session_info_forces_persistence_despite_disabled_config() {
     write_disabled_session_config(&temp, &session_dir);
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
@@ -571,7 +673,7 @@ fn named_session_clear_missing_parent_reports_no_artifacts() {
         .join("lecture-04.wayscriber-session");
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session")
@@ -590,7 +692,7 @@ fn clear_tool_state_command_succeeds_without_files() {
     write_session_config(&temp, &session_dir);
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-tool-state"),
@@ -602,6 +704,10 @@ fn clear_tool_state_command_succeeds_without_files() {
 
 #[test]
 fn clear_tool_state_named_session_targets_only_requested_file() {
+    if !in_isolated_process("clear_tool_state_named_session_targets_only_requested_file") {
+        return;
+    }
+
     let temp = TempDir::new().unwrap();
     let selected = temp.path().join("lecture-04.wayscriber-session");
     let sibling = temp.path().join("lecture-05.wayscriber-session");
@@ -620,7 +726,7 @@ fn clear_tool_state_named_session_targets_only_requested_file() {
     session::save_snapshot(&saved_line_snapshot(true), &sibling_options).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-tool-state")
@@ -653,7 +759,7 @@ fn named_session_info_rejects_symlink_primary() {
     symlink(&target, &link).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--session-info")
@@ -678,7 +784,7 @@ fn named_session_clear_rejects_symlink_primary_without_removing_artifacts() {
     symlink(&target, &link).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--clear-session")
@@ -708,7 +814,7 @@ fn active_named_session_rejects_symlink_primary_before_wayland_preflight() {
     symlink(&target, &link).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env(NO_DETACH_ENV, "1")
             .env_remove(WAYLAND_DISPLAY_ENV)
@@ -730,7 +836,7 @@ fn freeze_named_session_rejects_symlink_primary_before_wayland_preflight() {
     symlink(&target, &link).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env(NO_DETACH_ENV, "1")
             .env_remove(WAYLAND_DISPLAY_ENV)
@@ -751,7 +857,7 @@ fn active_named_session_missing_parent_fails_before_wayland_preflight() {
         .join("lecture-04.wayscriber-session");
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active")
@@ -768,7 +874,7 @@ fn active_named_session_directory_path_fails_before_wayland_preflight() {
     let temp = TempDir::new().unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--active")
@@ -788,7 +894,7 @@ fn freeze_named_session_missing_parent_fails_before_wayland_preflight() {
         .join("lecture-04.wayscriber-session");
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--freeze")
@@ -805,7 +911,7 @@ fn freeze_named_session_missing_wayland_fails_before_detach() {
     let named_path = temp.path().join("lecture-04.wayscriber-session");
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env_remove(WAYLAND_DISPLAY_ENV)
             .arg("--freeze")
@@ -818,6 +924,10 @@ fn freeze_named_session_missing_wayland_fails_before_detach() {
 
 #[test]
 fn session_info_reports_saved_snapshot() {
+    if !in_isolated_process("session_info_reports_saved_snapshot") {
+        return;
+    }
+
     let temp = TempDir::new().unwrap();
     let session_dir = temp.path().join("sessions");
     write_session_config(&temp, &session_dir);
@@ -887,7 +997,7 @@ fn session_info_reports_saved_snapshot() {
     session::save_snapshot(&snapshot, &options).unwrap();
 
     run_command(
-        wayscriber_cmd()
+        wayscriber_cmd(&temp)
             .env(XDG_CONFIG_HOME_ENV, temp.path())
             .env(WAYLAND_DISPLAY_ENV, display)
             .arg("--session-info"),

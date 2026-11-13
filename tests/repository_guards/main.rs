@@ -10,5 +10,6 @@ mod no_python;
 mod process_sites;
 mod shared_dependencies;
 mod source;
+mod test_process_isolation;
 mod translations;
 mod use_statements;
