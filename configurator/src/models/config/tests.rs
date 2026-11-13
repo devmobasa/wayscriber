@@ -679,6 +679,32 @@ fn a_config_saved_in_chinese_keeps_its_font_and_color_names() {
             if let Err(error) = saved.validate_for_save() {
                 panic!("{error}");
             }
+
+            // Repair values written by versions that translated stored names,
+            // including names entered in the custom-name field.
+            let mut legacy = config;
+            legacy.drawing.default_color = ColorSpec::Name("红色".to_string());
+            legacy.drawing.quick_colors.entries[0].color = ColorSpec::Name("绿色".to_string());
+            let mut draft = ConfigDraft::from_config(&legacy);
+            let slot = draft.presets.slot_mut(1).expect("first preset slot");
+            slot.enabled = true;
+            slot.color.name = "蓝色".to_string();
+            slot.color.selected_named = NamedColorOption::Custom;
+            let repaired = draft
+                .to_config(&legacy)
+                .expect("translated legacy colors can be saved");
+            assert_eq!(
+                repaired.drawing.default_color,
+                ColorSpec::Name("red".to_string())
+            );
+            assert_eq!(
+                repaired.drawing.quick_colors.entries[0].color,
+                ColorSpec::Name("green".to_string())
+            );
+            assert_eq!(
+                repaired.presets.slot(1).expect("saved preset").color,
+                ColorSpec::Name("blue".to_string())
+            );
         },
     );
 }

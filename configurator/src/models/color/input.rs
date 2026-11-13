@@ -3,7 +3,9 @@ use wayscriber::i18n::{tr, trf};
 use wayscriber::config::enums::ColorSpec;
 use wayscriber::draw::Color;
 use wayscriber::input::state;
-use wayscriber::util::{ConfigHexColorError, name_to_color, parse_config_hex_color};
+use wayscriber::util::{
+    ConfigHexColorError, canonical_color_name, name_to_color, parse_config_hex_color,
+};
 
 use super::super::error::FormError;
 use super::named::{ColorMode, NamedColorOption};
@@ -197,7 +199,8 @@ impl ColorInput {
 
     fn named_value(&self) -> String {
         if self.selected_named_is_custom() {
-            self.name.trim().to_string()
+            let value = self.name.trim();
+            canonical_color_name(value).unwrap_or(value).to_string()
         } else {
             self.selected_named.as_value().to_string()
         }

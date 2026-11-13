@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 use wayscriber::i18n::tr;
+use wayscriber::util;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorMode {
@@ -66,7 +67,7 @@ impl NamedColorOption {
     }
 
     pub fn from_name(value: &str) -> Self {
-        match value.trim().to_lowercase().as_str() {
+        match util::canonical_color_name(value).unwrap_or("") {
             "red" => Self::Red,
             "green" => Self::Green,
             "blue" => Self::Blue,

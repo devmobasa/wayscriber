@@ -3,7 +3,38 @@ use crate::draw::color::{
     PALETTE_BLACK, PALETTE_BLUE, PALETTE_GREEN, PALETTE_ORANGE, PALETTE_PINK, PALETTE_RED,
     PALETTE_WHITE, PALETTE_YELLOW,
 };
+use crate::i18n;
 use crate::i18n::tr;
+use std::sync::Once;
+
+const NAMED_COLORS: [(&str, &str, Color); 8] = [
+    ("red", "Red", PALETTE_RED),
+    ("green", "Green", PALETTE_GREEN),
+    ("blue", "Blue", PALETTE_BLUE),
+    ("yellow", "Yellow", PALETTE_YELLOW),
+    ("orange", "Orange", PALETTE_ORANGE),
+    ("pink", "Pink", PALETTE_PINK),
+    ("white", "White", PALETTE_WHITE),
+    ("black", "Black", PALETTE_BLACK),
+];
+
+/// The stable configuration token for an English name or a legacy translated
+/// name from any shipped catalog, independent of the selected UI language.
+#[must_use]
+pub fn canonical_color_name(name: &str) -> Option<&'static str> {
+    let normalized = name.trim().to_lowercase();
+    if let Some((canonical, _, _)) = NAMED_COLORS
+        .iter()
+        .find(|(canonical, _, _)| *canonical == normalized)
+    {
+        return Some(canonical);
+    }
+
+    NAMED_COLORS
+        .iter()
+        .find(|(_, source, _)| i18n::embedded_translation_matches(source, &normalized))
+        .map(|(canonical, _, _)| *canonical)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigHexColorError {
@@ -30,17 +61,18 @@ pub enum ConfigHexColorError {
 /// - `None` if the name is not recognized
 #[must_use]
 pub fn name_to_color(name: &str) -> Option<Color> {
-    match name.to_lowercase().as_str() {
-        "red" => Some(PALETTE_RED),
-        "green" => Some(PALETTE_GREEN),
-        "blue" => Some(PALETTE_BLUE),
-        "yellow" => Some(PALETTE_YELLOW),
-        "orange" => Some(PALETTE_ORANGE),
-        "pink" => Some(PALETTE_PINK),
-        "white" => Some(PALETTE_WHITE),
-        "black" => Some(PALETTE_BLACK),
-        _ => None,
+    let canonical = canonical_color_name(name)?;
+    if !name.trim().eq_ignore_ascii_case(canonical) {
+        static LEGACY_WARNING: Once = Once::new();
+        LEGACY_WARNING.call_once(|| {
+            log::warn!("Translated color name '{name}' accepted as '{canonical}'; save with the configurator to use canonical English color names");
+        });
     }
+
+    NAMED_COLORS
+        .iter()
+        .find(|(name, _, _)| *name == canonical)
+        .map(|(_, _, color)| *color)
 }
 
 /// Parses config-facing hex colors.
@@ -139,6 +171,31 @@ mod tests {
     fn name_to_color_is_case_insensitive() {
         assert_eq!(name_to_color("Orange"), Some(PALETTE_ORANGE));
         assert_eq!(name_to_color("WHITE"), Some(PALETTE_WHITE));
+    }
+
+    #[test]
+    fn translated_config_colors_resolve_without_selecting_their_language() {
+        for (translated, expected) in [
+            ("红色", PALETTE_RED),
+            ("绿色", PALETTE_GREEN),
+            ("蓝色", PALETTE_BLUE),
+            ("黄色", PALETTE_YELLOW),
+            ("橙色", PALETTE_ORANGE),
+            ("粉色", PALETTE_PINK),
+            ("白色", PALETTE_WHITE),
+            ("黑色", PALETTE_BLACK),
+        ] {
+            assert_eq!(
+                name_to_color(translated),
+                Some(expected),
+                "legacy name {translated} must load"
+            );
+        }
+        assert_eq!(
+            name_to_color("未知颜色"),
+            None,
+            "unknown names stay invalid"
+        );
     }
 
     #[test]

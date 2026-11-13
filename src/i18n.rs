@@ -345,6 +345,26 @@ fn catalog(code: &str) -> Option<&'static Catalog> {
         .map(|(_, catalog)| catalog)
 }
 
+/// Recognizes values written by older builds that translated configuration
+/// tokens. Only shipped translations count: UI overrides must neither change
+/// the configuration format nor hide a previously accepted spelling.
+pub(crate) fn embedded_translation_matches(source: &str, value: &str) -> bool {
+    static EMBEDDED: OnceLock<Vec<Catalog>> = OnceLock::new();
+    EMBEDDED
+        .get_or_init(|| {
+            EMBEDDED_CATALOGS
+                .iter()
+                .map(|(code, source)| parse_catalog(source, code))
+                .collect()
+        })
+        .iter()
+        .any(|catalog| {
+            catalog
+                .get(source)
+                .is_some_and(|translation| translation.to_lowercase() == value)
+        })
+}
+
 /// One embedded catalog with the override `directory` holds for it merged
 /// over it. A rejected override, or a rejected entry in one, leaves the
 /// embedded entries in place.

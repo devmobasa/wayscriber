@@ -380,6 +380,7 @@ drag_tool = "default"
 
 **Color Options:**
 - **Named colors**: `"red"` (`#F5333F`), `"green"` (`#2EC27E`), `"blue"` (`#3584E4`), `"yellow"` (`#F6D32D`), `"orange"` (`#FF7800`), `"pink"` (`#C061CB`), `"white"` (`#FFFFFF`), `"black"` (`#241F31`) — named colors resolve to the tuned quick color palette
+- Older configurators sometimes saved translated names such as `"红色"`. Wayscriber accepts the eight named colors in every shipped translation, regardless of the current UI language, and logs one warning per process. Saving with the configurator converts these names to canonical English tokens such as `"red"`; translated UI labels stay translated.
 - **Hex strings**: `"#RRGGBB"` such as `"#FFB3BA"`, or `"#RRGGBBAA"` such as `"#FFB3BA80"` to carry alpha. Other hex-like strings such as `"#GG0000"` or `"#12345"` keep config-load compatibility but fall back to red with a warning; the configurator rejects them for quick color fields.
 - **RGB arrays**: `[255, 0, 0]` for red, `[0, 255, 0]` for green, etc. A fourth component sets alpha: `[255, 0, 0, 128]`.
 - **Alpha**: colors are opaque unless an alpha component says otherwise, and opaque colors are written back in the three-component form they have always used — so adding alpha never rewrites an existing palette. The marker and highlighter multiply their own opacity on top of any color alpha rather than replacing it.
