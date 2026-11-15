@@ -100,7 +100,7 @@ public sealed class RepositoryContractTests
         var sdk = document.RootElement.GetProperty( "sdk" );
         Assert.Equal( VersionCommands.ToolSdkVersion, sdk.GetProperty( "version" ).GetString( ) );
         Assert.Equal( VersionCommands.ToolSdkRollForward, sdk.GetProperty( "rollForward" ).GetString( ) );
-        Assert.True( sdk.GetProperty( "allowPrerelease" ).GetBoolean( ) );
+        Assert.Equal( VersionCommands.ToolSdkAllowPrerelease, sdk.GetProperty( "allowPrerelease" ).GetBoolean( ) );
     }
 
     [Fact]

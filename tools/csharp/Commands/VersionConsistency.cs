@@ -144,9 +144,11 @@ internal static partial class VersionCommands
         {
             errors.Add( $"{RepositoryNames.GlobalJsonFile} SDK rollForward must be {ToolSdkRollForward}" );
         }
-        if ( !sdk.TryGetProperty( "allowPrerelease", out var allowPrerelease ) || allowPrerelease.ValueKind != JsonValueKind.True )
+
+        var expectedAllowPrerelease = ToolSdkAllowPrerelease ? JsonValueKind.True : JsonValueKind.False;
+        if ( !sdk.TryGetProperty( "allowPrerelease", out var allowPrerelease ) || allowPrerelease.ValueKind != expectedAllowPrerelease )
         {
-            errors.Add( $"{RepositoryNames.GlobalJsonFile} SDK allowPrerelease must be true" );
+            errors.Add( $"{RepositoryNames.GlobalJsonFile} SDK allowPrerelease must be {(ToolSdkAllowPrerelease ? "true" : "false")}" );
         }
 
         return version.GetString( )!.Trim( );
