@@ -331,6 +331,20 @@ fn config_draft_round_trips_shape_size_readout_preference() {
 }
 
 #[test]
+fn config_draft_round_trips_light_mode_toast_preference() {
+    let mut config = Config::default();
+    config.ui.show_light_mode_toasts = false;
+    let mut draft = ConfigDraft::from_config(&config);
+    assert!(!draft.ui_show_light_mode_toasts);
+
+    draft.set_toggle(ToggleField::UiShowLightModeToasts, true);
+    let round_trip = draft
+        .to_config(&config)
+        .expect("light mode toast preference should round trip");
+    assert!(round_trip.ui.show_light_mode_toasts);
+}
+
+#[test]
 fn config_draft_round_trips_text_halo_preference() {
     let mut config = Config::default();
     config.drawing.text_halo_enabled = false;

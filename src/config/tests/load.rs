@@ -177,6 +177,27 @@ fn shape_size_readout_defaults_on_and_can_be_disabled_after_reload() {
 }
 
 #[test]
+fn light_mode_toasts_default_on_and_can_be_disabled_after_reload() {
+    let default_config: Config = toml::from_str("").expect("empty config should use defaults");
+    assert!(default_config.ui.show_light_mode_toasts);
+
+    let existing_ui: Config = toml::from_str("[ui]\nshow_status_bar = false\n")
+        .expect("a ui table without the key should parse");
+    assert!(
+        existing_ui.ui.show_light_mode_toasts,
+        "an existing [ui] table without the key keeps light mode toasts on"
+    );
+
+    let disabled: Config = toml::from_str("[ui]\nshow_light_mode_toasts = false\n")
+        .expect("light mode toast preference should parse");
+    assert!(!disabled.ui.show_light_mode_toasts);
+
+    let serialized = toml::to_string(&disabled).expect("config should serialize");
+    let reloaded: Config = toml::from_str(&serialized).expect("round trip should parse");
+    assert!(!reloaded.ui.show_light_mode_toasts);
+}
+
+#[test]
 fn presenter_toolbar_mode_defaults_to_hidden_and_round_trips() {
     let default_config: Config = toml::from_str("").expect("empty config should use defaults");
     assert_eq!(

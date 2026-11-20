@@ -521,6 +521,11 @@ multi_monitor_enabled = true
 # Requires layer-shell, multi_monitor_enabled, session.per_output, and persist_transparent.
 keep_light_overlays_on_all_outputs = false
 
+# Show the light-mode enter, exit, and drawing/passthrough switch toasts.
+# Set to false to keep them out of screen recordings. The warning that light
+# mode is unsupported is always shown.
+show_light_mode_toasts = true
+
 # Request fullscreen for the GNOME fallback overlay. Disable if fullscreen appears opaque.
 #xdg_fullscreen = false
 
@@ -902,6 +907,7 @@ show_toast = true
 #   Do not rely on the in-overlay F6 binding to exit after input is passed through.
 # - wayscriber --light-draw-toggle switches between drawing and passthrough.
 # - wayscriber --light-draw-on / --light-draw-off support press/release shortcuts.
+# - ui.show_light_mode_toasts = false hides the light-mode enter/exit/switch toasts.
 
 # ───────────────────────────────────────────────────────────────────────────────
 # Help Overlay Styling (Press F10 to toggle)

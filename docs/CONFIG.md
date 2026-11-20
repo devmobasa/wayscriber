@@ -1063,6 +1063,11 @@ multi_monitor_enabled = true
 # Requires layer-shell, multi_monitor_enabled, session.per_output, and persist_transparent.
 keep_light_overlays_on_all_outputs = false
 
+# Show the light-mode enter, exit, and drawing/passthrough switch toasts.
+# Set to false to keep them out of screen recordings. The warning that light
+# mode is unsupported is always shown.
+show_light_mode_toasts = true
+
 # Request fullscreen for the GNOME fallback overlay (disable if opaque)
 #xdg_fullscreen = false
 
@@ -1157,6 +1162,7 @@ to save it.
 - **Light mode**: `force_in_light_mode = true` preserves the default behavior of enabling click highlights on light mode entry; set it to `false` to keep the current click highlight state
 - **Context menu**: `ui.context_menu.enabled` toggles right-click / keyboard menus
 - **Light overlays on other monitors**: `keep_light_overlays_on_all_outputs = true` keeps light-mode drawings visible on monitors the editor leaves (see [Keeping light-mode drawings on other monitors](#keeping-light-mode-drawings-on-other-monitors))
+- **Light mode toasts**: `show_light_mode_toasts = false` hides the toasts light mode shows when it starts, stops, or switches between drawing and passthrough (see [Light Passthrough Mode](#light-passthrough-mode))
 - **Output focus**: `multi_monitor_enabled` controls output-cycling shortcuts; `active_output_badge` shows the current monitor in the status bar once two or more outputs are connected (`active_output_badge_always = true` keeps it with a single output)
 - **GNOME fallback**: `preferred_output` pins the xdg-shell overlay to a specific monitor; `xdg_fullscreen` requests fullscreen instead of maximized; `xdg_focus_loss_behavior` controls whether losing focus closes (`exit`) or keeps (`stay`) the overlay
 - **Radial menu trigger**: `radial_menu_mouse_binding` selects which mouse button opens radial menu (`middle` default, `right`, or `disabled`)
@@ -1331,6 +1337,8 @@ wayscriber --light-draw-off
 ```
 
 Use `--light-draw-on` on key/button press and `--light-draw-off` on release for a non-sticky draw-while-held shortcut. The raw `--daemon-action` form remains available for scripts.
+
+Light mode shows a toast when it starts ("Light Mode passthrough" or "Light Mode drawing", with an Exit button), when it switches between drawing and passthrough, and when it stops. Set `ui.show_light_mode_toasts = false` to hide these toasts, for example to keep them out of a screen recording. Without the entry toast there is no Exit button, so leave with `wayscriber --light-toggle` (or `toggle_light_mode` while the overlay has focus). The warning that light mode is not supported in the current session is always shown.
 
 #### Keeping light-mode drawings on other monitors
 
