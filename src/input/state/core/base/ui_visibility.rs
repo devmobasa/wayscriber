@@ -24,6 +24,8 @@ pub struct UiVisibility {
     pub show_delay_sliders: bool,
     pub show_marker_opacity_section: bool,
     pub show_preset_toasts: bool,
+    /// Show Light Mode enter, exit, and drawing/passthrough switch toasts.
+    pub show_light_mode_toasts: bool,
     pub idle_fade: bool,
     pub show_tool_preview: bool,
     pub show_more_colors: bool,
@@ -62,6 +64,7 @@ impl From<&UiConfig> for UiVisibility {
             show_delay_sliders: toolbar.show_delay_sliders,
             show_marker_opacity_section: toolbar.show_marker_opacity_section,
             show_preset_toasts: toolbar.show_preset_toasts,
+            show_light_mode_toasts: config.show_light_mode_toasts,
             idle_fade: toolbar.idle_fade,
             show_tool_preview: toolbar.show_tool_preview,
             show_more_colors: toolbar.show_more_colors,

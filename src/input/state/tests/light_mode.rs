@@ -3,7 +3,7 @@ use crate::input::InputState;
 use crate::ui_text::UiTextEngine;
 
 use super::{create_test_input_state, create_test_input_state_with_click_highlight};
-use crate::config::Action;
+use crate::config::{Action, Config};
 use crate::input::{ClickHighlightSettings, Tool};
 
 fn create_light_mode_test_state() -> InputState {
@@ -212,4 +212,111 @@ fn light_mode_does_not_enter_without_layer_shell() {
 
     assert!(!state.light_mode_active());
     assert!(!state.light_mode_passthrough());
+}
+
+#[test]
+fn light_mode_transitions_show_toasts_by_default() {
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+    let mut state = create_light_mode_test_state();
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+
+    assert_eq!(
+        state.test_active_toast_message(),
+        Some("Light Mode passthrough")
+    );
+    assert_eq!(
+        state
+            .active_toast()
+            .and_then(|toast| toast.action.as_ref())
+            .and_then(|action| action.dispatch_action()),
+        Some(Action::ToggleLightMode),
+        "the entry toast offers an Exit action"
+    );
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
+
+    assert_eq!(
+        state.test_active_toast_message(),
+        Some("Light Mode drawing")
+    );
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+
+    assert_eq!(
+        state.test_active_toast_message(),
+        Some("Stopping Light Mode")
+    );
+}
+
+#[test]
+fn light_mode_transitions_stay_silent_when_toasts_are_disabled() {
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+    let config: Config = toml::from_str("[ui]\nshow_light_mode_toasts = false\n")
+        .expect("light mode toast preference should parse");
+    let mut state = InputState::from_config(&config);
+    state.compositor_capabilities.layer_shell = true;
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+
+    assert!(state.light_mode_passthrough());
+    assert!(state.toasts_idle(), "entering light mode must not toast");
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
+
+    assert!(state.light_mode_drawing_active());
+    assert!(state.toasts_idle(), "switching to drawing must not toast");
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightModeDrawing);
+
+    assert!(state.light_mode_passthrough());
+    assert!(
+        state.toasts_idle(),
+        "switching back to passthrough must not toast"
+    );
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+
+    assert!(!state.light_mode_active());
+    assert!(state.toasts_idle(), "leaving light mode must not toast");
+
+    assert!(state.set_light_mode_drawing(true));
+
+    assert!(state.light_mode_drawing_active());
+    assert!(
+        state.toasts_idle(),
+        "entering light mode to draw must not toast"
+    );
+}
+
+#[test]
+fn light_mode_unsupported_warning_ignores_disabled_toasts() {
+    let test_text_measurer = TextMeasurer::default();
+    let test_ui_engine = UiTextEngine::default();
+    let test_text_resources = crate::input::state::InputTextResources {
+        measurer: &test_text_measurer,
+        ui_engine: &test_ui_engine,
+    };
+    let mut state = create_test_input_state();
+    state.ui_visibility.show_light_mode_toasts = false;
+
+    state.handle_action_with_resources(test_text_resources, Action::ToggleLightMode);
+
+    assert!(!state.light_mode_active());
+    assert!(
+        state
+            .test_active_toast_message()
+            .is_some_and(|message| message.starts_with("Light Mode passthrough is not supported")),
+        "the unsupported warning reports a failure, so it is always shown"
+    );
 }

@@ -137,12 +137,16 @@ impl InputState {
 
         self.cancel_active_interaction_with(resources.measurer);
         self.modes.set_light_drawing(drawing);
-        let message = if drawing {
-            tr("Light Mode drawing")
-        } else {
-            tr("Light Mode passthrough")
-        };
-        self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
+
+        if self.ui_visibility.show_light_mode_toasts {
+            let message = if drawing {
+                tr("Light Mode drawing")
+            } else {
+                tr("Light Mode passthrough")
+            };
+            self.push_toast(ToastPriority::Info, "light_mode", Toast::info(message));
+        }
+
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
         self.light_mode_drawing_active()
@@ -165,11 +169,14 @@ impl InputState {
             }
         }
 
-        self.push_toast(
-            ToastPriority::Info,
-            "light_mode",
-            Toast::info(tr("Stopping Light Mode")),
-        );
+        if self.ui_visibility.show_light_mode_toasts {
+            self.push_toast(
+                ToastPriority::Info,
+                "light_mode",
+                Toast::info(tr("Stopping Light Mode")),
+            );
+        }
+
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }
@@ -220,16 +227,20 @@ impl InputState {
         }
 
         self.modes.begin_light(drawing, restore);
-        let message = if drawing {
-            tr("Light Mode drawing")
-        } else {
-            tr("Light Mode passthrough")
-        };
-        self.push_toast(
-            ToastPriority::Action,
-            "light_mode",
-            Toast::info(message).action(tr("Exit"), Action::ToggleLightMode),
-        );
+
+        if self.ui_visibility.show_light_mode_toasts {
+            let message = if drawing {
+                tr("Light Mode drawing")
+            } else {
+                tr("Light Mode passthrough")
+            };
+            self.push_toast(
+                ToastPriority::Action,
+                "light_mode",
+                Toast::info(message).action(tr("Exit"), Action::ToggleLightMode),
+            );
+        }
+
         self.dirty_tracker.mark_full();
         self.needs_redraw = true;
     }

@@ -89,6 +89,15 @@ fn shape_size_readout_exists_in_json_schema() {
 }
 
 #[test]
+fn light_mode_toasts_exist_in_json_schema() {
+    let schema = Config::json_schema();
+    assert!(
+        schema_contains_path(&schema, "ui.show_light_mode_toasts"),
+        "schema missing light mode toast preference"
+    );
+}
+
+#[test]
 fn interactive_region_capture_keybinding_exists_in_json_schema() {
     let schema = Config::json_schema();
     assert!(

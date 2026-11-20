@@ -152,6 +152,11 @@ pub struct UiConfig {
     #[serde(default)]
     pub keep_light_overlays_on_all_outputs: bool,
 
+    /// Show the Light Mode enter, exit, and drawing/passthrough switch toasts.
+    /// The warning that Light Mode is unsupported is always shown.
+    #[serde(default = "default_show_light_mode_toasts")]
+    pub show_light_mode_toasts: bool,
+
     /// Show active output identity in the status bar. It appears only while
     /// two or more outputs are connected, unless `active_output_badge_always`
     /// is set.
@@ -230,6 +235,7 @@ impl Default for UiConfig {
             preferred_output: None,
             multi_monitor_enabled: default_multi_monitor_enabled(),
             keep_light_overlays_on_all_outputs: false,
+            show_light_mode_toasts: default_show_light_mode_toasts(),
             active_output_badge: default_active_output_badge(),
             active_output_badge_always: false,
             command_palette_toast_duration_ms: default_command_palette_toast_duration_ms(),
@@ -361,6 +367,10 @@ fn default_command_palette_toast_duration_ms() -> u64 {
 }
 
 fn default_multi_monitor_enabled() -> bool {
+    true
+}
+
+fn default_show_light_mode_toasts() -> bool {
     true
 }
 

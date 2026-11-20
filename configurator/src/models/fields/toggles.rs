@@ -23,6 +23,7 @@ pub enum ToggleField {
     UiShowShapeSizeReadout,
     UiHelpOverlayContextFilter,
     UiKeepLightOverlaysOnAllOutputs,
+    UiShowLightModeToasts,
     UiContextMenuEnabled,
     UiXdgFullscreen,
     UiXdgKeepOnFocusLoss,

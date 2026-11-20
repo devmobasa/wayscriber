@@ -50,6 +50,12 @@ pub(super) fn build(sender: &ComponentSender<ConfiguratorApp>) -> BuiltPage {
             |app| app.draft.ui_keep_light_overlays_on_all_outputs,
             |value| Message::ToggleChanged(ToggleField::UiKeepLightOverlaysOnAllOutputs, value),
         )
+        .switch_row(
+            tr("Show light-mode toasts"),
+            tr("Shows a toast when light mode starts or stops, or switches between drawing and passthrough. The warning that light mode is unsupported always appears."),
+            |app| app.draft.ui_show_light_mode_toasts,
+            |value| Message::ToggleChanged(ToggleField::UiShowLightModeToasts, value),
+        )
         .entry_row(
             tr("Preferred output (GNOME fallback)"),
             |app| app.draft.ui_preferred_output.clone(),
