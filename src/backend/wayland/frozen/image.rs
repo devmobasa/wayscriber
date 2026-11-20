@@ -51,11 +51,17 @@ pub(in crate::backend::wayland) fn validate_shm_buffer_layout(
 }
 
 impl FrozenImage {
-    /// Apply the `wl_output` transform advertised for the captured output.
+    /// Undo the `wl_output` transform the compositor applied to the captured
+    /// output's pixels.
     ///
-    /// WLR screencopy buffers are returned in output framebuffer coordinates.
-    /// Frozen/zoom rendering paints them onto a logical surface, so rotated or
-    /// flipped outputs need the same transform applied to the captured pixels.
+    /// `ext-image-copy-capture` reports the transform the compositor applied
+    /// to each frame. WLR screencopy frames carry no transform of their own, so
+    /// callers pass the advertised `wl_output` transform on the assumption
+    /// that the frame holds output framebuffer pixels, as wlroots and niri
+    /// return them. Frozen/zoom rendering paints the pixels onto a
+    /// logical surface, so rotated or flipped outputs need the inverse of that
+    /// transform. A 90 degree output, for example, holds its content rotated 90
+    /// degrees counter-clockwise, so the buffer is rotated back clockwise.
     pub fn with_output_transform(mut self, transform: wl_output::Transform) -> Result<Self> {
         let width =
             usize::try_from(self.width).context("Frozen image width does not fit memory")?;
@@ -213,6 +219,9 @@ fn transform_argb(
     Some((dest_width, dest_height, transformed))
 }
 
+/// Logical position of buffer pixel `(x, y)` once the output transform is
+/// undone. Each flipped transform and 180 degrees is its own inverse, while 90
+/// and 270 degrees invert each other.
 fn transformed_coords(
     x: usize,
     y: usize,
@@ -222,9 +231,9 @@ fn transformed_coords(
 ) -> (usize, usize) {
     match transform {
         wl_output::Transform::Normal => (x, y),
-        wl_output::Transform::_90 => (y, width - 1 - x),
+        wl_output::Transform::_90 => (height - 1 - y, x),
         wl_output::Transform::_180 => (width - 1 - x, height - 1 - y),
-        wl_output::Transform::_270 => (height - 1 - y, x),
+        wl_output::Transform::_270 => (y, width - 1 - x),
         wl_output::Transform::Flipped => (width - 1 - x, y),
         wl_output::Transform::Flipped90 => (y, x),
         wl_output::Transform::Flipped180 => (x, height - 1 - y),
@@ -261,6 +270,140 @@ mod tests {
             .collect()
     }
 
+    const ALL_TRANSFORMS: [wl_output::Transform; 8] = [
+        wl_output::Transform::Normal,
+        wl_output::Transform::_90,
+        wl_output::Transform::_180,
+        wl_output::Transform::_270,
+        wl_output::Transform::Flipped,
+        wl_output::Transform::Flipped90,
+        wl_output::Transform::Flipped180,
+        wl_output::Transform::Flipped270,
+    ];
+
+    /// grim's `get_output_rotation` in quarter turns and its
+    /// `get_output_flipped` x mirror.
+    fn grim_rotation(transform: wl_output::Transform) -> (usize, i64) {
+        match transform {
+            wl_output::Transform::Normal => (0, 1),
+            wl_output::Transform::_90 => (1, 1),
+            wl_output::Transform::_180 => (2, 1),
+            wl_output::Transform::_270 => (3, 1),
+            wl_output::Transform::Flipped => (0, -1),
+            wl_output::Transform::Flipped90 => (1, -1),
+            wl_output::Transform::Flipped180 => (2, -1),
+            wl_output::Transform::Flipped270 => (3, -1),
+            _ => panic!("grim only defines the eight wl_output transforms"),
+        }
+    }
+
+    /// grim's `apply_output_transform`: quarter turns swap the buffer axes.
+    fn grim_logical_size(
+        (width, height): (u32, u32),
+        transform: wl_output::Transform,
+    ) -> (u32, u32) {
+        let (quarter_turns, _) = grim_rotation(transform);
+
+        if quarter_turns % 2 == 1 {
+            (height, width)
+        } else {
+            (width, height)
+        }
+    }
+
+    /// Logical pixel that grim's `out2com` matrix sends a captured buffer
+    /// pixel to.
+    ///
+    /// grim, the reference wlroots screenshot client, composites screencopy
+    /// and `ext-image-copy-capture` buffers by moving the buffer centre to the
+    /// origin, mirroring y for `y_invert` frames, rotating by
+    /// `get_output_rotation(transform)` through pixman's
+    /// `[[cos, -sin], [sin, cos]]` matrix, mirroring x for flipped transforms,
+    /// and moving the result to the logical centre. Coordinates are doubled so
+    /// pixel centres stay integral.
+    fn grim_logical_pixel(
+        (x, y): (u32, u32),
+        (width, height): (u32, u32),
+        transform: wl_output::Transform,
+        y_invert: bool,
+    ) -> (u32, u32) {
+        let (quarter_turns, mirror_x) = grim_rotation(transform);
+        let (cos, sin) = [(1, 0), (0, 1), (-1, 0), (0, -1)][quarter_turns];
+        let mirror_y = if y_invert { -1 } else { 1 };
+        let (logical_width, logical_height) = grim_logical_size((width, height), transform);
+
+        let centred_x = 2 * i64::from(x) + 1 - i64::from(width);
+        let centred_y = mirror_y * (2 * i64::from(y) + 1 - i64::from(height));
+        let rotated_x = cos * centred_x - sin * centred_y;
+        let rotated_y = sin * centred_x + cos * centred_y;
+        let logical_x = (mirror_x * rotated_x + i64::from(logical_width) - 1) / 2;
+        let logical_y = (rotated_y + i64::from(logical_height) - 1) / 2;
+
+        (
+            u32::try_from(logical_x).expect("grim keeps every buffer pixel inside the output"),
+            u32::try_from(logical_y).expect("grim keeps every buffer pixel inside the output"),
+        )
+    }
+
+    #[test]
+    fn shm_captures_orient_like_grim_for_every_transform_and_row_order() {
+        // Two rows of three distinct pixels, each followed by four padding
+        // bytes that the copy must drop.
+        let (width, height, stride) = (3, 2, 16);
+        let mut canvas = Vec::new();
+        for row in [[1, 2, 3], [4, 5, 6]] {
+            for value in row {
+                canvas.extend_from_slice(&[value, 0, 0, 0xff]);
+            }
+            canvas.extend_from_slice(&[0xee; 4]);
+        }
+
+        for y_invert in [false, true] {
+            for transform in ALL_TRANSFORMS {
+                let oriented = copy_shm_argb(
+                    &canvas,
+                    width,
+                    height,
+                    stride,
+                    wl_shm::Format::Argb8888,
+                    y_invert,
+                )
+                .and_then(|image| image.with_output_transform(transform))
+                .expect("the padded capture is valid");
+                let (logical_width, logical_height) = grim_logical_size((width, height), transform);
+
+                let mut expected = vec![0; 6];
+                for (index, value) in (0..).zip(1..=6) {
+                    let (x, y) = grim_logical_pixel(
+                        (index % width, index / width),
+                        (width, height),
+                        transform,
+                        y_invert,
+                    );
+                    let logical_index = usize::try_from(y * logical_width + x)
+                        .expect("the test image index fits in memory");
+                    expected[logical_index] = value;
+                }
+
+                assert_eq!(
+                    (oriented.width, oriented.height),
+                    (logical_width, logical_height),
+                    "{transform:?} must swap the axes only for quarter turns"
+                );
+                assert_eq!(
+                    oriented.stride,
+                    i32::try_from(logical_width * 4).expect("the test stride fits in i32"),
+                    "{transform:?} must leave tightly packed rows"
+                );
+                assert_eq!(
+                    values(&oriented),
+                    expected,
+                    "{transform:?} with y_invert={y_invert} must place pixels where grim does"
+                );
+            }
+        }
+    }
+
     #[test]
     fn output_transform_rejects_an_invalid_pixel_buffer() {
         let malformed = FrozenImage {
@@ -278,24 +421,44 @@ mod tests {
     }
 
     #[test]
-    fn output_transform_270_rotates_into_logical_orientation() {
+    fn output_transform_270_rotates_buffer_counter_clockwise_into_logical_orientation() {
         let transformed = image(3, 2, &[1, 2, 3, 4, 5, 6])
             .with_output_transform(wl_output::Transform::_270)
             .expect("valid transform");
 
-        assert_eq!((transformed.width, transformed.height), (2, 3));
-        assert_eq!(values(&transformed), vec![4, 1, 5, 2, 6, 3]);
-        assert_eq!(transformed.stride, 8);
+        assert_eq!(
+            (transformed.width, transformed.height),
+            (2, 3),
+            "a quarter turn swaps the buffer axes"
+        );
+        assert_eq!(
+            values(&transformed),
+            vec![3, 6, 2, 5, 1, 4],
+            "the last buffer column, read top to bottom, is the logical top row"
+        );
+        assert_eq!(transformed.stride, 8, "rotated rows stay tightly packed");
     }
 
     #[test]
-    fn output_transform_90_rotates_into_logical_orientation() {
+    fn output_transform_90_rotates_buffer_clockwise_into_logical_orientation() {
+        // A 90 degree output's framebuffer holds the logical image rotated 90
+        // degrees counter-clockwise: its first buffer column, read bottom to
+        // top, is the logical top row. Rotating it the same way again leaves
+        // the frozen image upside down (#446).
         let transformed = image(3, 2, &[1, 2, 3, 4, 5, 6])
             .with_output_transform(wl_output::Transform::_90)
             .expect("valid transform");
 
-        assert_eq!((transformed.width, transformed.height), (2, 3));
-        assert_eq!(values(&transformed), vec![3, 6, 2, 5, 1, 4]);
+        assert_eq!(
+            (transformed.width, transformed.height),
+            (2, 3),
+            "a quarter turn swaps the buffer axes"
+        );
+        assert_eq!(
+            values(&transformed),
+            vec![4, 1, 5, 2, 6, 3],
+            "the first buffer column, read bottom to top, is the logical top row"
+        );
     }
 
     #[test]

@@ -886,7 +886,8 @@ mod tests {
                 .iter()
                 .map(|p| p[0])
                 .collect::<Vec<_>>(),
-            vec![4, 1]
+            vec![3, 6],
+            "the crop must read the logical top row of the rotated capture"
         );
     }
 }
